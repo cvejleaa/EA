@@ -1,0 +1,84 @@
+<section class="integrations" aria-labelledby="integrations-title" id="integrationer">
+  <div class="row header">
+    <h2 id="integrations-title">Integrationer</h2>
+    <span class="muted">direkte forbindelser — ikke videre led</span>
+    <span class="spacer"></span>
+    <button mat-stroked-button type="button" (click)="download()" [disabled]="downloading()" data-testid="download">
+      Hent som CSV (inkl. moduler)
+    </button>
+    @if (data()?.canAdd) {
+      <a mat-flat-button [routerLink]="['/systemer', systemId(), 'integrationer', 'ny']" data-testid="add">Tilføj integration</a>
+    }
+  </div>
+
+  @if (error()) {
+    <p class="error-text" role="alert">{{ error() }}</p>
+  }
+
+  @if (data(); as d) {
+    @if (summary()) {
+      <p class="summary" data-testid="summary">{{ summary() }}</p>
+    }
+    @if (directDbWarning()) {
+      <p class="warning" data-testid="direct-db">{{ directDbWarning() }}</p>
+    }
+
+    @if (d.items.length) {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Relation</th>
+            <th>System</th>
+            <th>Type</th>
+            <th>Via</th>
+            <th>Dataobjekter</th>
+            <th>Beskrivelse</th>
+            <th><span class="visually-hidden">Handlinger</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of d.items; track item.integration.id) {
+            <tr>
+              <td>{{ relationLabels[item.relation] }}</td>
+              <td>
+                @if (item.counterpart; as c) {
+                  <a [routerLink]="['/systemer', c.id]">{{ displayName(c) }}</a>
+                } @else {
+                  {{ otherEnd(item) }}
+                }
+                @for (flag of flags(item.counterpart); track flag) {
+                  &ngsp;<span class="flag">{{ flag }}</span>
+                }
+                @if (item.localModule; as m) {
+                  <span class="muted"> (modul: {{ m.name }})</span>
+                }
+              </td>
+              <td [class.warn]="item.integration.type === 'DirekteDb'">{{ typeLabel(item.integration.type) }}</td>
+              <td>{{ item.integration.via ? displayName(item.integration.via) : '' }}</td>
+              <td>
+                @for (o of item.integration.dataObjects; track o.id; let last = $last) {
+                  {{ o.name }}{{ last ? '' : ', ' }}
+                }
+              </td>
+              <td>
+                @if (item.integration.name) {
+                  <strong>{{ item.integration.name }}</strong>
+                }
+                {{ item.integration.description }}
+              </td>
+              <td>
+                @if (item.integration.permissions.canEdit) {
+                  <a [routerLink]="['/systemer', systemId(), 'integrationer', item.integration.id, 'rediger']">Rediger</a>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <p class="muted" data-testid="empty">Ingen registrerede integrationer — registret er ikke komplet her endnu.</p>
+    }
+  } @else if (!error()) {
+    <p class="muted">Henter integrationer…</p>
+  }
+</section>

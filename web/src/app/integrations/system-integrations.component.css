@@ -1,0 +1,9 @@
+.integrations { margin: 24px 0; }
+.header h2 { margin: 0; }
+.spacer { flex: 1; }
+.summary { font: var(--mat-sys-title-small); margin: 8px 0; }
+.warning, .warn { color: var(--mat-sys-error); }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--mat-sys-outline-variant); vertical-align: top; }
+.flag { margin-left: 6px; padding: 0 6px; border-radius: 8px; font: var(--mat-sys-label-small); background: var(--mat-sys-tertiary-container); color: var(--mat-sys-on-tertiary-container); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

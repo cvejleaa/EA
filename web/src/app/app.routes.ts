@@ -15,6 +15,16 @@ export const routes: Routes = [
         loadComponent: () => import('./systems/system-form.page').then((m) => m.SystemFormPage),
         title: 'Rediger system',
       },
+      {
+        path: ':id/integrationer/ny',
+        loadComponent: () => import('./integrations/integration-form.page').then((m) => m.IntegrationFormPage),
+        title: 'Ny integration',
+      },
+      {
+        path: ':id/integrationer/:integrationId/rediger',
+        loadComponent: () => import('./integrations/integration-form.page').then((m) => m.IntegrationFormPage),
+        title: 'Rediger integration',
+      },
     ],
   },
   { path: '', pathMatch: 'full', redirectTo: 'systemer' },

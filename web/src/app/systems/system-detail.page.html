@@ -79,9 +79,11 @@
         <button mat-stroked-button type="button" (click)="confirmUnchanged()" [disabled]="busy()" data-testid="confirm">
           Bekræft uændret
         </button>
-        <span class="muted hint">Oplysningerne er stadig rigtige — ingen ændringer.</span>
+        <span class="muted hint">Systemets oplysninger ovenfor er stadig rigtige. Integrationerne bekræftes ikke her.</span>
       }
     </section>
+
+    <ea-system-integrations [systemId]="s.id" />
 
     @if (actionError()) {
       <p class="error-text" role="alert">{{ actionError() }}</p>

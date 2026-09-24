@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideDanishLocale } from '../core/locale';
 import { provideRouter } from '@angular/router';
 import type { SystemDetail } from '../api/types';
-import { systemDetail, text, settle } from '../testing/fixtures';
+import { integrations, systemDetail, text, settle } from '../testing/fixtures';
 import { SystemDetailPage } from './system-detail.page';
 
 describe('SystemDetailPage', () => {
@@ -24,6 +24,9 @@ describe('SystemDetailPage', () => {
     fixture.componentRef.setInput('id', s.id);
     fixture.detectChanges();
     http.expectOne(`/api/systems/${s.id}`).flush(s);
+    await settle(fixture);
+    // Integrationssektionen henter sine egne data (testet for sig i system-integrations.component.spec.ts).
+    http.expectOne(`/api/systems/${s.id}/integrations`).flush(integrations());
     await settle(fixture);
     return fixture;
   }
