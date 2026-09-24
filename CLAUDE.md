@@ -163,6 +163,12 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
   - Kapabilitets-CSV'en er også en ekstern kontrakt:
     `Capabilities/CapabilityCsv.cs` ⇄ `docs/csv/kapabiliteter-eksempel.csv`
     (golden-fil) ⇄ `docs/csv-kapabiliteter.md` (kolonner og grænser).
+  - Koblings-CSV'en ligeså: `Capabilities/CouplingCsv.cs` ⇄
+    `docs/csv/koblinger-eksempel.csv` (golden-fil) ⇄ `docs/csv-koblinger.md`
+    (kolonner og koderne for `OverlapExclusion` og `MoveReason`).
+  - Overlap og dækning afgøres ét sted hver: `CapabilityRules.OverlapOf` og
+    `CapabilityQueries.Uncovered`. Kort, systemside, systemliste og CSV bruger
+    dem — klienten regner aldrig selv.
   - Konflikt-typer (`Common/Problems.cs`, fx `urn:ea:problem:stale-version`
     og `urn:ea:problem:stale-dry-run`) ⇄ `web/src/app/core/problem.ts`. Kun
     en forældet version må tilbyde "Hent nyeste version"; en forældet

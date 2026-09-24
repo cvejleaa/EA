@@ -384,6 +384,43 @@ operator-flip-mutation, fordi flippet nødvendigvis også ændrer den dækkede g
 (`true`/`false` i stedet for selve sammenligningen) ville undslippe. Værd at kende, så man ikke fejlagtigt
 rapporterer den slags som et hul uden selv at prøve flippet.
 
+## Fund da9ee56 (delopgave 3c-1, server+web, EA-register): overlap-reglen og koblings-CSV'en — meget stærk kerne, to overlevede mutationer
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests --filter-namespace Ea.Api.Tests.Capabilities` 147/147, web
+`npx ng test --watch=false` 98/98. Kørte netop de 16 udpegede mutationer (`OverlapExclusionOf`s fire grene +
+begge arve-retninger + begge forrangs-byt, `OverlapOf`s `Planned`/`PlannedOnTopOfActive`/tærskler, `OverlapGroupKey`
+→ id, `MoveReasonOf`-porten, `Uncovered` to varianter, Nedlagt-filtret i eksporten, tom-kode-rækken to varianter,
+`DelesMed`, `WithChildren`, web-knappens URL) — **14 af 16 dræbt præcist**, ofte af netop ÉN linje i
+`OverlapRulesTests`s `Exclusions`-theory (fx `{ Udfases, LokalLoesning, null, Udfases }` dræber BEGGE
+forrangs-byt hver for sig). `CouplingCsvTemplateTests`s rige, navngivne fixture (8 systemer, moduler, én retired
+kapabilitet, én lokal løsning) dræbte selv urelaterede mutationer (fx tom-kode-række-varianterne) som bifangst.
+
+**Overlevede — to reelle huller, begge i `CouplingCsv.cs`/`CapabilityRules.cs`:**
+1. **`DelesMed` udelukker kun rækkens eget `SystemId`, ikke sin `GroupKey`, i INGEN test.**
+   `src/Ea.Api/Capabilities/CouplingCsv.cs:81`: `.Where(m => m.Holder.GroupKey != own!.Holder.GroupKey)` — ændrede
+   til `.Where(m => m.Holder.SystemId != system.Id)` → 147/147 forblev grønt. Årsag: INGEN fixture (hverken
+   `CouplingCsvTemplateTests` eller `CouplingExportTests`) har to holdere i SAMME gruppe (to søskendemoduler, eller
+   et modul og dets forælder), der begge er koblet til den SAMME kapabilitet — kun ét medlem pr. gruppe optræder
+   nogensinde som "egen kobling"-række for den kapabilitet. Reel konsekvens: kobles et system OG et af dets moduler
+   til samme kapabilitet, ville modulets `DelesMed`-kolonne fejlagtigt liste forælderen som "deler med" (og omvendt),
+   selvom de tælles som ÉT system i overlap-tallet. Mangler: en test hvor fx `Nordlys` (forælder) OG `Nordlys > HR`
+   (modul) begge er koblet til samme kapabilitet, der bekræfter at `DelesMed` for HR's række IKKE nævner Nordlys.
+2. **`CapabilityRules.WithChildren`s "udgåede børn tæller ikke" (`c.RetiredAt is null`-filteret) er utestet i HELE
+   test-suiten — også før denne PR.** `src/Ea.Api/Capabilities/CapabilityRules.cs:101-102`: fjernede
+   `c.RetiredAt is null &&` → 147/147 forblev grønt (både Capabilities-namespacet og en efterfølgende bredere
+   søgning efter `RetiredAt =`/`Selectable` i HELE `tests/Ea.Api.Tests` fandt kun to direkte `RetiredAt`-
+   konstruktioner, ingen af dem en kapabilitet der er ENESTE barn af en anden). Denne PR flyttede logikken (tre
+   identiske kopier → én), men ændrede den ikke — hullet er altså ældre end 3c-1, blot nu samlet ét sted, så én
+   rettelse lukker det tre steder. Reel konsekvens: udgår en kapabilitets ENESTE underkapabilitet, burde
+   forælderen blive et blad igen (`Selectable: true`, kan kobles direkte) — mutationen beviser, at intet i
+   test-suiten opdager, hvis den regel går i stykker. Mangler: en test (fx i `CouplingTests.cs` eller en ny unit-
+   test i `CapabilityRulesTests.cs`) der lader en kapabilitets eneste barn udgå via import, og derefter bekræfter
+   forælderens `Selectable` er `true` (ikke stadig blokeret af det udgåede barn).
+
+**Bekræftet solidt derudover:** web-knappens URL (`downloadFile(..., '/api/capabilities/couplings/export.csv', ...)`)
+dræbt præcist af `http.expectOne(...)` + `TestBed`-dobbeltinstantiering, som gjorde FLERE tests røde på én gang —
+en stærkere fejlsignatur end en løs `toContain`.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

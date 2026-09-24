@@ -158,6 +158,7 @@ describe('CapabilityMapPage', () => {
     expect(text(q(f, '[data-testid="empty"]'))).toBe(message);
     expect(q(f, '[data-testid="tree"]')).toBeNull();
     expect(q(f, '[data-testid="download"]')).toBeNull();
+    expect(q(f, '[data-testid="download-couplings"]')).toBeNull();
   });
 
   it('en fejl vises i stedet for et tomt kort', async () => {
@@ -185,6 +186,32 @@ describe('CapabilityMapPage', () => {
 
     expect(text(q(f, '[role="alert"]'))).toBe('Uventet fejl (500).');
     expect(q(f, '[data-testid="tree"]')).not.toBeNull();
+  });
+
+  it('"Hent koblinger (CSV)" henter koblings-eksporten, og begge knapper er spærret imens', async () => {
+    const f = await render(capabilityTree([capabilityNode('K1', 0)]));
+    Object.assign(URL, {
+      createObjectURL: vi.fn().mockReturnValue('blob:c'),
+      revokeObjectURL: vi.fn(),
+    });
+    const clicked: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push(this.download);
+    });
+
+    (q(f, '[data-testid="download-couplings"]') as HTMLButtonElement).click();
+    await settle(f);
+    expect((q(f, '[data-testid="download"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((q(f, '[data-testid="download-couplings"]') as HTMLButtonElement).disabled).toBe(true);
+    http.expectOne('/api/capabilities/couplings/export.csv').flush(new Blob(['x']), {
+      headers: { 'Content-Disposition': "attachment; filename*=UTF-8''koblinger-2026-09-24.csv" },
+    });
+    await settle(f);
+
+    expect(clicked).toEqual(['koblinger-2026-09-24.csv']);
+    expect((q(f, '[data-testid="download-couplings"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('"Hent kortet (CSV)" henter eksporten under serverens filnavn', async () => {

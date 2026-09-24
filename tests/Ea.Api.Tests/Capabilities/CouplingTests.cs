@@ -541,4 +541,27 @@ public sealed class CouplingTests
         Assert.Contains((CapabilityChangeKind.Slettes, "K2.1"), preview.Changes.Select(c => (c.Kind, c.Code)));
         Assert.Equal(0, preview.Summary.Retired);
     }
+
+    [Fact]
+    public async Task Udgaar_det_eneste_barn_kan_forælderen_vaelges_igen()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        await (await admin.CoupleAsync(system, ids["K2.1"])).ExpectAsync(HttpStatusCode.OK);
+        Assert.False((await admin.CapabilitiesAsync()).Items.Single(i => i.Code == "K2").Selectable);
+
+        // K2.1 har en kobling, så den udgår i stedet for at blive slettet.
+        await admin.ImportAsync(File(
+            ("K1", "Uddannelse", null, null),
+            ("K1.1", "Studieadministration", "K1", null),
+            ("K1.1.1", "Optagelse", "K1.1", null),
+            ("K1.2", "Undervisning", "K1", null),
+            ("K2", "Forskning", null, null)));
+
+        var tree = await admin.CapabilitiesAsync();
+        Assert.True(tree.Items.Single(i => i.Code == "K2").Selectable);
+        Assert.Equal([("K2.1", MoveReason.Udgaaet)], tree.ToMove.Select(m => (m.Code, m.Reason)));
+        await (await admin.CoupleAsync(await admin.GetSystemAsync(system.Id), ids["K2.1"], ids["K2"])).ExpectAsync(HttpStatusCode.OK);
+    }
 }

@@ -82,13 +82,7 @@ public static class SystemEndpoints
 
         if (capabilityId == None)
         {
-            // Hverken systemet eller familien dækker noget: en forælder er dækket af sine modulers koblinger, et modul af
-            // forælderens ("hele systemet gør X") — men ikke af et søskendemoduls.
-            query = query.Where(s =>
-                s.CapabilityLinks.Count == 0 &&
-                (s.ParentSystemId == null
-                    ? s.Modules.All(m => m.CapabilityLinks.Count == 0)
-                    : s.ParentSystem!.CapabilityLinks.Count == 0));
+            query = query.Where(CapabilityQueries.Uncovered);
         }
         else if (Guid.TryParse(capabilityId, out var capability))
         {
@@ -629,7 +623,7 @@ public static class SystemEndpoints
         }
 
         var byId = await db.Capabilities.AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
-        var parents = byId.Values.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
+        var parents = CapabilityRules.WithChildren(byId.Values);
         var treeOrder = CapabilityRules.Ordered(byId.Values)
             .Select((n, index) => (n.Capability.Id, index))
             .ToDictionary(x => x.Id, x => x.index);

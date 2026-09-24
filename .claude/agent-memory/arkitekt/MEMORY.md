@@ -69,3 +69,31 @@ Første plan lagt 2026-09-24: 1 fundament+systemregister, 2 integrationer+"hvad 
   (tjekkes kun for NYE koblinger). Ingen felter på koblingen.
 - Overlap: CapabilityRules.Overlap, familienøgle ParentSystemId ?? Id; default: tæller Indfases+IDrift, ikke Udfases/Planlagt/Nedlagt/LokalLoesning.
 - Import: ét endpoint dryRun + fingerprint (409 stale ved afvigelse). Csv.Read i Common (TextFieldParser + strikt UTF-8 + formelvagt-invers).
+
+## Genbrugskatalog — kode efter 3b-web (main 391e82b)
+- FINDES IKKE (trods antagelser): SystemRules.FamilyKey, OverlapExclusion, noget overlap-kode, koblings-CSV.
+- Common/CsvRead.cs: Csv.Read (l.27, strikt UTF-8, Unguard), ImportRowError (l.9), SaveAsUtf8Advice (l.17).
+- CapabilityImport.cs: Parse (l.26, header-tjek m. komma-hint l.39-46), Plan (l.210), Fingerprint = SHA256(JSON(Changes)) (l.325),
+  Apply (l.328), ReadBodyAsync (l.389, GENERISK — hører i Common), WithoutTrailingEmpty (l.375), MaxErrors=200 (l.24).
+- CapabilityEndpoints.Import (l.72-137): tør-kørsel/fingeraftryk-protokol; commit i ExecutionStrategy + tx +
+  "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE" (l.111) → genberegn → sammenlign → StaleDryRun.
+- Problems.StaleDryRun() (l.31) har HÅRDKODET tekst om "Kortet" → skal parametriseres ved næste import.
+- CapabilityRules: CoupleBlockedReason (l.31, selectable-reglen), MoveReasonOf (l.42), MaxCouplingsPerSystem=100 (l.16),
+  MaxRows=5000/MaxFileBytes=2MB (l.18-19, for kortet), CodeOrder, Ordered, PathOf/DisplayPath.
+- CapabilityQueries.CoupledSystemsAsync (l.9): CoupledSystem(Id,"Forælder › Modul") pr. kapabilitet — indgår i import-fingeraftryk
+  (AffectedSystems) → udvid ikke CoupledSystem; lav en rigere holder-query og projicér.
+- SystemEndpoints: capabilityId=none-prædikat (l.83-92; forælder dækket af moduler, modul af forælder, IKKE søskende),
+  WithCouplingLock (l.506, ROW EXCLUSIVE på system_capabilities før validering), ValidateCapabilities (l.531: loft på RÅ liste,
+  kun NYE valideres), koblings-diff (l.486-495), CapabilitiesOf (l.611, familie-dict), Touch (l.573 sætter OGSÅ LastConfirmed).
+- Deterministisk låse-race-testmønster: CouplingTests.WaitForBlockedLockAsync/Sql (l.407-430) — flyt til Infrastructure ved genbrug.
+- Web: capability-import.page.ts (tilstandsmaskine file/result/done/problem/busy/canCommit — TM fandt 4 subtile huller her → generalisér,
+  kopiér ikke), capabilities.api.ts import() (l.24), system-list setFilter→URL (l.122-131), labels.ts Records.
+- EnableRetryOnFailure (DatabaseSetup l.27) → 40P01/40001 genkøres af ExecutionStrategy.
+
+## Plan 3c/3d (2026-09-24) — mine beslutninger
+- Skæring: 3c-1 (regel+koblings-CSV+knap) → 3c-2 (API-felter) → 3d-server → 3d-web (ImportFlow generaliseret) → 3c-web.
+- Undtagelses-forrang: Nedlagt > Udfases > LokalLoesning > Planlagt (Planlagt sidst, så kun "rigtige" planlagte giver mærket).
+- Overlap kun på valgbare kapabiliteter (MoveReason != null → ingen vurdering). Familie = ParentSystemId ?? Id (inkl. søskende)
+  ≠ dækning (selv+forælder+moduler, ikke søskende). Holderens egen status/type afgør.
+- Koblings-CSV: én række pr. egen kobling + én tom-Kode-række pr. system uden egne koblinger (= arbejdsliste OG "fjern alle").
+- 3d: fil = fuldt sæt egne koblinger for systemer i filen; kun NYE valideres; systems-rækken bumpes (UpdatedAt, ikke LastConfirmed).

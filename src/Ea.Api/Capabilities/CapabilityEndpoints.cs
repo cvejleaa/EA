@@ -17,6 +17,7 @@ public static partial class CapabilityEndpoints
         var group = app.MapGroup("/api/capabilities").WithTags("Kapabiliteter");
         group.MapGet("/", GetTree);
         group.MapGet("/export.csv", Export).Produces(StatusCodes.Status200OK, contentType: "text/csv");
+        group.MapGet("/couplings/export.csv", ExportCouplings).Produces(StatusCodes.Status200OK, contentType: "text/csv");
 
         // Filen sendes som selve request-kroppen (text/csv) — ingen formular, så ingen antiforgery-undtagelse.
         // Adgangstjekket ligger i policyen og kører FØR kroppen læses.
@@ -30,7 +31,7 @@ public static partial class CapabilityEndpoints
     {
         var all = await db.Capabilities.AsNoTracking().ToListAsync(ct);
         var byId = all.ToDictionary(c => c.Id);
-        var parents = all.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
+        var parents = CapabilityRules.WithChildren(all);
         var items = CapabilityRules.Ordered(all)
             .Select(n => new CapabilityNode(
                 n.Capability.Id,
@@ -63,6 +64,33 @@ public static partial class CapabilityEndpoints
         var all = await db.Capabilities.AsNoTracking().ToListAsync(ct);
         var date = time.GetUtcNow().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         return TypedResults.File(CapabilityCsv.Write(all), "text/csv; charset=utf-8", $"kapabiliteter-{date}.csv");
+    }
+
+    /// <summary>
+    /// Koblings-CSV'en (docs/csv-koblinger.md): alle systemers egne koblinger med overlap-vurderingen og en række
+    /// uden kode for hvert system, der mangler — dækningsreglen er den samme som systemlistens "Ikke angivet", men
+    /// nedlagte systemer skal ikke kobles.
+    /// </summary>
+    private static async Task<FileContentHttpResult> ExportCouplings(EaDbContext db, TimeProvider time, CancellationToken ct)
+    {
+        var systems = await db.Systems
+            .Include(s => s.ParentSystem)
+            .Include(s => s.ManagingTeam)
+            .Include(s => s.Roles).ThenInclude(r => r.Person)
+            .Include(s => s.CapabilityLinks)
+            .AsSplitQuery()
+            .AsNoTracking()
+            .ToListAsync(ct);
+        var missing = (await db.Systems
+                .Where(CapabilityQueries.Uncovered)
+                .Where(s => s.LifecycleStatus != Systems.LifecycleStatus.Nedlagt)
+                .Select(s => s.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
+        var capabilities = await db.Capabilities.AsNoTracking().ToListAsync(ct);
+        var date = time.GetUtcNow().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return TypedResults.File(
+            CouplingCsv.Write(systems, capabilities, missing), "text/csv; charset=utf-8", $"koblinger-{date}.csv");
     }
 
     /// <summary>

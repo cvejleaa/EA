@@ -24,4 +24,23 @@ public sealed class CapabilityRulesTests
 
         Assert.Equal([("A", 0), ("B", 0), ("B.1", 1), ("C", 0)], ordered.Select(o => (o.Capability.Code, o.Depth)));
     }
+
+    [Fact]
+    public void Et_udgaaet_barn_goer_ikke_forælderen_til_andet_end_et_blad()
+    {
+        var parent = new Capability { Id = Guid.NewGuid(), Code = "K1", Name = "K1" };
+        var retired = new Capability
+        {
+            Id = Guid.NewGuid(),
+            Code = "K1.1",
+            Name = "K1.1",
+            ParentId = parent.Id,
+            RetiredAt = DateTimeOffset.UnixEpoch,
+        };
+        var other = new Capability { Id = Guid.NewGuid(), Code = "K2", Name = "K2" };
+        var child = new Capability { Id = Guid.NewGuid(), Code = "K2.1", Name = "K2.1", ParentId = other.Id };
+
+        // Kun K2 har et barn i kortet. K1's eneste barn er udgået — også selv om det stadig peger på K1.
+        Assert.Equal([other.Id], CapabilityRules.WithChildren([parent, retired, other, child]));
+    }
 }

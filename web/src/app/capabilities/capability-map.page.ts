@@ -39,10 +39,10 @@ export class CapabilityMapPage {
     }
   }
 
-  protected async download(): Promise<void> {
+  protected async download(file: 'model' | 'couplings'): Promise<void> {
     this.downloading.set(true);
     try {
-      await this.api.downloadModel();
+      await (file === 'model' ? this.api.downloadModel() : this.api.downloadCouplings());
     } catch (e) {
       this.error.set(toProblem(e).message);
     } finally {

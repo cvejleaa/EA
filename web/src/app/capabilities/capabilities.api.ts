@@ -16,6 +16,11 @@ export class CapabilitiesApi {
     return downloadFile(this.http, '/api/capabilities/export.csv', 'kapabiliteter.csv');
   }
 
+  /** Alle koblinger med overlap-vurderingen — arbejdslisten til at koble systemerne (docs/csv-koblinger.md). */
+  downloadCouplings(): Promise<void> {
+    return downloadFile(this.http, '/api/capabilities/couplings/export.csv', 'koblinger.csv');
+  }
+
   /**
    * Filen sendes som den er (text/csv). Tør-kørsel gemmer intet; gennemførelse kræver tør-kørslens
    * fingeraftryk, så der gemmes præcis det, brugeren så.
