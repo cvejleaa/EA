@@ -34,6 +34,8 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
 
     public DbSet<Capability> Capabilities => Set<Capability>();
 
+    public DbSet<SystemCapability> SystemCapabilities => Set<SystemCapability>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Eget schema, så databasen kan deles på en fælles DTU-server.
@@ -73,6 +75,12 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
             e.HasMany(s => s.Roles)
                 .WithOne()
                 .HasForeignKey(r => r.SystemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Koblingerne er systemets egne oplysninger: de forsvinder med systemet (som rollerne).
+            e.HasMany(s => s.CapabilityLinks)
+                .WithOne()
+                .HasForeignKey(l => l.SystemId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -162,6 +170,16 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
             // Restrict: importen sletter børn før forældre; databasen afviser et hul i træet.
             e.HasOne<Capability>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(c => c.ParentId);
+            e.Property(c => c.RetiredPath).HasMaxLength(CapabilityRules.RetiredPathMaxLength);
+        });
+
+        modelBuilder.Entity<SystemCapability>(e =>
+        {
+            e.ToTable("system_capabilities");
+            e.HasKey(l => new { l.SystemId, l.CapabilityId });
+            // Restrict: importen sletter aldrig en kapabilitet med koblinger — den markeres udgået.
+            e.HasOne(l => l.Capability).WithMany().HasForeignKey(l => l.CapabilityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(l => l.CapabilityId);
         });
 
         modelBuilder.Entity<Team>(e =>

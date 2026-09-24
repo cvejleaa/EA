@@ -26,24 +26,28 @@ describe('CapabilityImportPage', () => {
           code: 'K3',
           before: { code: 'K3', name: 'Gammel', parentCode: null, description: null },
           after: null,
+          affectedSystems: [],
         },
         {
           kind: 'Aendret',
           code: 'K1.1',
           before: { code: 'K1.1', name: 'Studier', parentCode: 'K1', description: 'a' },
           after: { code: 'K1.1', name: 'Studieadministration', parentCode: 'K1', description: 'b' },
+          affectedSystems: [],
         },
         {
           kind: 'Aendret',
           code: 'K2',
           before: { code: 'K2', name: 'Forsk', parentCode: null, description: 'samme' },
           after: { code: 'K2', name: 'Forskning', parentCode: null, description: 'samme' },
+          affectedSystems: [],
         },
         {
           kind: 'Ny',
           code: 'K4',
           before: null,
           after: { code: 'K4', name: 'Ny ting', parentCode: null, description: null },
+          affectedSystems: [],
         },
       ],
       fingerprint: 'abc123',
@@ -194,8 +198,70 @@ describe('CapabilityImportPage', () => {
     await settle(f);
 
     expect(text(q(f, '[data-testid="large-removal"]'))).toBe(
-      'Importen sletter 40 af kortets 100 kapabiliteter. Filen skal være hele kortet — er det en delvis fil?',
+      'Importen fjerner 40 af kortets 100 kapabiliteter. Filen skal være hele kortet — er det en delvis fil?',
     );
+  });
+
+  it('det, der udgår, vises med de systemer, hvis koblinger bør flyttes', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    importRequest().flush(
+      preview({
+        summary: importSummary({
+          retired: 1,
+          unchanged: 5,
+          currentTotal: 6,
+          couplingsToMove: 2,
+          systemsToMove: 2,
+        }),
+        changes: [
+          {
+            kind: 'Udgaar',
+            code: 'K2.1',
+            before: { code: 'K2.1', name: 'Laboratorier', parentCode: 'K2', description: null },
+            after: null,
+            affectedSystems: [
+              { id: 's1', name: 'Laborant' },
+              { id: 's2', name: 'Nordlys › HR' },
+            ],
+          },
+          {
+            kind: 'Ny',
+            code: 'K9',
+            before: null,
+            after: { code: 'K9', name: 'Ny', parentCode: null, description: null },
+            affectedSystems: [],
+          },
+        ],
+      }),
+    );
+    await settle(f);
+
+    expect(text(q(f, '[data-testid="summary"]'))).toBe(
+      '0 nye · 0 ændrede · 0 slettes · 1 udgår · 5 uændrede',
+    );
+    expect(text(q(f, '[data-testid="to-move"]'))).toBe(
+      '2 koblinger på 2 systemer bør flyttes bagefter: de peger på en kapabilitet, der udgår eller får underkapabiliteter. Koblingerne bevares, indtil de er flyttet.',
+    );
+    const rows = Array.from(el(f).querySelectorAll('[data-testid="changes"] tbody tr'));
+    expect(text(rows[0].querySelector('td'))).toBe('Udgår');
+    expect(text(rows[0].querySelector('[data-testid="affected"]'))).toBe(
+      'Koblinger bør flyttes: Laborant, Nordlys › HR',
+    );
+    expect(rows[1].querySelector('[data-testid="affected"]')).toBeNull();
+    expect(rows.map((tr) => tr.classList.contains('removed'))).toEqual([true, false]);
+  });
+
+  it('uden koblinger at flytte er der ingen besked om det', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    importRequest().flush(preview());
+    await settle(f);
+
+    expect(q(f, '[data-testid="summary"]')).not.toBeNull();
+    expect(q(f, '[data-testid="to-move"]')).toBeNull();
   });
 
   it('en fil uden ændringer har intet at gennemføre', async () => {

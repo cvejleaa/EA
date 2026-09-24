@@ -10,6 +10,10 @@ namespace Ea.Api.Tests.Capabilities;
 /// <summary>Import af kapabilitetskortet: filen er HELE kortet, tør-kørslen gemmer intet, og fejl stopper alt.</summary>
 public sealed class CapabilityImportTests
 {
+    /// <summary>Tallene uden koblinger (intet udgår, genaktiveres eller skal flyttes).</summary>
+    private static CapabilityImportSummary Summary(int New, int Changed, int Removed, int Unchanged, int CurrentTotal) =>
+        new(New, Changed, Removed, Retired: 0, Reactivated: 0, Unchanged, CurrentTotal, LargeRemoval: false, CouplingsToMove: 0, SystemsToMove: 0);
+
     private static readonly byte[] Model = File(
         ("K1", "Uddannelse", null, null),
         ("K1.1", "Studieadministration", "K1", "Fra ansøgning til bevis"),
@@ -28,7 +32,7 @@ public sealed class CapabilityImportTests
 
         Assert.False(preview.Committed);
         Assert.Empty(preview.Errors);
-        Assert.Equal(new CapabilityImportSummary(New: 6, Changed: 0, Removed: 0, Unchanged: 0, CurrentTotal: 0, LargeRemoval: false),
+        Assert.Equal(Summary(New: 6, Changed: 0, Removed: 0, Unchanged: 0, CurrentTotal: 0),
             preview.Summary);
         Assert.All(preview.Changes, c => Assert.Equal(CapabilityChangeKind.Ny, c.Kind));
         Assert.Equal(new CapabilitySnapshot("K1.1", "Studieadministration", "K1", "Fra ansøgning til bevis"),
@@ -80,7 +84,7 @@ public sealed class CapabilityImportTests
 
         var again = await admin.DryRunAsync(Model);
 
-        Assert.Equal(new CapabilityImportSummary(0, 0, 0, Unchanged: 6, CurrentTotal: 6, false), again.Summary);
+        Assert.Equal(Summary(New: 0, Changed: 0, Removed: 0, Unchanged: 6, CurrentTotal: 6), again.Summary);
         Assert.Empty(again.Changes);
     }
 
@@ -100,7 +104,7 @@ public sealed class CapabilityImportTests
         var again = await admin.DryRunAsync(await export.Content.ReadAsByteArrayAsync());
 
         Assert.Empty(again.Errors);
-        Assert.Equal(new CapabilityImportSummary(0, 0, 0, Unchanged: 3, CurrentTotal: 3, false), again.Summary);
+        Assert.Equal(Summary(New: 0, Changed: 0, Removed: 0, Unchanged: 3, CurrentTotal: 3), again.Summary);
     }
 
     [Fact]
@@ -119,7 +123,7 @@ public sealed class CapabilityImportTests
             ("K2.1", "Laboratoriedrift", "K2", null),
             ("K3", "Understøttende", null, null)));
 
-        Assert.Equal(new CapabilityImportSummary(New: 1, Changed: 2, Removed: 1, Unchanged: 3, CurrentTotal: 6, LargeRemoval: false),
+        Assert.Equal(Summary(New: 1, Changed: 2, Removed: 1, Unchanged: 3, CurrentTotal: 6),
             preview.Summary);
         Assert.Equal(
             [

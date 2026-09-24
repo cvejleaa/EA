@@ -206,58 +206,120 @@ public static class CapabilityImport
         return $"Forælder-kæden går i ring: {string.Join(" → ", shown)}.";
     }
 
-    public static CapabilityImportPlan Plan(IReadOnlyList<CapabilityImportRow> rows, IReadOnlyCollection<Capability> existing)
+    /// <param name="coupled">Systemer koblet til hver kapabilitet (tom, hvis ingen) — afgør "slettes" eller "udgår".</param>
+    public static CapabilityImportPlan Plan(
+        IReadOnlyList<CapabilityImportRow> rows,
+        IReadOnlyCollection<Capability> existing,
+        IReadOnlyDictionary<Guid, IReadOnlyList<CoupledSystem>> coupled)
     {
         var existingByCode = existing.ToDictionary(c => c.CodeNormalized);
         var existingCode = existing.ToDictionary(c => c.Id, c => c.Code);
         var rowByCode = rows.ToDictionary(r => CapabilityRules.NormalizeCode(r.Code));
+        var hadChildren = existing.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
+        var getsChildren = rows.Where(r => r.ParentCode is not null)
+            .Select(r => CapabilityRules.NormalizeCode(r.ParentCode!)).ToHashSet();
 
+        IReadOnlyList<CoupledSystem> Coupled(Capability c) => coupled.GetValueOrDefault(c.Id) ?? [];
+
+        // En udgået kapabilitet er løsrevet: "før" har ingen forælder.
         CapabilitySnapshot Before(Capability c) =>
-            new(c.Code, c.Name, c.ParentId is { } p ? existingCode[p] : null, c.Description);
+            new(c.Code, c.Name, c.ParentId is { } p && c.RetiredAt is null ? existingCode[p] : null, c.Description);
 
         // Forælderkoden skrives som forælderens egen række staver den — "ek-1" og "EK-1" er ikke en ændring.
         CapabilitySnapshot After(CapabilityImportRow r) =>
             new(r.Code, r.Name, r.ParentCode is { } p ? rowByCode[CapabilityRules.NormalizeCode(p)].Code : null, r.Description);
 
-        var added = new List<CapabilityChange>();
-        var changed = new List<CapabilityChange>();
+        var changes = new List<CapabilityChange>();
+        int added = 0, changed = 0, reactivated = 0;
         foreach (var row in rows)
         {
-            if (!existingByCode.TryGetValue(CapabilityRules.NormalizeCode(row.Code), out var current))
+            var code = CapabilityRules.NormalizeCode(row.Code);
+            if (!existingByCode.TryGetValue(code, out var current))
             {
-                added.Add(new CapabilityChange(CapabilityChangeKind.Ny, row.Code, null, After(row)));
+                changes.Add(new CapabilityChange(CapabilityChangeKind.Ny, row.Code, null, After(row), []));
+                added++;
+                continue;
+            }
+
+            // Et koblet blad, der får børn: koblingerne ligger nu på et niveau, der ikke kan vælges.
+            var moveCouplings = current.RetiredAt is null && !hadChildren.Contains(current.Id) && getsChildren.Contains(code)
+                ? Coupled(current)
+                : [];
+
+            if (current.RetiredAt is not null)
+            {
+                changes.Add(new CapabilityChange(CapabilityChangeKind.Genaktiveres, row.Code, Before(current), After(row), []));
+                reactivated++;
             }
             else if (Before(current) != After(row))
             {
-                changed.Add(new CapabilityChange(CapabilityChangeKind.Aendret, row.Code, Before(current), After(row)));
+                changes.Add(new CapabilityChange(CapabilityChangeKind.Aendret, row.Code, Before(current), After(row), moveCouplings));
+                changed++;
+            }
+            else if (moveCouplings.Count > 0)
+            {
+                changes.Add(new CapabilityChange(
+                    CapabilityChangeKind.FaarUnderkapabiliteter, row.Code, Before(current), After(row), moveCouplings));
             }
         }
 
-        var removed = existing
-            .Where(c => !rowByCode.ContainsKey(c.CodeNormalized))
-            .Select(c => new CapabilityChange(CapabilityChangeKind.Slettes, c.Code, Before(c), null))
-            .ToList();
+        int removed = 0, retired = 0, removedFromMap = 0;
+        foreach (var gone in existing.Where(c => !rowByCode.ContainsKey(c.CodeNormalized)))
+        {
+            var systems = Coupled(gone);
+            if (systems.Count == 0)
+            {
+                changes.Add(new CapabilityChange(CapabilityChangeKind.Slettes, gone.Code, Before(gone), null, []));
+                removed++;
+                removedFromMap += gone.RetiredAt is null ? 1 : 0;
+            }
+            else if (gone.RetiredAt is null)
+            {
+                changes.Add(new CapabilityChange(CapabilityChangeKind.Udgaar, gone.Code, Before(gone), null, systems));
+                retired++;
+                removedFromMap++;
+            }
+
+            // En allerede udgået kapabilitet med koblinger forbliver udgået — det er ikke en ændring.
+        }
 
         // Det, der forsvinder, først — det er dét, en fejl i filen koster.
-        var changes = removed.OrderBy(c => c.Code, CapabilityRules.CodeOrder)
-            .Concat(changed.OrderBy(c => c.Code, CapabilityRules.CodeOrder))
-            .Concat(added.OrderBy(c => c.Code, CapabilityRules.CodeOrder))
+        var ordered = changes
+            .OrderBy(c => KindOrder(c.Kind))
+            .ThenBy(c => c.Code, CapabilityRules.CodeOrder)
             .ToList();
 
+        var active = existing.Count(c => c.RetiredAt is null);
+        var toMove = ordered.SelectMany(c => c.AffectedSystems).ToList();
         var summary = new CapabilityImportSummary(
-            New: added.Count,
-            Changed: changed.Count,
-            Removed: removed.Count,
-            Unchanged: rows.Count - added.Count - changed.Count,
-            CurrentTotal: existing.Count,
-            LargeRemoval: existing.Count > 0 && removed.Count > existing.Count * CapabilityRules.LargeRemovalShare);
+            New: added,
+            Changed: changed,
+            Removed: removed,
+            Retired: retired,
+            Reactivated: reactivated,
+            Unchanged: rows.Count - added - changed - reactivated,
+            CurrentTotal: active,
+            LargeRemoval: active > 0 && removedFromMap > active * CapabilityRules.LargeRemovalShare,
+            CouplingsToMove: toMove.Count,
+            SystemsToMove: toMove.Select(s => s.Id).Distinct().Count());
 
-        return new CapabilityImportPlan(rows, changes, summary);
+        return new CapabilityImportPlan(rows, ordered, summary);
     }
 
+    private static int KindOrder(CapabilityChangeKind kind) => kind switch
+    {
+        CapabilityChangeKind.Slettes => 0,
+        CapabilityChangeKind.Udgaar => 1,
+        CapabilityChangeKind.FaarUnderkapabiliteter => 2,
+        CapabilityChangeKind.Aendret => 3,
+        CapabilityChangeKind.Genaktiveres => 4,
+        _ => 5,
+    };
+
     /// <summary>
-    /// Et fingeraftryk af ændringerne. Er kortet ændret, siden tør-kørslen blev lavet, giver den samme fil et andet
-    /// aftryk — og importen afvises i stedet for at gemme noget, brugeren ikke har set.
+    /// Et fingeraftryk af ændringerne (inkl. de berørte systemer). Er kortet eller koblingerne ændret, siden
+    /// tør-kørslen blev lavet, giver den samme fil et andet aftryk — og importen afvises i stedet for at gemme noget,
+    /// brugeren ikke har set.
     /// </summary>
     public static string Fingerprint(CapabilityImportPlan plan) =>
         Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan.Changes)));
@@ -265,11 +327,19 @@ public static class CapabilityImport
     public static void Apply(CapabilityImportPlan plan, IReadOnlyCollection<Capability> existing, EaDbContext db, DateTimeOffset now)
     {
         var byCode = existing.ToDictionary(c => c.CodeNormalized);
+        var byId = existing.ToDictionary(c => c.Id);
         var ids = existing.ToDictionary(c => c.CodeNormalized, c => c.Id);
         foreach (var row in plan.Rows)
         {
             ids.TryAdd(CapabilityRules.NormalizeCode(row.Code), Guid.CreateVersion7(now));
         }
+
+        // Stien til det, der udgår, beregnes FØR træet ændres — det er dér, koblingerne sad.
+        var retiring = plan.Changes
+            .Where(c => c.Kind == CapabilityChangeKind.Udgaar)
+            .Select(c => byCode[CapabilityRules.NormalizeCode(c.Code)])
+            .Select(c => (Capability: c, Path: CapabilityRules.PathOf(c, byId)))
+            .ToList();
 
         foreach (var row in plan.Rows)
         {
@@ -284,6 +354,15 @@ public static class CapabilityImport
             capability.Name = row.Name;
             capability.Description = row.Description;
             capability.ParentId = row.ParentCode is { } parent ? ids[CapabilityRules.NormalizeCode(parent)] : null;
+            capability.RetiredAt = null;
+            capability.RetiredPath = null;
+        }
+
+        foreach (var (capability, path) in retiring)
+        {
+            capability.RetiredAt = now;
+            capability.RetiredPath = path.Length == 0 ? null : path[..Math.Min(path.Length, CapabilityRules.RetiredPathMaxLength)];
+            capability.ParentId = null;
         }
 
         foreach (var change in plan.Changes.Where(c => c.Kind == CapabilityChangeKind.Slettes))

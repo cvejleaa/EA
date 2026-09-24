@@ -257,6 +257,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "capabilityId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -870,7 +877,8 @@
           "kind",
           "code",
           "before",
-          "after"
+          "after",
+          "affectedSystems"
         ],
         "type": "object",
         "properties": {
@@ -899,6 +907,12 @@
                 "$ref": "#/components/schemas/CapabilitySnapshot"
               }
             ]
+          },
+          "affectedSystems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoupledSystem"
+            }
           }
         }
       },
@@ -906,7 +920,10 @@
         "enum": [
           "Ny",
           "Aendret",
-          "Slettes"
+          "Slettes",
+          "Udgaar",
+          "Genaktiveres",
+          "FaarUnderkapabiliteter"
         ]
       },
       "CapabilityImportResult": {
@@ -950,9 +967,13 @@
           "new",
           "changed",
           "removed",
+          "retired",
+          "reactivated",
           "unchanged",
           "currentTotal",
-          "largeRemoval"
+          "largeRemoval",
+          "couplingsToMove",
+          "systemsToMove"
         ],
         "type": "object",
         "properties": {
@@ -968,6 +989,14 @@
             "type": "integer",
             "format": "int32"
           },
+          "retired": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reactivated": {
+            "type": "integer",
+            "format": "int32"
+          },
           "unchanged": {
             "type": "integer",
             "format": "int32"
@@ -978,6 +1007,14 @@
           },
           "largeRemoval": {
             "type": "boolean"
+          },
+          "couplingsToMove": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "systemsToMove": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -988,7 +1025,9 @@
           "name",
           "description",
           "parentId",
-          "depth"
+          "depth",
+          "path",
+          "selectable"
         ],
         "type": "object",
         "properties": {
@@ -1018,6 +1057,40 @@
           "depth": {
             "type": "integer",
             "format": "int32"
+          },
+          "path": {
+            "type": "string"
+          },
+          "selectable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CapabilityRef": {
+        "required": [
+          "id",
+          "code",
+          "name",
+          "path",
+          "retired"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "retired": {
+            "type": "boolean"
           }
         }
       },
@@ -1053,6 +1126,7 @@
       "CapabilityTreeResponse": {
         "required": [
           "items",
+          "retired",
           "canImport"
         ],
         "type": "object",
@@ -1061,6 +1135,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CapabilityNode"
+            }
+          },
+          "retired": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RetiredCapability"
             }
           },
           "canImport": {
@@ -1080,6 +1160,22 @@
               "integer"
             ],
             "format": "uint32"
+          }
+        }
+      },
+      "CoupledSystem": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -1626,6 +1722,45 @@
           }
         }
       },
+      "RetiredCapability": {
+        "required": [
+          "id",
+          "code",
+          "name",
+          "retiredPath",
+          "retiredAt",
+          "systems"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "retiredPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "retiredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "systems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoupledSystem"
+            }
+          }
+        }
+      },
       "RoleAssignmentDto": {
         "required": [
           "role",
@@ -1657,6 +1792,28 @@
           }
         }
       },
+      "SystemCapabilityDto": {
+        "required": [
+          "capability",
+          "heldBy"
+        ],
+        "type": "object",
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/CapabilityRef"
+          },
+          "heldBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemRef"
+              }
+            ]
+          }
+        }
+      },
       "SystemDetail": {
         "required": [
           "id",
@@ -1669,6 +1826,7 @@
           "parent",
           "modules",
           "roles",
+          "capabilities",
           "createdAt",
           "updatedAt",
           "lastConfirmedAt",
@@ -1740,6 +1898,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RoleAssignmentDto"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemCapabilityDto"
             }
           },
           "createdAt": {
@@ -2114,6 +2278,16 @@
               "integer"
             ],
             "format": "uint32"
+          },
+          "capabilityIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },

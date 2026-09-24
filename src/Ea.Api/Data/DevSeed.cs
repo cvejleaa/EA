@@ -43,6 +43,49 @@ public static partial class DevSeed
         {
             await SeedCapabilitiesAsync(db, now, logger);
         }
+
+        if (!await db.SystemCapabilities.AnyAsync())
+        {
+            await SeedCouplingsAsync(db, logger);
+        }
+    }
+
+    /// <summary>
+    /// FIKTIVE koblinger mellem eksempelsystemerne og eksempelkortet — med et par overlap at vise (Kompas Sag og
+    /// Studium; Servicedesk Plus og Blanketmotor) og et modul-/forældre-eksempel (Nordlys).
+    /// </summary>
+    private static async Task SeedCouplingsAsync(EaDbContext db, ILogger logger)
+    {
+        (string System, string Code)[] couplings =
+        [
+            ("Nordlys Økonomi", "K3.1.1"),
+            ("Nordlys Økonomi", "K3.1.2"),
+            ("Nordlys Projekter", "K3.1.2"),
+            ("Nordlys HR", "K3.2.1"),
+            ("Lønudtræk-regneark", "K3.2.1"),
+            ("Kompas Sag", "K1.1.2"),
+            ("Studium", "K1.1.1"),
+            ("Studium", "K1.1.2"),
+            ("Laborant", "K2.1.1"),
+            ("Servicedesk Plus (fiktiv)", "K3.3.2"),
+            ("Blanketmotor", "K3.3.2"),
+            ("Identitetskilde (fiktiv)", "K3.3.1"),
+        ];
+
+        var systems = await db.Systems.ToDictionaryAsync(s => s.Name);
+        var capabilities = await db.Capabilities.ToDictionaryAsync(c => c.Code);
+        var added = 0;
+        foreach (var (system, code) in couplings)
+        {
+            if (systems.TryGetValue(system, out var s) && capabilities.TryGetValue(code, out var c))
+            {
+                db.SystemCapabilities.Add(new SystemCapability { SystemId = s.Id, CapabilityId = c.Id });
+                added++;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        LogCouplingsSeeded(logger, added);
     }
 
     /// <summary>
@@ -75,7 +118,7 @@ public static partial class DevSeed
         ];
 
         var rows = model.Select((m, i) => new CapabilityImportRow(i + 2, m.Code, m.Name, m.Parent, null)).ToList();
-        var plan = CapabilityImport.Plan(rows, []);
+        var plan = CapabilityImport.Plan(rows, [], new Dictionary<Guid, IReadOnlyList<CoupledSystem>>());
         CapabilityImport.Apply(plan, [], db, now);
         await db.SaveChangesAsync();
         LogCapabilitiesSeeded(logger, rows.Count);
@@ -247,4 +290,7 @@ public static partial class DevSeed
 
     [LoggerMessage(Level = LogLevel.Information, Message = "DevSeed: {Count} fiktive kapabiliteter oprettet.")]
     private static partial void LogCapabilitiesSeeded(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "DevSeed: {Count} fiktive koblinger mellem systemer og kapabiliteter oprettet.")]
+    private static partial void LogCouplingsSeeded(ILogger logger, int count);
 }

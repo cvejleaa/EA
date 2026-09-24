@@ -48,6 +48,14 @@ public static class TestApiCapabilities
         return (await response.Content.ReadFromJsonAsync<CapabilityTreeResponse>(TestApp.Json))!;
     }
 
+    /// <summary>Kapabilitetens id ud fra koden (fra kortet).</summary>
+    public static async Task<Guid> CapabilityIdAsync(this HttpClient client, string code) =>
+        (await client.CapabilitiesAsync()).Items.Single(i => i.Code == code).Id;
+
+    /// <summary>Sætter systemets egne koblinger (hele listen) og returnerer svaret.</summary>
+    public static Task<HttpResponseMessage> CoupleAsync(this HttpClient client, Ea.Api.Systems.SystemDetail system, params Guid[] capabilityIds) =>
+        client.PutSystemAsync(system.Id, system.ToWrite() with { CapabilityIds = capabilityIds });
+
     /// <summary>Kortet som (dybde, kode, navn, forælderens kode) i visningsrækkefølge.</summary>
     public static async Task<List<(int Depth, string Code, string Name, string? Parent)>> TreeAsync(this HttpClient client)
     {

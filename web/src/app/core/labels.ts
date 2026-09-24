@@ -56,6 +56,9 @@ export const capabilityChangeKindLabels: Record<CapabilityChangeKind, string> = 
   Ny: 'Ny',
   Aendret: 'Ændret',
   Slettes: 'Slettes',
+  Udgaar: 'Udgår',
+  Genaktiveres: 'Genaktiveres',
+  FaarUnderkapabiliteter: 'Får underkapabiliteter',
 };
 
 export const lifecycleOptions = Object.keys(lifecycleLabels) as LifecycleStatus[];
@@ -72,6 +75,8 @@ export function importSummaryText(s: CapabilityImportSummary, committed: boolean
     count(s.new, 'ny', 'nye'),
     count(s.changed, 'ændret', 'ændrede'),
     `${s.removed} ${committed ? 'slettet' : 'slettes'}`,
+    ...(s.retired > 0 ? [`${s.retired} ${committed ? 'udgået' : 'udgår'}`] : []),
+    ...(s.reactivated > 0 ? [`${s.reactivated} ${committed ? 'genaktiveret' : 'genaktiveres'}`] : []),
     count(s.unchanged, 'uændret', 'uændrede'),
   ].join(' · ');
 }

@@ -1,3 +1,4 @@
+using Ea.Api.Capabilities;
 using Ea.Api.Teams;
 
 namespace Ea.Api.Systems;
@@ -43,6 +44,9 @@ public sealed class SystemEntity
     public List<SystemEntity> Modules { get; set; } = [];
 
     public List<SystemRoleAssignment> Roles { get; set; } = [];
+
+    /// <summary>Kapabiliteter, systemet selv er koblet til (modulers koblinger ligger på modulerne).</summary>
+    public List<SystemCapability> CapabilityLinks { get; set; } = [];
 
     public DateTimeOffset CreatedAt { get; set; }
 

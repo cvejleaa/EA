@@ -10,13 +10,30 @@ EA-registret via denne fil. Det kan ikke redigeres i brugerfladen. Et eksempel m
 ## Det vigtigste: filen er HELE kortet
 
 **En import erstatter hele kortet.** Kapabiliteter, der står i filen, oprettes eller opdateres. **Koder, der
-ikke står i filen, slettes.** Det er det modsatte af integrations-CSV'en, hvor manglende rækker aldrig
+ikke står i filen, fjernes.** Det er det modsatte af integrations-CSV'en, hvor manglende rækker aldrig
 slettes.
 
 - **Start altid fra en eksport.** Hent kortet fra registret, ret i Excel, og indlæs hele filen igen.
-- **Tør-kørslen viser forskellen, før noget gemmes.** Det, der slettes, står øverst. Fjerner filen mere end
+- **Tør-kørslen viser forskellen, før noget gemmes.** Det, der fjernes, står øverst. Fjerner filen mere end
   en femtedel af kortet, får du en tydelig advarsel. Det tyder på en delvis fil.
-- **En tom fil afvises.** Det samme gælder en fil med kun overskrifter, for den ville slette hele kortet.
+- **En tom fil afvises.** Det samme gælder en fil med kun overskrifter, for den ville fjerne hele kortet.
+
+### Når systemer er koblet til kapabiliteterne
+
+En kapabilitet, der fjernes, **slettes kun, hvis ingen systemer er koblet til den**. Ellers:
+
+- **Den udgår.** Den forsvinder fra kortet og fra eksporten, men koblingerne bevares. Den kan ikke vælges til
+  nye koblinger, og den vises under "Udgåede kapabiliteter" på kortet med de systemer, der skal flyttes, og med
+  stien til, hvor den sad.
+- **Den genaktiveres, hvis koden står i en senere fil.** Så kan en fejlimport rulles tilbage uden at miste
+  koblinger.
+- **En udgået kapabilitet uden koblinger slettes** ved næste import, hvor den ikke står i filen.
+- **Et koblet blad, der får underkapabiliteter**, meldes i tør-kørslen. Koblingerne bevares, men bør flyttes ned
+  på det blad, der passer bedst, for kun blade kan vælges.
+
+Tør-kørslen tæller koblingerne, der bør flyttes, fx "37 koblinger på 21 systemer", så prisen for en ny udgave af
+kortet ses, før der trykkes. **Omdøber en ny HERM-udgave en kode**, bliver det til "udgår + ny". Flyt så
+koblingerne fra den udgåede kapabilitet til den nye.
 
 ## Kolonner
 
@@ -59,14 +76,10 @@ række er forkert. Registret afviser blandt andet:
 
 ## Når importen gennemføres
 
-- Registret gemmer **præcis det, tør-kørslen viste**. Er kortet ændret af en anden i mellemtiden, afvises
-  importen med besked om at køre tør-kørslen igen.
+- Registret gemmer **præcis det, tør-kørslen viste**. Er kortet eller koblingerne ændret i mellemtiden,
+  afvises importen med besked om at køre tør-kørslen igen.
 - Alt gemmes samlet. En halv import kan ikke ske.
 - Kun enterprise arkitekten (rollen *EA.Admin*) kan importere.
-
-> **Når systemer bliver koblet til kapabiliteter (delopgave 3b)**, slettes en kapabilitet med koblinger ikke
-> længere. Den markeres i stedet som *udgået*, og koblingerne bevares, indtil de er flyttet. Den
-> vejledning kommer med 3b.
 
 ## Apostroffer mod formler
 
