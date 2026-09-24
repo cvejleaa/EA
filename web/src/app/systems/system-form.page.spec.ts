@@ -118,7 +118,10 @@ describe('SystemFormPage', () => {
 
     const put = http.expectOne('/api/systems/sys-1');
     expect((put.request.body as SystemWriteRequest).version).toBe(7);
-    put.flush({ detail: 'Systemet er ændret af en anden, siden du åbnede det.' }, { status: 409, statusText: 'Conflict' });
+    put.flush(
+      { type: 'urn:ea:problem:stale-version', detail: 'Systemet er ændret af en anden, siden du åbnede det.' },
+      { status: 409, statusText: 'Conflict' },
+    );
     await settle(f);
 
     const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
@@ -164,7 +167,23 @@ describe('SystemFormPage', () => {
 
     const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
     expect(text(problem)).toBe('Der er fejl i oplysningerne.');
-    // Kun en konflikt (409) må vise "Hent nyeste version (dine ændringer kasseres)".
+    // Kun en forældet version må vise "Hent nyeste version (dine ændringer kasseres)".
+    expect(problem?.querySelector('button')).toBeNull();
+  });
+
+  it('en navnedublet (409) tilbyder heller ikke at kassere ændringerne', async () => {
+    const f = await render(systemDetail());
+    await submit(f);
+    http
+      .expectOne('/api/systems/sys-1')
+      .flush(
+        { type: 'urn:ea:problem:duplicate', detail: 'Der findes allerede et system med navnet "Kompas".' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    await settle(f);
+
+    const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
+    expect(text(problem)).toBe('Der findes allerede et system med navnet "Kompas".');
     expect(problem?.querySelector('button')).toBeNull();
   });
 });

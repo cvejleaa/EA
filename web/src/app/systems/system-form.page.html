@@ -141,7 +141,7 @@
       @if (problem(); as p) {
         <div class="problem" role="alert" data-testid="problem">
           <p class="error-text">{{ p.message }}</p>
-          @if (p.status === 409 && isEdit()) {
+          @if (p.type === staleVersion && isEdit()) {
             <button mat-stroked-button type="button" (click)="reload()">Hent nyeste version (dine ændringer kasseres)</button>
           }
         </div>

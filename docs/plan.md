@@ -48,7 +48,7 @@ Hver delopgave kan landes alene og giver værdi for sig.
    systemejer, systemforvaltere) og personer med afdeling. Dertil søgning,
    filtre, friskhed ("Bekræft uændret"), adgang på serveren, dev-login, CI og
    API-kontrakten.
-2. **Integrationer og "hvad rammes"**. Integrationer registreres med fra/til,
+2. **Integrationer og "hvad rammes"** *(server landet i PR #2; brugerfladen følger)*. Integrationer registreres med fra/til,
    type (API/fil/event/direkte-DB/udtræk), dataobjekter og CSV-eksport. CSV'en
    er også det fremtidige importformat og skal indeholde en matchnøgle (id
    eller ExternalKey). Den udleveres til foranalysen som skabelon. Lister og
@@ -74,6 +74,25 @@ Hver delopgave kan landes alene og giver værdi for sig.
 **Spor A: Azure og Entra ID**. Kræver app-registreringer hos DTU IT, så den
 proces bør startes nu. Det omfatter MSAL i klienten, migrations bundle før
 appen, og at API'et serverer Angular-buildet.
+
+## Beslutninger for delopgave 2: integrationer
+
+Arkitektens plan blev gennemgået af Quality Control og domæne-rådgiveren før koden, og deres fund er
+indarbejdet.
+
+| # | Beslutning | Hvorfor |
+|---|---|---|
+| A | **Retning er dataflow** ("data går fra → til"). Der er intet retningsfelt; tovejs registreres som to rækker. | Svarer direkte på "hvad rammes". Et system, der henter via API, er *modtageren*. Det står i UI-teksterne og i CSV-vejledningen, fordi det er den mest sandsynlige fejlregistrering. |
+| B | **Fra og til kan ikke ændres** efter oprettelse. | Giver en stabil identitet til import og undgår at flytte adgang mellem systemer i delopgave 4. |
+| C | **Dublet-nøgle: (fra, til, type, platform, navn)**. NULL tæller som en værdi. Navnet er valgfrit. | Fanger den samme integration registreret to gange. Navnet adskiller reelle, separate flows, så importen kan matche entydigt. |
+| D | **Ingen status på integrationen.** "Planlagt" og "nedlagt" udledes af endernes livscyklus, og sletning er hård, indtil ændringshistorikken kommer i delopgave 4. | Et felt kommer først, når en visning bruger det. Begrænsningen står i CSV-vejledningen. |
+| E | **Tidsstempler på integrationen.** UpdatedAt sættes ved hver skrivning. | Uden den ville en ændring, der kun rører dataobjekterne, ikke blive tjekket for samtidige ændringer (QC). |
+| F | **409 har en type**: forældet version, dublet eller blokeret. | Kun en forældet version må tilbyde "Hent nyeste version". Rettelsen gælder også systemformularen. |
+| G | **Systemer, der er i brug, kan ikke slettes.** Det gælder både som ende og som platform, og begrundelsen viser antal. | Sletning må ikke fjerne historik. Brug status "Nedlagt". |
+
+CSV-formatet er beskrevet i [`csv-integrationer.md`](csv-integrationer.md), med eksemplet
+[`csv/integrationer-eksempel.csv`](csv/integrationer-eksempel.csv). Begge kan sendes til foranalysen nu, og
+formatet er låst som ekstern kontrakt.
 
 ## Designprincipper for værktøjet selv
 

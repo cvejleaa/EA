@@ -158,12 +158,12 @@ public sealed class SystemEndpointsTests
 
         var detail = await admin.GetSystemAsync(nordlys.Id);
         Assert.False(detail.Permissions.CanDelete);
-        Assert.Equal("Nordlys har moduler (1) — flyt eller slet dem først.", detail.Permissions.DeleteBlockedReason);
+        Assert.Equal("Nordlys har moduler (1) — flyt eller slet dem først, eller sæt status til Nedlagt.", detail.Permissions.DeleteBlockedReason);
         Assert.Equal("Systemet har selv moduler og kan derfor ikke gøres til modul.", detail.Permissions.ParentBlockedReason);
 
         var blocked = await admin.DeleteAsync($"/api/systems/{nordlys.Id}");
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Equal("Nordlys har moduler (1) — flyt eller slet dem først.", await blocked.ProblemDetailAsync());
+        Assert.Equal("Nordlys har moduler (1) — flyt eller slet dem først, eller sæt status til Nedlagt.", await blocked.ProblemDetailAsync());
 
         await (await admin.DeleteAsync($"/api/systems/{hr.Id}")).ExpectAsync(HttpStatusCode.NoContent);
         var after = await admin.GetSystemAsync(nordlys.Id);

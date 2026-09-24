@@ -65,6 +65,39 @@
         }
       }
     },
+    "/api/systems/{id}/integrations": {
+      "get": {
+        "tags": [
+          "Integrationer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemIntegrationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/dev/users": {
       "get": {
         "tags": [
@@ -319,6 +352,18 @@
         }
       }
     },
+    "/api/systems/export.csv": {
+      "get": {
+        "tags": [
+          "Systemer"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/systems/{id}": {
       "get": {
         "tags": [
@@ -479,6 +524,246 @@
           }
         }
       }
+    },
+    "/api/integrations/export.csv": {
+      "get": {
+        "tags": [
+          "Integrationer"
+        ],
+        "parameters": [
+          {
+            "name": "systemId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found"
+          },
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}": {
+      "get": {
+        "tags": [
+          "Integrationer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Integrationer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Integrationer"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/integrations": {
+      "post": {
+        "tags": [
+          "Integrationer"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-objects": {
+      "get": {
+        "tags": [
+          "Dataobjekter"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DataObjectDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Dataobjekter"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDataObjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataObjectDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -509,6 +794,20 @@
           }
         }
       },
+      "CreateDataObjectRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CreatePersonRequest": {
         "required": [
           "displayName",
@@ -534,6 +833,22 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "DataObjectDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -626,6 +941,275 @@
           }
         }
       },
+      "IntegrationCreateRequest": {
+        "required": [
+          "fromSystemId",
+          "toSystemId",
+          "viaPlatformId",
+          "type",
+          "name",
+          "description",
+          "dataObjectIds"
+        ],
+        "type": "object",
+        "properties": {
+          "fromSystemId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "toSystemId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "viaPlatformId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IntegrationType"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dataObjectIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "IntegrationDto": {
+        "required": [
+          "id",
+          "name",
+          "from",
+          "to",
+          "via",
+          "type",
+          "description",
+          "dataObjects",
+          "createdAt",
+          "updatedAt",
+          "version",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "from": {
+            "$ref": "#/components/schemas/SystemLink"
+          },
+          "to": {
+            "$ref": "#/components/schemas/SystemLink"
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemLink"
+              }
+            ]
+          },
+          "type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IntegrationType"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dataObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DataObjectDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "uint32"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/IntegrationPermissions"
+          }
+        }
+      },
+      "IntegrationPermissions": {
+        "required": [
+          "canEdit"
+        ],
+        "type": "object",
+        "properties": {
+          "canEdit": {
+            "type": "boolean"
+          }
+        }
+      },
+      "IntegrationRelation": {
+        "enum": [
+          "Ud",
+          "Via",
+          "Ind",
+          "Intern"
+        ]
+      },
+      "IntegrationSummary": {
+        "required": [
+          "receivers",
+          "suppliers",
+          "viaPlatform",
+          "localSolutions",
+          "directDb"
+        ],
+        "type": "object",
+        "properties": {
+          "receivers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "suppliers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "viaPlatform": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "localSolutions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "directDb": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IntegrationType": {
+        "enum": [
+          "Api",
+          "Fil",
+          "Event",
+          "DirekteDb",
+          "Udtraek",
+          null
+        ]
+      },
+      "IntegrationUpdateRequest": {
+        "required": [
+          "viaPlatformId",
+          "type",
+          "name",
+          "description",
+          "dataObjectIds",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "viaPlatformId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IntegrationType"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dataObjectIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "version": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "uint32"
+          }
+        }
+      },
       "LifecycleStatus": {
         "enum": [
           "Planlagt",
@@ -638,7 +1222,8 @@
       "MePermissions": {
         "required": [
           "canCreateSystems",
-          "canManagePersons"
+          "canManagePersons",
+          "canManageDataObjects"
         ],
         "type": "object",
         "properties": {
@@ -646,6 +1231,9 @@
             "type": "boolean"
           },
           "canManagePersons": {
+            "type": "boolean"
+          },
+          "canManageDataObjects": {
             "type": "boolean"
           }
         }
@@ -863,6 +1451,107 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/SystemPermissions"
+          }
+        }
+      },
+      "SystemIntegrationItem": {
+        "required": [
+          "relation",
+          "counterpart",
+          "localModule",
+          "integration"
+        ],
+        "type": "object",
+        "properties": {
+          "relation": {
+            "$ref": "#/components/schemas/IntegrationRelation"
+          },
+          "counterpart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemLink"
+              }
+            ]
+          },
+          "localModule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemRef"
+              }
+            ]
+          },
+          "integration": {
+            "$ref": "#/components/schemas/IntegrationDto"
+          }
+        }
+      },
+      "SystemIntegrationsResponse": {
+        "required": [
+          "summary",
+          "items",
+          "canAdd"
+        ],
+        "type": "object",
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/IntegrationSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemIntegrationItem"
+            }
+          },
+          "canAdd": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SystemLink": {
+        "required": [
+          "id",
+          "name",
+          "parent",
+          "type",
+          "lifecycleStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemRef"
+              }
+            ]
+          },
+          "type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemType"
+              }
+            ]
+          },
+          "lifecycleStatus": {
+            "$ref": "#/components/schemas/LifecycleStatus"
           }
         }
       },
@@ -1142,10 +1831,16 @@
       "name": "Teams"
     },
     {
+      "name": "Integrationer"
+    },
+    {
       "name": "Personer"
     },
     {
       "name": "Systemer"
+    },
+    {
+      "name": "Dataobjekter"
     }
   ]
 }

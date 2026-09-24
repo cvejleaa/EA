@@ -28,8 +28,9 @@ web/coverage/
 *.xlsx
 *.xls
 *.csv
-# Undtagelse: fiktive test-fixtures
+# Undtagelser: fiktive test-fixtures og den fiktive CSV-skabelon til eksterne (docs/csv)
 !tests/**/fixtures/**
+!docs/csv/*.csv
 
 # Midlertidige worktrees fra gennemgangsrollerne (fx Test Manager)
 .claude/worktrees/

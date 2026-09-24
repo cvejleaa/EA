@@ -1,3 +1,4 @@
+using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
 using Ea.Api.Teams;
@@ -10,6 +11,11 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
     /// <summary>Unik-indeks for navn inden for samme forælder (topniveau tæller som én forælder).</summary>
     public const string SystemNameIndex = "ux_systems_parent_name";
 
+    /// <summary>Dublet-nøglen for integrationer: samme ender, type, platform og navn (NULL tæller som en værdi).</summary>
+    public const string IntegrationKeyIndex = "ux_integrations_natural_key";
+
+    public const string DataObjectNameIndex = "ux_data_objects_name";
+
     public DbSet<SystemEntity> Systems => Set<SystemEntity>();
 
     public DbSet<SystemRoleAssignment> SystemRoles => Set<SystemRoleAssignment>();
@@ -17,6 +23,10 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
     public DbSet<Person> Persons => Set<Person>();
 
     public DbSet<Team> Teams => Set<Team>();
+
+    public DbSet<Integration> Integrations => Set<Integration>();
+
+    public DbSet<DataObject> DataObjects => Set<DataObject>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,6 +92,54 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
             e.Property(p => p.Department).HasMaxLength(200);
             e.Property(p => p.EntraObjectId).HasMaxLength(100);
             e.HasIndex(p => p.EntraObjectId).IsUnique();
+        });
+
+        modelBuilder.Entity<Integration>(e =>
+        {
+            e.ToTable("integrations", t => t.HasCheckConstraint(
+                "ck_integrations_not_self", "source_system_id <> target_system_id"));
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).ValueGeneratedNever();
+            e.Property(i => i.Type).HasConversion<string>().HasMaxLength(40);
+            e.Property(i => i.Name).HasMaxLength(IntegrationRules.NameMaxLength);
+            e.Property(i => i.NameNormalized).HasMaxLength(IntegrationRules.NameMaxLength);
+            e.Property(i => i.Description).HasMaxLength(IntegrationRules.DescriptionMaxLength);
+            e.Property(i => i.Version).IsRowVersion();
+
+            e.HasIndex(i => new { i.SourceSystemId, i.TargetSystemId, i.Type, i.ViaPlatformId, i.NameNormalized })
+                .IsUnique()
+                .AreNullsDistinct(false)
+                .HasDatabaseName(IntegrationKeyIndex);
+            e.HasIndex(i => i.TargetSystemId);
+            e.HasIndex(i => i.ViaPlatformId);
+
+            // Restrict: et system, der indgår i integrationer, kan ikke slettes (SystemRules.DeleteBlockedReason).
+            e.HasOne(i => i.SourceSystem).WithMany().HasForeignKey(i => i.SourceSystemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.TargetSystem).WithMany().HasForeignKey(i => i.TargetSystemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.ViaPlatform).WithMany().HasForeignKey(i => i.ViaPlatformId).OnDelete(DeleteBehavior.Restrict);
+
+            e.HasMany(i => i.DataObjects)
+                .WithOne()
+                .HasForeignKey(d => d.IntegrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DataObject>(e =>
+        {
+            e.ToTable("data_objects");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).ValueGeneratedNever();
+            e.Property(d => d.Name).HasMaxLength(IntegrationRules.NameMaxLength).IsRequired();
+            e.Property(d => d.NameNormalized).HasMaxLength(IntegrationRules.NameMaxLength).IsRequired();
+            e.HasIndex(d => d.NameNormalized).IsUnique().HasDatabaseName(DataObjectNameIndex);
+        });
+
+        modelBuilder.Entity<IntegrationDataObject>(e =>
+        {
+            e.ToTable("integration_data_objects");
+            e.HasKey(d => new { d.IntegrationId, d.DataObjectId });
+            e.HasOne(d => d.DataObject).WithMany().HasForeignKey(d => d.DataObjectId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(d => d.DataObjectId);
         });
 
         modelBuilder.Entity<Team>(e =>

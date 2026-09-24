@@ -56,7 +56,7 @@ public sealed class AuthorizationTests
             .ToList();
 
         // En løkke over ingenting beviser ingenting.
-        Assert.True(protectedEndpoints.Count >= 9, $"Fandt kun {protectedEndpoints.Count} beskyttede endpoints.");
+        Assert.True(protectedEndpoints.Count >= 20, $"Fandt kun {protectedEndpoints.Count} beskyttede endpoints.");
 
         foreach (var (method, route, _) in protectedEndpoints)
         {
@@ -100,6 +100,36 @@ public sealed class AuthorizationTests
     }
 
     [Fact]
+    public async Task Laeser_kan_se_integrationer_men_ikke_aendre_dem()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        var reader = await app.ClientFor(TestUsers.Reader);
+        var a = await admin.CreateSystemAsync("A");
+        var b = await admin.CreateSystemAsync("B");
+        var integration = await admin.CreateIntegrationAsync(TestApiIntegrations.NewIntegration(a.Id, b.Id, description: "Original"));
+
+        var asReader = await reader.SystemIntegrationsAsync(a.Id);
+        Assert.False(asReader.CanAdd);
+        Assert.False(Assert.Single(asReader.Items).Integration.Permissions.CanEdit);
+        Assert.True((await admin.SystemIntegrationsAsync(a.Id)).CanAdd);
+
+        var create = await reader.PostIntegrationAsync(TestApiIntegrations.NewIntegration(b.Id, a.Id));
+        var update = await reader.PutIntegrationAsync(integration.Id, integration.ToUpdate() with { Description = "Ændret" });
+        var delete = await reader.DeleteAsync($"/api/integrations/{integration.Id}");
+        var dataObject = await reader.PostAsJsonAsync("/api/data-objects", new Ea.Api.Integrations.CreateDataObjectRequest("X"), TestApp.Json);
+
+        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, update.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, delete.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, dataObject.StatusCode);
+
+        var after = await admin.SystemIntegrationsAsync(a.Id);
+        Assert.Equal("Original", Assert.Single(after.Items).Integration.Description);
+        Assert.Empty(await admin.GetFromJsonAsync<List<Ea.Api.Integrations.DataObjectDto>>("/api/data-objects", TestApp.Json) ?? []);
+    }
+
+    [Fact]
     public async Task Permissions_afspejler_rollen()
     {
         await using var app = await TestApp.StartAsync();
@@ -117,8 +147,8 @@ public sealed class AuthorizationTests
 
         var meReader = await reader.GetFromJsonAsync<MeResponse>("/api/me", TestApp.Json);
         var meAdmin = await admin.GetFromJsonAsync<MeResponse>("/api/me", TestApp.Json);
-        Assert.Equal(new MePermissions(false, false), meReader!.Permissions);
-        Assert.Equal(new MePermissions(true, true), meAdmin!.Permissions);
+        Assert.Equal(new MePermissions(false, false, false), meReader!.Permissions);
+        Assert.Equal(new MePermissions(true, true, true), meAdmin!.Permissions);
         Assert.Equal(TestUsers.Admin.Oid, meAdmin.Oid);
         Assert.Equal([AppRoles.Admin], meAdmin.Roles);
     }

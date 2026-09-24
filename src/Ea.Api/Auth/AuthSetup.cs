@@ -73,8 +73,11 @@ public static class AuthSetup
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
             .AddPolicy(Policies.CreateSystem, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManagePersons, p => p.RequireRole(AppRoles.Admin))
-            .AddPolicy(Policies.EditSystem, p => p.AddRequirements(new EditSystemRequirement()));
+            .AddPolicy(Policies.ManageDataObjects, p => p.RequireRole(AppRoles.Admin))
+            .AddPolicy(Policies.EditSystem, p => p.AddRequirements(new EditSystemRequirement()))
+            .AddPolicy(Policies.EditIntegration, p => p.AddRequirements(new EditIntegrationRequirement()));
 
         services.AddSingleton<IAuthorizationHandler, EditSystemHandler>();
+        services.AddSingleton<IAuthorizationHandler, EditIntegrationHandler>();
     }
 }

@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Ea.Api.Auth;
 using Ea.Api.CurrentUser;
 using Ea.Api.Data;
+using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
 using Ea.Api.Teams;
@@ -43,6 +44,8 @@ app.MapMeEndpoints();
 app.MapTeamEndpoints();
 app.MapPersonEndpoints();
 app.MapSystemEndpoints();
+app.MapIntegrationEndpoints();
+app.MapDataObjectEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

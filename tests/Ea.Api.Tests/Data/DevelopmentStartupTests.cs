@@ -21,6 +21,22 @@ public sealed class DevelopmentStartupTests
         Assert.Equal("Bo Bogholder", erp.BusinessOwner?.DisplayName);
         // Eksempeldata må ikke kunne forveksles med rigtige DTU-systemer.
         Assert.DoesNotContain(list.Items, i => i.Name.Contains("DTU", StringComparison.OrdinalIgnoreCase));
+
+        // Integrationerne er samlet om identitetskilden, så "hvad rammes" kan demonstreres.
+        var identity = Assert.Single(list.Items, i => i.Name == "Identitetskilde (fiktiv)");
+        var integrations = await admin.SystemIntegrationsAsync(identity.Id);
+        Assert.Equal(
+            [
+                (Ea.Api.Integrations.IntegrationRelation.Ud, "Kompas Sag"),
+                (Ea.Api.Integrations.IntegrationRelation.Ud, "Laborant"),
+                (Ea.Api.Integrations.IntegrationRelation.Ud, "Servicedesk Plus (fiktiv)"),
+                (Ea.Api.Integrations.IntegrationRelation.Ud, "Studium"),
+                (Ea.Api.Integrations.IntegrationRelation.Ind, "Nordlys HR"),
+            ],
+            integrations.Items.Select(i => (i.Relation, i.Counterpart!.Name)));
+        Assert.Equal(1, integrations.Summary.DirectDb);
+        var all = await admin.GetAsync("/api/integrations/export.csv");
+        Assert.Equal(8, (await all.Content.ReadAsStringAsync()).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
     [Fact]
