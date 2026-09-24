@@ -124,3 +124,47 @@ public sealed record CapabilityImportResult(
     CapabilityImportSummary Summary,
     IReadOnlyList<CapabilityChange> Changes,
     string? Fingerprint);
+
+/// <summary>Hvad koblingsimporten gør med en kobling. Danske koder (ekstern kontrakt).</summary>
+public enum CouplingChangeKind
+{
+    Fjernes,
+    Tilfoejes,
+}
+
+/// <summary>
+/// Én kobling, importen fjerner eller tilføjer. <c>ChangedSinceExport</c>: systemet er ændret i registret, efter
+/// filen blev hentet — så kan det, der fjernes, være tilføjet siden (docs/csv-koblinger.md).
+/// </summary>
+public sealed record CouplingChange(
+    CouplingChangeKind Kind, CoupledSystem System, string Code, string Name, string Path, bool ChangedSinceExport);
+
+/// <summary>
+/// Tallene for en koblingsimport. <c>SystemsNotInFile</c>: systemer med koblinger, der ikke står i filen og derfor
+/// ikke røres. <c>LargeRemoval</c>: over en femtedel af koblingerne på systemerne i filen fjernes (en delvis fil?).
+/// <c>IgnoredEdits</c>: rækker, hvor en kolonne, der ikke indlæses, er rettet.
+/// </summary>
+public sealed record CouplingImportSummary(
+    int SystemsInFile,
+    int SystemsChanged,
+    int Added,
+    int Removed,
+    int Unchanged,
+    int SystemsCleared,
+    bool LargeRemoval,
+    int SystemsChangedSinceExport,
+    int SystemsNotInFile,
+    int IgnoredEdits);
+
+/// <summary>
+/// Svaret på en tør-kørsel eller gennemført koblingsimport. <c>Warnings</c> stopper ikke importen (fx en rettet
+/// kolonne, der ikke indlæses). <c>NotInFile</c> er systemerne bag <c>SystemsNotInFile</c>.
+/// </summary>
+public sealed record CouplingImportResult(
+    bool Committed,
+    IReadOnlyList<ImportRowError> Errors,
+    IReadOnlyList<ImportRowError> Warnings,
+    CouplingImportSummary Summary,
+    IReadOnlyList<CouplingChange> Changes,
+    IReadOnlyList<CoupledSystem> NotInFile,
+    string? Fingerprint);

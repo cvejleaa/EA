@@ -28,8 +28,9 @@ public static class Problems
         $"{subject} er ændret af en anden, siden du åbnede det. Genindlæs for at se den nyeste version.",
         StaleVersionType);
 
-    public static ProblemHttpResult StaleDryRun() => Conflict(
-        "Kortet eller koblingerne til det er ændret, siden du lavede tør-kørslen. Kør tør-kørslen igen for at se, hvad importen nu vil gøre.",
+    /// <param name="subject">Det, der kan være ændret, fx "Kortet eller koblingerne til det".</param>
+    public static ProblemHttpResult StaleDryRun(string subject) => Conflict(
+        $"{subject} er ændret, siden du lavede tør-kørslen. Kør tør-kørslen igen for at se, hvad importen nu vil gøre.",
         StaleDryRunType);
 
     public static ProblemHttpResult Duplicate(string detail) => Conflict(detail, DuplicateType);

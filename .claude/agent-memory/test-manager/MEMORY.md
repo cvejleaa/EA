@@ -421,6 +421,61 @@ kapabilitet, én lokal løsning) dræbte selv urelaterede mutationer (fx tom-kod
 dræbt præcist af `http.expectOne(...)` + `TestBed`-dobbeltinstantiering, som gjorde FLERE tests røde på én gang —
 en stærkere fejlsignatur end en løs `toContain`.
 
+## Fund b8d6ff5 (delopgave 3d-server, EA-register): koblings-CSV-IMPORT — kernen meget stærkt dækket, ét reelt hul (skjult "ny adfærd" i en refaktorerings-commit)
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests --filter-namespace Ea.Api.Tests.Capabilities` 171/171 (19/19 i
+`CouplingImportTests`, inkl. theory-cases). To commits: `d3c91b3` ("Import-protokollen samlet i Common/CsvImport
+(uden ny adfærd)") og `b8d6ff5` (selve koblingsimporten). Kørte alle 18 udpegede mutationer (nogle med to
+varianter) i `CouplingImport.cs`, `CsvImport.cs`, `CapabilityEndpoints.cs`, `SystemEndpoints.cs.DeleteSystem` og
+`CsvRead.cs`s `Unguard` — **17 af 18 dræbt**, ofte præcist af navngivne tests (fx `Hoejst_100_koblinger_pr_system`
+dræber BÅDE `>`→`>=` og "loftet fjernet" for `MaxCouplingsPerSystem`; `En_import_venter_paa_en_samtidig_kobling_og_afvises`
+og `En_sletning_venter_paa_en_import_uden_at_have_laast_systemet` er ægte parallelle lås-race-tests, der dræber
+LOCK-mutationer i både importen OG `DeleteSystem` — IKKE bare sekventielle stub-tests som i tidligere delopgaver).
+
+**Overraskende solidt af sig selv:** "Fejl_mod_registret_vises_med_linje_og_kolonne_og_intet_gemmes" har ved et
+tilfælde to rækker med TOM `FuldtNavn` (`(kompas.Id, "", "K9")`, `(kompas.Id, "", "K1")`) — det dræbte BÅDE
+"FuldtNavn-tjekket fjernet" OG "tom er OK fjernet"-mutationerne, selvom ingen test eksplicit er navngivet efter
+"tom er OK". Værd at huske: tjek altid det FAKTISKE testdata for et tomt-felt-tilfælde, før man rapporterer det
+som et hul — det kan ligge skjult i en fejl-test, der egentlig handler om noget andet.
+
+**Overlevet — ét reelt hul, og det er en advarsel om en bestemt slags refaktorerings-risiko:**
+
+1. **`catch (DbUpdateConcurrencyException)` i `CsvImport.CommitIfUnchangedAsync` (`src/Ea.Api/Common/CsvImport.cs:110-117`,
+   returnerer `null` → 409 i stedet for at lade undtagelsen boble op) er HELT utestet.** Fjernede try/catch'en
+   (kald `SaveChangesAsync` direkte) → HELE `Ea.Api.Tests.Capabilities`-namespacet (171/171, inkl. både
+   kapabilitetskort- og koblingsimporten, som begge bruger denne fælles funktion) forblev grønt. **Særligt
+   bemærkelsesværdigt**: denne catch er ikke bare udækket — den er **reelt NY ADFÆRD**, selvom d3c91b3's
+   commit-besked eksplicit siger "uden ny adfærd". `git show d094add:.../CapabilityEndpoints.cs` (før
+   generaliseringen) viser, at det gamle `Import`-endpoint kaldte `await db.SaveChangesAsync(ct);` HELT UDEN
+   try/catch — en ægte samtidigheds-konflikt under selve gemningen (fx en formular, der gemmer PRÆCIS i vinduet
+   mellem lås og SaveChanges) ville før have givet en ubehandlet undtagelse (500), men giver nu en pæn 409
+   (StaleDryRun). Ingen test, hverken før eller efter, har nogensinde bevist at denne kode gør noget — en grøn
+   suite ville forblive grøn, uanset om try/catch'en er der eller ej. **Mangler**: en test, der reelt udløser
+   `DbUpdateConcurrencyException` INDE I `CommitIfUnchangedAsync`s `SaveChangesAsync` — sværere end de
+   eksisterende lås-race-tests, fordi `LOCK TABLE ea.capabilities, ea.system_capabilities` allerede serialiserer
+   koblings-/kort-skrivninger; en ægte konflikt kræver et system, der IKKE er omfattet af den lås (fx systemets
+   egen `Version`-kolonne bumpet af en samtidig `PutSystem`, som ikke tager samme lock), ramt lige efter
+   `recompute()` men før `SaveChangesAsync`. Vurdér om dette er værd at teste eksplicit, eller om det skal noteres
+   til Quality Control/Release Manager som en bevidst, svært-testbar defense-in-depth (samme mønster som
+   LOCK-dækningen i 840d4c4/89d8011) — men i modsætning til dén, er DENNE gren slet ikke dokumenteret som bevidst
+   udækket noget sted.
+
+**Lektie til næste gang**: en commit-besked, der siger "generalisering uden ny adfærd" (eller lignende), er en
+PÅSTAND, ikke en garanti — diff'et mod den GAMLE kode (her: `git show <base>:<fil>` for filen, FØR den blev
+splittet/flyttet) kan afsløre skjult ny adfærd, som ingen test fanger, fordi ingen troede der var noget nyt at
+teste. Tjek det specifikt, når en refaktorerings-commit ligger lige før en commit, der bruger den nye,
+generaliserede kode til noget vigtigt (som her: den fælles lås+fingeraftryk-protokol, som BÅDE kort- og
+koblingsimporten er afhængige af for korrekt 409-håndtering).
+
+**Miljø-fælde bekræftet igen** (se afsnittet øverst): under denne gennemgang ramte `dotnet test` midlertidigt
+"remaining connection slots are reserved for roles with the SUPERUSER attribute" — server-dækkende
+forbindelses-udtømning pga. andre samtidige `dotnet test`-processer (formentlig andre subagenter, der kørte
+parallelt jf. CLAUDE.md's arbejdsgang). ALLE 19 tests fejlede samtidigt, med 100 % identisk fejltekst (ingen
+`Assert.*`), og kørslen var mistænkeligt hurtig (~1,7s mod normalt ~17s). Ventede med en `until psql ...; do sleep
+5; done`-løkke, til en almindelig forbindelse igen lykkedes, og gentog derefter mutationskørslen — gav det
+forventede, konsistente resultat. Genkend dette mønster med det samme og gentag ISOLERET, i stedet for at
+rapportere "17 fejl" som et ægte mutations-fund.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

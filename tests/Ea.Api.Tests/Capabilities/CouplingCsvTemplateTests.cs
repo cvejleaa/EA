@@ -135,4 +135,53 @@ public sealed class CouplingCsvTemplateTests
         Assert.Equal(("1", "1"), (rows[2]["SystemerDerTæller"], rows[2]["AntalPlanlagte"]));
         Assert.Equal(("Bo Bogholder (eksempel)", "Frida Forvalter (eksempel)"), (rows[0]["Forretningsejer"], rows[0]["Systemejer"]));
     }
+
+    [Fact]
+    public async Task Vejledningen_naevner_importens_graenser()
+    {
+        var guide = await File.ReadAllTextAsync(RepoPaths.File("docs", "csv-koblinger.md"));
+
+        var maxRows = CouplingImport.MaxRows.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("da-DK"));
+        Assert.Contains($"højst {maxRows} rækker", guide, StringComparison.Ordinal);
+        Assert.Contains($"{CouplingImport.MaxFileBytes / (1024 * 1024)} MB", guide, StringComparison.Ordinal);
+        Assert.Contains($"højst {CapabilityRules.MaxCouplingsPerSystem} koblinger", guide, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Begrundelsen for importens grænser (CouplingImport.MaxRows og MaxFileBytes): en eksport af hele DTU — 2000
+    /// systemer med 5 koblinger hver og en lang beskrivelse (1000 tegn) — kan indlæses igen uden at ramme dem.
+    /// Pessimistisk: kun 100 blade, så hver kapabilitet deles af ca. 100 systemer, og <c>DelesMed</c> bliver lang.
+    /// (Med 50 blade fyldte filen 57 MB — derfor er grænsen ikke Kestrels 30 MB.)
+    /// </summary>
+    [Fact]
+    public void En_eksport_af_hele_DTU_kan_indlaeses_igen()
+    {
+        var capabilities = Enumerable.Range(1, 100).Select(i => Node(1000 + i, $"B{i}", $"Blad {i} (eksempel)")).ToList();
+        var description = new string('x', 1000);
+        var systems = Enumerable.Range(1, 2000).Select(i =>
+        {
+            var system = new SystemEntity
+            {
+                Id = Id(10_000 + i),
+                Name = $"System {i} (eksempel)",
+                LifecycleStatus = LifecycleStatus.IDrift,
+                Description = description,
+                UpdatedAt = Changed,
+                LastConfirmedAt = Changed,
+            };
+            system.CapabilityLinks = Enumerable.Range(0, 5)
+                .Select(k => new SystemCapability { SystemId = system.Id, CapabilityId = capabilities[(i + k) % 100].Id })
+                .ToList();
+            return system;
+        }).ToList();
+
+        var written = CouplingCsv.Write(systems, capabilities, new HashSet<Guid>());
+        var (rows, errors) = CouplingImport.Parse(Ea.Api.Common.Csv.Read(written));
+
+        Assert.Empty(errors);
+        Assert.Equal(10_000, rows.Count);
+        Assert.True(rows.Count * 2 <= CouplingImport.MaxRows, "MaxRows skal give dobbelt margin over hele DTU.");
+        Assert.True(written.Length < CouplingImport.MaxFileBytes,
+            $"Eksporten fylder {written.Length / (1024 * 1024)} MB — mere end MaxFileBytes.");
+    }
 }

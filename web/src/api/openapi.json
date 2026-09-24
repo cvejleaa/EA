@@ -869,6 +869,61 @@
           }
         }
       }
+    },
+    "/api/capabilities/couplings/import": {
+      "post": {
+        "tags": [
+          "Kapabiliteter"
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fingerprint",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouplingImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1235,6 +1290,149 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CouplingChange": {
+        "required": [
+          "kind",
+          "system",
+          "code",
+          "name",
+          "path",
+          "changedSinceExport"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CouplingChangeKind"
+          },
+          "system": {
+            "$ref": "#/components/schemas/CoupledSystem"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "changedSinceExport": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CouplingChangeKind": {
+        "enum": [
+          "Fjernes",
+          "Tilfoejes"
+        ]
+      },
+      "CouplingImportResult": {
+        "required": [
+          "committed",
+          "errors",
+          "warnings",
+          "summary",
+          "changes",
+          "notInFile",
+          "fingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "committed": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowError"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowError"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CouplingImportSummary"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CouplingChange"
+            }
+          },
+          "notInFile": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoupledSystem"
+            }
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CouplingImportSummary": {
+        "required": [
+          "systemsInFile",
+          "systemsChanged",
+          "added",
+          "removed",
+          "unchanged",
+          "systemsCleared",
+          "largeRemoval",
+          "systemsChangedSinceExport",
+          "systemsNotInFile",
+          "ignoredEdits"
+        ],
+        "type": "object",
+        "properties": {
+          "systemsInFile": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "systemsChanged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "added": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unchanged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "systemsCleared": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "largeRemoval": {
+            "type": "boolean"
+          },
+          "systemsChangedSinceExport": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "systemsNotInFile": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ignoredEdits": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

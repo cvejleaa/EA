@@ -4,14 +4,14 @@ Vejledning til enterprise arkitekten og andre, der henter koblingerne fra EA-reg
 **"Hent koblinger (CSV)"** på siden Kapabiliteter. Et eksempel med fiktive data ligger i
 [`csv/koblinger-eksempel.csv`](csv/koblinger-eksempel.csv).
 
-Filen bruges til to ting:
+Filen bruges til tre ting:
 
 - **Arbejdslisten til at koble systemerne.** Hvert system, der endnu ikke er koblet til en kapabilitet, står på
   en række uden kode.
 - **Overlap-samtalerne med systemejerne.** Filtrér på `Overlap` = `Ja`. Så står det på hver række, hvem
   kapabiliteten deles med, og hvem der ejer systemet.
-
-Filen kan endnu ikke indlæses igen. Det kommer i en senere version, og så bliver `SystemId` og `Kode` nøglerne.
+- **At koble mange systemer på én gang.** Ret koderne i Excel, og indlæs filen igen (se *Indlæs filen igen*
+  herunder). Formularen på systemsiden bruges til den løbende vedligeholdelse.
 
 ## Rækkerne
 
@@ -74,14 +74,72 @@ Koderne i `BørFlyttes`:
 
 Indtil koblingen er flyttet, indgår den ikke i overlap. Kortet har en liste over koblinger, der bør flyttes.
 
+## Indlæs filen igen
+
+**Hent koblingerne, ret dem i Excel, og indlæs filen igen.** Start altid fra en frisk eksport.
+
+### Det vigtigste: filen er hele sandheden for systemerne i den
+
+- **For hvert system, der står i filen, bliver koblingerne præcis dem, der står i filen.** Koblinger, systemet har
+  i dag, men som ikke står i filen, fjernes.
+- **Systemer, der slet ikke står i filen, røres ikke.** Du kan derfor dele filen op, fx pr. team, og indlæse
+  delene hver for sig. Tør-kørslen viser, hvilke systemer med koblinger der ikke står i filen.
+- **Tøm koden, slet ikke rækken.** Vil du fjerne en kobling, så tøm cellen i `Kode`. Sletter du alle et systems
+  rækker, står systemet ikke længere i filen og røres ikke. En række uden kode betyder "systemet er med i filen".
+  Står den alene, fjernes alle systemets koblinger.
+
+Det er det modsatte af kortets fil ([`csv-kapabiliteter.md`](csv-kapabiliteter.md)), som altid er hele kortet.
+
+### Kun `SystemId` og `Kode` indlæses
+
+- **Tilføj en kobling:** skriv koden i systemets række uden kode, eller kopiér en af systemets rækker og skriv den
+  nye kode. `SystemId` skal stå på rækken. Et system, der ikke står i filen, fx et modul, der er dækket af
+  forælderen, finder du med "Hent systemliste (CSV)" på systemlisten.
+- **Flyt en kobling:** overskriv den gamle kode med den nye.
+- **Et moduls koblinger** står på modulets egne rækker. En forælders rækker rører ikke modulerne.
+- `FuldtNavn` er en kontrol: står der et navn, skal det passe til systemet. Er systemet omdøbt, så ret navnet
+  eller tøm cellen.
+- **Alle andre kolonner indlæses ikke.** Rettes fx `Status` eller `Forretningsejer` i filen, gemmes det ikke, og
+  tør-kørslen siger det. Ret den slags på systemsiden.
+
+### Tør-kørslen
+
+Tør-kørslen viser, hvad importen vil gøre, før noget gemmes: det, der fjernes, står øverst, derefter det, der
+tilføjes. Den advarer, når
+
+- over en femtedel af koblingerne på systemerne i filen fjernes (en delvis fil?);
+- et system er ændret i registret, efter filen blev hentet (`SidstÆndret`). Så kan det, der fjernes, være
+  tilføjet af en anden siden. Tjek det, eller hent en ny eksport;
+- en kolonne, der ikke indlæses, er rettet.
+
+Importen gemmer præcis det, tør-kørslen viste. Er koblingerne eller systemerne i filen ændret i mellemtiden,
+afvises importen med besked om at køre tør-kørslen igen. Alt gemmes samlet, eller intet. En import ændrer ikke
+"Sidst bekræftet": det er forvalterens udsagn om, at oplysningerne er rigtige.
+
+### Regler og grænser
+
+Er der fejl, gemmes intet. Tør-kørslen viser hver fejl med linje og kolonne. Registret afviser blandt andet:
+
+- forkerte eller omrokerede kolonneoverskrifter (alle kolonner skal stå der, også de beregnede);
+- et `SystemId`, der mangler, er ugyldigt eller ikke findes i registret;
+- et `FuldtNavn`, der ikke passer til systemet;
+- en kode, der ikke findes i kortet, eller den samme kode to gange for samme system;
+- en NY kobling til en kapabilitet, der ikke kan vælges (en gruppe eller en udgået). En kobling, systemet
+  allerede har, bevares, også når kapabiliteten siden er udgået;
+- højst 100 koblinger pr. system;
+- en fil over 64 MB. En fil kan have højst 20.000 rækker; del en større fil op efter system.
+
+Kun enterprise arkitekten (rollen *EA.Admin*) kan indlæse filen.
+
 ## Apostroffer mod formler
 
 Som i de andre CSV-filer sætter registret `'` foran `=`, `+`, `-` og `@`, når tegnet står først i et felt
 eller lige efter et komma, en tabulator eller et linjeskift (se `csv-integrationer.md`). Så kan Excel ikke
-tolke en systembeskrivelse som en formel.
+tolke en systembeskrivelse som en formel. Importen fjerner præcis de apostroffer igen.
 
 ## Excel
 
 - Filen er **UTF-8 med BOM** og bruger **semikolon** som separator. Dansk Excel åbner den direkte.
 - Filtrér og sortér gerne, fx på `Overlap`, `ForvaltendeTeam` eller `Status`.
-- Gemmer du filen, så gem som **"CSV UTF-8 (kommasepareret) (*.csv)"**, ellers går æøå tabt.
+- Gemmer du filen, så gem som **"CSV UTF-8 (kommasepareret) (*.csv)"**, ellers går æøå tabt, og filen afvises.
+- Rediger ikke kolonneoverskrifterne, og slet ikke kolonner.

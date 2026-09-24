@@ -63,4 +63,61 @@ public static class TestApiCapabilities
         var codes = items.ToDictionary(i => i.Id, i => i.Code);
         return items.Select(i => (i.Depth, i.Code, i.Name, i.ParentId is { } p ? codes[p] : null)).ToList();
     }
+
+    /// <summary>Koblingsfilen, som eksporten skriver den (bytes, så den kan indlæses igen uændret).</summary>
+    public static async Task<byte[]> ExportCouplingsAsync(this HttpClient client)
+    {
+        var response = await client.GetAsync("/api/capabilities/couplings/export.csv");
+        await response.ExpectAsync(HttpStatusCode.OK);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    /// <summary>En koblingsfil med kun nøglerne (og evt. FuldtNavn); de beregnede kolonner er tomme.</summary>
+    public static byte[] CouplingFile(params (Guid SystemId, string? FullName, string? Code)[] rows) =>
+        Csv.Write(CouplingCsv.Header, rows.Select(r => (IReadOnlyList<string?>)CouplingCsv.Header
+            .Select(column => column switch
+            {
+                "SystemId" => r.SystemId.ToString(),
+                "FuldtNavn" => r.FullName,
+                "Kode" => r.Code,
+                _ => null,
+            })
+            .ToList()));
+
+    /// <summary>Filen læst som rækker (kolonnenavn → værdi) — til at rette i den, som man ville i Excel.</summary>
+    public static List<Dictionary<string, string>> CouplingRows(byte[] file)
+    {
+        var read = Csv.Read(file);
+        Assert.Null(read.Error);
+        return read.Rows.Select(r => CouplingCsv.Header.Zip(r.Fields).ToDictionary(p => p.First, p => p.Second)).ToList();
+    }
+
+    /// <summary>Rækkerne skrevet som fil igen.</summary>
+    public static byte[] CouplingFile(IEnumerable<Dictionary<string, string>> rows) =>
+        Csv.Write(CouplingCsv.Header, rows.Select(r => (IReadOnlyList<string?>)CouplingCsv.Header.Select(c => r[c]).ToList()));
+
+    public static Task<HttpResponseMessage> PostCouplingImportAsync(this HttpClient client, byte[] file, bool dryRun, string? fingerprint = null)
+    {
+        var content = new ByteArrayContent(file);
+        content.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        var query = $"?dryRun={(dryRun ? "true" : "false")}" + (fingerprint is null ? "" : $"&fingerprint={fingerprint}");
+        return client.PostAsync("/api/capabilities/couplings/import" + query, content);
+    }
+
+    public static async Task<CouplingImportResult> CouplingDryRunAsync(this HttpClient client, byte[] file)
+    {
+        var response = await client.PostCouplingImportAsync(file, dryRun: true);
+        await response.ExpectAsync(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<CouplingImportResult>(TestApp.Json))!;
+    }
+
+    /// <summary>Tør-kørsel og derefter gennemførelse med dens fingeraftryk — som brugeren gør det.</summary>
+    public static async Task<CouplingImportResult> ImportCouplingsAsync(this HttpClient client, byte[] file)
+    {
+        var preview = await client.CouplingDryRunAsync(file);
+        Assert.Empty(preview.Errors);
+        var response = await client.PostCouplingImportAsync(file, dryRun: false, preview.Fingerprint);
+        await response.ExpectAsync(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<CouplingImportResult>(TestApp.Json))!;
+    }
 }

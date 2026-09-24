@@ -90,7 +90,7 @@
   (b) citationstegn mellem skilletegn og formeltegn ('x,"=1+1,' -> celle
   =1+1, fordi " fordobles og åbner et citeret felt i ','-parse). ';'-parse
   ren (0 af 50.000 fuzz-værdier). Rammer ALLE eksporter (fælles Csv.Field).
-  SKAL lukkes før delopgave 4 (ikke-admin skriver).
+  SKAL lukkes før delopgave 4 (ikke-admin skriver). -> LUKKET, fuzz-efterprøvet 3d.
 - NUL-byte (\u0000) i felt: tør-kørsel 200, commit 500 (Postgres afviser),
   generisk ProblemDetails, intet gemt. Robusthed.
 - Read(Write(x)) != x ved tomme/whitespace-linjer i citerede felter
@@ -126,6 +126,53 @@
 - Fingeraftryk: commit genberegner planen under LOCK på begge tabeller og
   sammenligner kun; AffectedSystems (id+navn) indgår -> systemomdøbning
   mellem tør-kørsel og commit giver 409 (ufarligt). Ingen manipulation mulig.
+
+## Delopgave 3d-server (b8d6ff5, koblingsimport + CsvImport) – kørt 2026-09-24
+- BEKRÆFTET lukket: anonym 401, lars/frida 403 på tør-kørsel og commit; raw
+  socket CL=100 MB uden krop -> 401/403 på 1 ms (policy før handler, grænsen
+  hæves kun i handleren). Admin CL=100 MB -> 400 på 4 ms.
+- Integritet BEKRÆFTET: 101 koder -> fejl; 99 + "k9.1"/" K9.2 " -> dublet-fejl
+  (NormalizeCode = Trim+ToUpperInvariant, NBSP trimmes også); præcis 100 ok;
+  ikke-blad og NY kobling til udgået -> fejl; eksisterende udgået bevares;
+  fuldbredde-K -> ukendt kode. Status/team/ejere/beskrivelse/LastConfirmed*
+  urørt ved commit (kun UpdatedAt bumpes); andre systemers koblinger md5-ens.
+- Races BEKRÆFTET ok: tør->form(koblinger)->commit 409; tør->slet->commit 409;
+  import holder lås + sletning i flight -> 200/204; sletning holder RE + import
+  -> 204/409; 25 runder stress (2 imports + kortimport + forms + sletninger)
+  -> 0 deadlocks, import aldrig 500/halv. Fuld DTU (2000 sys, 10k koblinger):
+  commit 1,06 s = låsevindue.
+- Formelvagt: 19 håndplukkede + 150 fuzz-navne/beskrivelser (inkl. modul og
+  DelesMed " | ") -> 0 formel-celler med ';' ',' TAB. Re-import af eksporten:
+  0 fejl, 0 advarsler (round-trip holder). 3a/3b-formelfundene er lukket.
+- FUND (BEKRÆFTET, regelbrud indført her): DeleteSystem tager LOCK (RE på
+  system_capabilities) FØR adgangstjekket. Læser-DELETE under en import venter
+  på låsen (403 efter 4,0 s mod 6 ms) og holder en pool-forbindelse. 15 læser-
+  DELETEs mod pool 15 -> eva GET /api/systems hang 19 s (kontrol uden: 7 ms).
+  Rettelse: billigt opslag + AuthorizeAsync før tx, derefter lås + genopslag.
+- FUND (BEKRÆFTET, admin): 64 MB af "x\n" -> Csv.Read bygger 33M rækker før
+  MaxRows-tjek: 5,9 GB peak RSS, 26 s. Rettelse: stop Read ved MaxRows+1.
+- FUND (BEKRÆFTET): UpdateSystem loader CapabilityLinks FØR WithCouplingLock.
+  Import holder låsen og tilføjer K; form (i kø på låsen) tilføjer også K ->
+  23505 pk_system_capabilities -> 500. Form vs sletning -> 23503 -> 500, og
+  DeleteSystem SaveChanges -> DbUpdateConcurrencyException -> 500 ved samtidig
+  form/confirm (begge gamle). Rettelse: load links efter låsen + map 23505/
+  23503/concurrency til 409.
+- Kestrel-grænse == egen grænse (64 MB): chunked > 64 MB -> BadHttpRequest ->
+  500 i stedet for 400. Sæt Kestrel til MaxFileBytes+1 eller fang undtagelsen.
+
+## PoC-mønstre (tilføjet 3d)
+- Hold en rækkelås (SELECT ... FOR UPDATE i psql via subprocess.Popen med
+  stdin-pipe og \echo locked) for at stoppe importen EFTER den har taget
+  tabel-låsene -> så kan en anden request sættes i kø bag importen. At holde
+  importens LOCK selv giver den modsatte rækkefølge (LOCK a, b tages én ad gangen).
+- ADVARSEL: PostgreSQL er DELT med andre agenter (max_connections 100). Start
+  pool-tests med "Maximum Pool Size=15;Timeout=5" i connection string, ellers
+  opbruges serverens slots (53300) for alle. Dræb API'et bagefter (idle pool).
+- API fra worktree: cd src/Ea.Api && dotnet bin/Debug/net10.0/Ea.Api.dll
+  (content root = cwd, ellers findes appsettings.Development.json ikke).
+- RSS: pgrep -f '^dotnet bin/...' (ellers rammes bash-wrapperen).
+- Eksporten kan indeholde flerlinjefelter -> byg filer ved at APPENDE rækker
+  til eksportens bytes, ikke ved split(';').
 
 ## PoC-mønstre (tilføjet 3b)
 - Deterministisk race: åbn Npgsql-forbindelse (cs fra

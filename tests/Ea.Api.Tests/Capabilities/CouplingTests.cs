@@ -5,6 +5,7 @@ using Ea.Api.Common;
 using Ea.Api.Systems;
 using Ea.Api.Tests.Infrastructure;
 using Npgsql;
+using static Ea.Api.Tests.Infrastructure.DbLocks;
 using static Ea.Api.Tests.Infrastructure.TestApiCapabilities;
 
 namespace Ea.Api.Tests.Capabilities;
@@ -402,31 +403,6 @@ public sealed class CouplingTests
         var response = await put;
         Assert.Equal([message], (await response.ValidationErrorsAsync())["capabilityIds"]);
         Assert.Empty((await admin.GetSystemAsync(system.Id)).Capabilities);
-    }
-
-    private static async Task Sql(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql)
-    {
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
-        await command.ExecuteNonQueryAsync();
-    }
-
-    /// <summary>Venter, til en anden forbindelse står i kø på en lås til koblingerne (så testen rammer vinduet).</summary>
-    private static async Task WaitForBlockedLockAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
-    {
-        for (var i = 0; i < 200; i++)
-        {
-            await using var command = new NpgsqlCommand(
-                "SELECT count(*) FROM pg_locks WHERE NOT granted AND relation = 'ea.system_capabilities'::regclass",
-                connection, transaction);
-            if ((long)(await command.ExecuteScalarAsync())! > 0)
-            {
-                return;
-            }
-
-            await Task.Delay(50);
-        }
-
-        Assert.Fail("Koblingen nåede aldrig at vente på importens lås.");
     }
 
     /// <summary>

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using Ea.Api.Common;
 using Ea.Api.Data;
 
@@ -20,9 +18,6 @@ public sealed record CapabilityImportPlan(
 /// </summary>
 public static class CapabilityImport
 {
-    /// <summary>Nok til at rette filen; flere fejl ville kun gøre svaret uoverskueligt.</summary>
-    public const int MaxErrors = 200;
-
     public static (List<CapabilityImportRow> Rows, List<ImportRowError> Errors) Parse(CsvReadResult csv)
     {
         if (csv.Error is not null)
@@ -30,19 +25,9 @@ public static class CapabilityImport
             return ([], [csv.Error]);
         }
 
-        var header = WithoutTrailingEmpty(csv.Header);
-        if (header.Count == 0)
+        if (CsvImport.HeaderError(csv.Header, CapabilityCsv.Header) is { } headerError)
         {
-            return ([], [new ImportRowError(1, null, "Filen er tom.")]);
-        }
-
-        if (!header.SequenceEqual(CapabilityCsv.Header))
-        {
-            var hint = header.Count == 1 && header[0].Contains(',', StringComparison.Ordinal)
-                ? " Filen ser ud til at bruge komma som skilletegn. " + Csv.SaveAsUtf8Advice
-                : "";
-            return ([], [new ImportRowError(1, null,
-                $"Første linje skal være præcis: {string.Join(Csv.Separator, CapabilityCsv.Header)}.{hint}")]);
+            return ([], [headerError]);
         }
 
         if (csv.Rows.Count == 0)
@@ -63,7 +48,7 @@ public static class CapabilityImport
 
         foreach (var row in csv.Rows)
         {
-            var fields = WithoutTrailingEmpty(row.Fields);
+            var fields = CsvImport.WithoutTrailingEmpty(row.Fields);
             if (fields.Count > CapabilityCsv.Header.Count)
             {
                 errors.Add(new ImportRowError(row.Line, null,
@@ -115,7 +100,7 @@ public static class CapabilityImport
         }
 
         errors.AddRange(TreeErrors(rows));
-        return (rows, errors.OrderBy(e => e.Line).Take(MaxErrors).ToList());
+        return (rows, errors.OrderBy(e => e.Line).Take(CsvImport.MaxErrors).ToList());
     }
 
     /// <summary>
@@ -317,13 +302,8 @@ public static class CapabilityImport
         _ => 5,
     };
 
-    /// <summary>
-    /// Et fingeraftryk af ændringerne (inkl. de berørte systemer). Er kortet eller koblingerne ændret, siden
-    /// tør-kørslen blev lavet, giver den samme fil et andet aftryk — og importen afvises i stedet for at gemme noget,
-    /// brugeren ikke har set.
-    /// </summary>
-    public static string Fingerprint(CapabilityImportPlan plan) =>
-        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan.Changes)));
+    /// <summary>Fingeraftrykket af ændringerne (inkl. de berørte systemer) — se <see cref="CsvImport.Fingerprint"/>.</summary>
+    public static string Fingerprint(CapabilityImportPlan plan) => CsvImport.Fingerprint(plan.Changes);
 
     public static void Apply(CapabilityImportPlan plan, IReadOnlyCollection<Capability> existing, EaDbContext db, DateTimeOffset now)
     {
@@ -372,40 +352,5 @@ public static class CapabilityImport
         }
     }
 
-    private static List<string> WithoutTrailingEmpty(IReadOnlyList<string> fields)
-    {
-        var count = fields.Count;
-        while (count > 0 && fields[count - 1].Trim().Length == 0)
-        {
-            count--;
-        }
-
-        return fields.Take(count).ToList();
-    }
-
     private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
-
-    /// <summary>Læser request-kroppen, men aldrig mere end <paramref name="maxBytes"/> (null = for stor).</summary>
-    public static async Task<byte[]?> ReadBodyAsync(Stream body, long? contentLength, int maxBytes, CancellationToken ct)
-    {
-        if (contentLength > maxBytes)
-        {
-            return null;
-        }
-
-        using var buffer = new MemoryStream();
-        var chunk = new byte[81920];
-        int read;
-        while ((read = await body.ReadAsync(chunk, ct)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
-            {
-                return null;
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return buffer.ToArray();
-    }
 }
