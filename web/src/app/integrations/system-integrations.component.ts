@@ -45,7 +45,10 @@ export class SystemIntegrationsComponent {
       `modtager data fra ${count(s.suppliers, 'system', 'systemer')}`,
     ];
     if (s.localSolutions > 0) {
-      parts.push(`heraf ${count(s.localSolutions, 'lokal løsning/udtræk', 'lokale løsninger/udtræk')}`);
+      // Tælles på tværs af begge retninger (serveren tager foreningen), så teksten må ikke lyde som en delmængde
+      // af kun det sidste tal.
+      const n = s.localSolutions;
+      parts.push(`${n} af modparterne er ${n === 1 ? 'en lokal løsning/udtræk' : 'lokale løsninger/udtræk'}`);
     }
     if (s.viaPlatform > 0) {
       parts.push(`${count(s.viaPlatform, 'integration går', 'integrationer går')} via platformen`);

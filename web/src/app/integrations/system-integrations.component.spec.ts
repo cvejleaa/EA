@@ -81,7 +81,7 @@ describe('SystemIntegrationsComponent', () => {
     );
 
     expect(text(q(f, '[data-testid="summary"]'))).toBe(
-      'Sender data til 1 system · modtager data fra 0 systemer · heraf 1 lokal løsning/udtræk · 2 integrationer går via platformen',
+      'Sender data til 1 system · modtager data fra 0 systemer · 1 af modparterne er en lokal løsning/udtræk · 2 integrationer går via platformen',
     );
     expect(text(q(f, '[data-testid="direct-db"]'))).toBe('3 integrationer med direkte databaseadgang (brud på API First)');
   });
@@ -92,7 +92,7 @@ describe('SystemIntegrationsComponent', () => {
     );
 
     expect(text(q(f, '[data-testid="direct-db"]'))).toBe('1 integration med direkte databaseadgang (brud på API First)');
-    expect(text(q(f, '[data-testid="summary"]'))).toContain('heraf 2 lokale løsninger/udtræk');
+    expect(text(q(f, '[data-testid="summary"]'))).toContain('2 af modparterne er lokale løsninger/udtræk');
   });
 
   it('tom tilstand lover ikke, at intet hænger på systemet', async () => {

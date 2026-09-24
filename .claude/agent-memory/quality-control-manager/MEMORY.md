@@ -112,3 +112,46 @@ Konklusion: GOD AT LANDE. Alle fem plan-fund fra 2026-09-24 er håndteret i kode
 - CSV FormulaGuard dækker flere tegn (=,+,-,@,TAB,CR) end vejledningens tekst nævner (=,+,-,@) — vejledningen er
   en bevidst forenkling for mennesker, ikke en kontraktafvigelse (koden er en superset), men tjek ved ændringer
   i Csv.cs, at vejledningen ikke bliver direkte forkert (ikke kun ufuldstændig).
+
+## Kode-gennemgang delopg. 2 web/UI (36c0817, PR #3, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE, med én BØR-rettelse (ikke blokerende). Alle plan-fund fra "Plan-gennemgang delopg. 2"
+er håndteret i UI'et:
+- Retning=dataflow-fælden: formularen viser en STATISK forklaring uafhængig af det valgte radio-knap
+  ("Henter [System] data fra et andet system via et API, så modtager [System] data") FØR valget — ordret
+  samme ræsonnement som docs/csv-integrationer.md ("Et system, der henter data via et API, er modtageren").
+  Dataflow-mapping (retning → fromSystemId/toSystemId) er testet med it.each i integration-form.page.spec.ts.
+- Friskheds-rækkevidde (åbent spørgsmål fra plan-gennemgangen) LØST: integrationssektionen er placeret UNDER
+  "Bekræft uændret"-knappen på system-detail.page.html, og hint-teksten blev ændret til at sige eksplicit
+  "Integrationerne bekræftes ikke her." God løsning på det åbne spørgsmål — brug samme mønster (placering
+  UNDER + eksplicit sætning) for fremtidige nye sektioner på systemsiden (kapabiliteter i delopg. 3?).
+- labels.ts fik Records for IntegrationType/IntegrationRelation (det åbne punkt fra server-gennemgangen er nu
+  lukket).
+- 409-typer bruges korrekt i UI: "Hent nyeste version" vises KUN ved p.type === staleVersion && isEdit();
+  duplicate/blocked viser bare den (allerede handlingsanvisende, server-genererede) besked.
+- Modul-visning: en integration, der hænger på et MODUL af det viste system, får en synlig "(modul: X)"-note
+  i tabellen — undgår "landede på en sammenfoldet liste"-fælden (linket går altid til den PRÆCISE
+  modpart-systemets id, aldrig en filtreret/generel liste).
+- Sletning af integration: to-trins inline-bekræftelse ("Slette integrationen permanent?" + Slet/Annullér),
+  samme mønster som ved sletning af system.
+- Alle knapper (Tilføj integration, Rediger pr. række, Dataobjektet findes ikke på listen) er gated på
+  server-permissions (canAdd, item.integration.permissions.canEdit, me().permissions.canManageDataObjects) —
+  ingen rollestrenge sammenlignes i klienten.
+
+### Nyt fund: "heraf"-ordet i en tællelinje, der summerer på tværs af to foregående tal
+system-integrations.component.ts (summary computed) skriver "Sender data til X systemer · modtager data fra Y
+systemer · heraf Z lokale løsninger/udtræk". Serverens LocalSolutions er en UNION på tværs af BÅDE afsender- og
+modtager-siden (IntegrationEndpoints.Summarize: sending.Concat(receiving).Distinct()), men "heraf" sidder
+grammatisk lige efter kun den SIDSTE af de to forudgående tal (modtager data fra Y) — en læser vil naturligt
+tro, at Z er en delmængde af Y alene. Med data, hvor den lokale løsning rent faktisk er på "sender data
+til"-siden, bliver sætningen misvisende (og kan i værste fald blive tal-logisk absurd, hvis Y er lille/nul).
+Selve tabellen nedenunder flagger korrekt hver række individuelt, så det er en ren tekst-tvetydighed i
+tællelinjen, ikke en datafejl. VURDER VED NÆSTE ÆNDRING AF DENNE LINJE: omformulér til noget der ikke antyder
+delmængde af kun ét af de to tal, fx "i alt Z lokale løsninger/udtræk (som afsender eller modtager)". Skal
+rettes, men ikke blokerende for denne PR — er en ren tekstforbedring uden datamæssig konsekvens.
+
+### Bekræftet mønster: to definitioner, der begge er korrekte hver for sig, men kan se inkonsistente ud
+"Sender data til N systemer" (distinkte modparter) kan være LAVERE end antal rækker under "Sender data til" i
+tabellen, hvis to integrationer går til samme system med forskellige navne (tilladt af dublet-nøglen,
+beslutning C i plan.md). Vurderet OK — feltet er korrekt defineret og dokumenteret, og tabellen gør årsagen
+synlig (samme systemnavn optræder to gange) — men hold øje med dette mønster, hvis der tilføjes flere
+aggregerede tal på samme skærm.
