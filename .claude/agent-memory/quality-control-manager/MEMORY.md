@@ -67,3 +67,48 @@ udvider den). Ingen modsigelse fundet mellem rolleliste og andre tal på samme s
 - "udtræk" er både integrationstype (plan.md) og systemtype (LokalLoesning "Lokal løsning/udtræk") — kræver en opskrift.
 - Retning = dataflow (API-pull B→A registreres B→A) er modintuitivt for teknikere → kolonnenavne/formular skal sige
   "data" eksplicit, og fra/til kan ikke rettes (B) → fejl koster slet+genopret.
+
+## Kode-gennemgang delopg. 2 server (a0caef1, PR #2, branch claude/trusting-brahmagupta-4v2ukj) — status på plan-fund
+Konklusion: GOD AT LANDE. Alle fem plan-fund fra 2026-09-24 er håndteret i koden, ikke kun i planen:
+- xmin-fælden LØST: Integration.UpdatedAt sættes ved HVER skrivning (kommentar forklarer hvorfor: uden det ville
+  en ren dataobjekt-ændring (M:N) ikke tvinge en UPDATE af selve rækken, og Version/xmin ville aldrig blive
+  tjekket). Samme mønster som SystemEntity — genbrugt korrekt.
+- 409-skelnen LØST: Problems.cs har type (stale-version/duplicate/blocked) på alle konflikter (også systemets
+  navne-dublet og slet-blokering, som blev rettet FRA generisk Conflict TIL Duplicate/Blocked i samme commit).
+  Klienten (system-form.page.html) viser nu "Hent nyeste version" kun ved `p.type === staleVersion`, ikke
+  `p.status === 409` — grebet er flyttet fra status til type, som planlagt.
+- Friskhedens rækkevidde: relevant for UI, som endnu ikke er bygget (denne PR er server + skabelon). Ingen ny
+  sektion på systemsiden endnu — spørgsmålet er stadig åbent til D3/D4, når integrationssektionen bygges: skal
+  den stå UNDER "Bekræft uændret", eller skal friskheden udvides til at dække den?
+- CSV-kontrakt-tjeklisten LØST solidt: CsvTemplateTests.cs har to guard-tests — (1) golden-fil == det eksporten
+  skriver (UPDATE_CONTRACT=1), (2) vejledningen nævner hver kolonne OG hver typekode (Assert.Contains per værdi,
+  ikke bare "findes en tabel"). "Udtræk er både type og systemtype"-forvirringen har fået sin egen opskrift i
+  doc'en (afsnit "Lister, regneark og datatræk, der ikke findes i registret": 1) registrér listen som et system
+  af typen Lokal løsning/udtræk, 2) flowet dertil som Type=Udtraek). God model at genbruge til fremtidige
+  eksterne kontrakt-filer: golden-fil-lighed + "nævner alle enum-koder" i to separate tests.
+- Naturlig nøgle vs. ExternalKey: STADIG ÅBEN, bevidst — importen er ikke bygget endnu (delopg. 6). Doc'en
+  beskriver allerede den planlagte matchrækkefølge (Id → ExternalKey → fire felter+Navn), hvilket er en
+  fremtids-kontrakt, ikke en nutidig funktion — klart markeret med en boks øverst i docs/csv-integrationer.md
+  ("Import kommer i en senere delopgave"). Vurderet OK (ikke "lover for meget"), men tjek ved delopg. 6, om
+  matchrækkefølgen rent faktisk løser kollisionen mellem to ExternalKeys, der peger på samme naturlige nøgle.
+
+## Nye mønstre/fælder fundet i denne gennemgang
+- Delete-blokering udvidet fra kun "har moduler" til også "indgår i integrationer"/"er platform for integrationer"
+  via SystemRules.DeleteBlockedReason(name, SystemUsage) — ét sted, brugt af DeleteSystem OG ToDetail (permissions).
+  God model: en ny afhængighedstype til et eksisterende "kan ikke slette"-koncept skal udvide SAMME funktion/type
+  (SystemUsage-record), ikke en ny sideløbende regel.
+- IntegrationSummary blander enheder på samme DTO: Receivers/Suppliers/LocalSolutions tæller FORSKELLIGE SYSTEMER
+  (distinct), men ViaPlatform/DirectDb tæller INTEGRATIONER (rækker). Er tydeligt dokumenteret i XML-kommentaren
+  pr. felt, så ikke en modsigelse — men når UI'et (D3/D4) viser en tællelinje, så tjek at teksten ikke antyder
+  samme enhed for alle fem tal ("3 modtagere, 2 direkte databaseadgange" er fint; "3 modtagere, 2 platforme" hvor
+  det ene er systemer og det andet integrationer, er ikke).
+- To forskellige sorteringer for "samme" data: systemsidens liste (ForSystem: relation → modtager-navn → type)
+  vs. CSV-eksport for ét system (IntegrationCsv.Write: fra-navn → til-navn → type → navn), begge kalder dog
+  IntegrationQueries (fælles UDVALG/familie). Ikke en fejl — de er forskellige visninger med forskelligt formål —
+  men spørg ved D3/D4, om en bruger, der eksporterer fra systemsiden, undrer sig over anden rækkefølge end skærmen.
+- Nyt enum tilføjet (IntegrationType, IntegrationRelation) UDEN tilsvarende Record i web/src/app/core/labels.ts
+  endnu — bevidst, fordi UI-sektionen kommer i en senere PR. IKKE en fejl nu (ingen kode refererer til dem endnu,
+  så TS-kompileringen fanger ikke noget), men er en åben opgave: husk labels.ts, når D3/D4 bygger integrations-UI.
+- CSV FormulaGuard dækker flere tegn (=,+,-,@,TAB,CR) end vejledningens tekst nævner (=,+,-,@) — vejledningen er
+  en bevidst forenkling for mennesker, ikke en kontraktafvigelse (koden er en superset), men tjek ved ændringer
+  i Csv.cs, at vejledningen ikke bliver direkte forkert (ikke kun ufuldstændig).

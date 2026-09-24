@@ -41,6 +41,40 @@
   resursen, så re-evaluer da (evt. billig projektion/rolle-shortcut først).
 - Malformet JSON -> 500 (burde være 400). Ingen læk, ren robusthed.
 
+## Delopgave 2 (a0caef1, integrationer/dataobjekter/CSV) – kørt 2026-09-24
+- BEKRÆFTET lukket: anonym -> 401 på alle nye ruter. Læser (lars) og
+  rolleløs (frida): POST/PUT/DELETE integration + POST dataobjekt -> 403,
+  intet ændret. Adgangstjek ligger før DB-validering (100k GUIDs + 100k-tegns
+  navn som læser -> 403 på ~60 ms). Kun "fra/til mangler" giver 400 før 403
+  (bevidst billigt tjek, ingen læk).
+- EditIntegrationHandler: p.t. KUN IsInRole(Admin), resursen ignoreres.
+  Delopgave 4 udvider -> genangrib (ikke-gemt resurs ved create: fra/til/via
+  kommer fra klienten, så ejer-tjek skal ske på de rigtige systemer).
+- q på /api/data-objects: % _ \ og SQL-payload -> parametriseret, ingen injektion.
+- Content-Disposition: Csv.Slug -> kun [a-z0-9-]. Systemnavn med CRLF gav et
+  rent filnavn. Lukket.
+- FUND (BEKRÆFTET, ikke blokerende): CSV-formelvagten tjekker kun feltets
+  FØRSTE tegn og citerer ikke felter med ','. Med ',' som skilletegn
+  (fx engelsk Excel/LibreOffice) bliver et felt som `navn,=1+1` til en celle,
+  der starter med '='. Ramte både integrations- og systemeksporten (navn,
+  beskrivelse, dataobjekter, systemnavne). ';'-parse var ren (kontroltest).
+  Rettelse: citér også felter med ',' og TAB (eller citér alle felter).
+  SKAL lukkes før delopgave 4 (ikke-admin-skrivning) / 6 (import).
+- FUND (BEKRÆFTET, lav): JsonStringEnumConverter accepterer heltal ->
+  "type": 99 blev gemt som '99' og sendes tilbage som tallet 99 (kontrakt
+  brudt, klientens labels giver undefined). Kun admin nu. Rettelse:
+  JsonStringEnumConverter(allowIntegerValues: false) eller Enum.IsDefined.
+  Gælder formentlig også systemers enums (fra før).
+- Fuld eksport = hele angrebskortet i ét kald for enhver indlogget. Ikke nyt
+  (læsere ser alt), men overvej revisionslog pr. eksport når der kommer rigtige data.
+- NB: sikkerhedsklassifikatoren stoppede et PoC med rigtige exploit-strenge
+  (DDE/cmd, WEBSERVICE-exfil). Brug KUN harmløse markører (=1+1) til
+  CSV-test – det er nok til at bevise, at en celle bliver til en formel.
+
 ## PoC-mønstre (genbrug)
+- CSV-injektion: eksportér, parse med python csv.reader BÅDE delimiter ';'
+  og ',', led efter celler der starter med = + - @ (filtrér tomme celler fra).
+- Python-hjælper req(m,p,tok,body) med urllib + tokens fra /api/dev/token
+  (eva=admin, frida/lars=ingen roller).
 - HS256-token i bash: header/payload base64url, openssl dgst -sha256 -hmac KEY.
 - Kør API på egen port+DB: ConnectionStrings__Ea + --urls, ryd op med dropdb.
