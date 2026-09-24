@@ -217,6 +217,7 @@ describe('SystemFormPage', () => {
         capabilities: [
           systemCapability('K1.1.1', null, { name: 'Optagelse', path: 'Uddannelse › Studieadministration' }),
           systemCapability('K1.9', null, { name: 'Gammel eksamen', path: 'Uddannelse', moveReason: 'Udgaaet' }),
+          systemCapability('K3', null, { name: 'Støtte', moveReason: 'HarUnderkapabiliteter' }),
           systemCapability('K2.1', { id: 'sys-mod', name: 'Laboratorie' }, { name: 'Bevillinger', path: 'Forskning' }),
         ],
       });
@@ -238,7 +239,13 @@ describe('SystemFormPage', () => {
     it('viser egne koblinger som valgte — med markering — og familiens for sig', async () => {
       const f = await render(existing(), tree);
 
-      expect(chips(f)).toEqual(['K1.1.1 Optagelse ×', 'K1.9 Gammel eksamen · udgået ×']);
+      expect(chips(f)).toEqual([
+        'K1.1.1 Optagelse ×',
+        'K1.9 Gammel eksamen · udgået ×',
+        'K3 Støtte · har underkapabiliteter ×',
+      ]);
+      const rows = Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row'));
+      expect(rows.map((r) => r.classList.contains('flagged'))).toEqual([false, true, true]);
       expect(text(el(f).querySelector('[data-testid="family-capabilities"]'))).toBe(
         'Familiens kapabiliteter (redigeres på det andet system): K2.1 Bevillinger — via modulet Laboratorie',
       );
@@ -267,14 +274,30 @@ describe('SystemFormPage', () => {
       expect((el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement).value).toBe('');
       (el(f).querySelector('[data-testid="remove-capability"]') as HTMLButtonElement).click(); // K1.1.1
       await settle(f);
-      expect(chips(f)).toEqual(['K1.9 Gammel eksamen · udgået ×', 'K1.1.2 Eksamen ×']);
+      expect(chips(f)).toEqual([
+        'K1.9 Gammel eksamen · udgået ×',
+        'K3 Støtte · har underkapabiliteter ×',
+        'K1.1.2 Eksamen ×',
+      ]);
 
       await submit(f);
       const put = http.expectOne('/api/systems/sys-1');
-      // Den udgåede kobling sendes med: den bevares, indtil nogen flytter den.
-      expect((put.request.body as SystemWriteRequest).capabilityIds).toEqual(['cap-K1.9', 'cap-K1.1.2']);
+      // Koblinger, der bør flyttes, sendes med: de bevares, indtil nogen flytter dem.
+      expect((put.request.body as SystemWriteRequest).capabilityIds).toEqual(['cap-K1.9', 'cap-K3', 'cap-K1.1.2']);
       put.flush(systemDetail());
       await settle(f);
+    });
+
+    it('tilbyder højst 50 forslag ad gangen', async () => {
+      const leaves = Array.from({ length: 60 }, (_, i) =>
+        capabilityNode(`B${i + 1}`, 1, { name: `Blad ${i + 1}`, path: 'Stor gruppe', selectable: true }),
+      );
+      const f = await render(undefined, capabilityTree([capabilityNode('B', 0, { name: 'Stor gruppe' }), ...leaves]));
+
+      const options = await search(f, 'stor gruppe');
+      // 60 blade matcher; de første 50 i kortets rækkefølge vises.
+      expect(options.length).toBe(50);
+      expect(text(options[49])).toBe('B50 Blad 50 · Stor gruppe');
     });
 
     it('viser serverens fejl ved kapabiliteterne ved feltet', async () => {

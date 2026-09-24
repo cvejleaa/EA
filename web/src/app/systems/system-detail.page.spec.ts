@@ -56,6 +56,7 @@ describe('SystemDetailPage', () => {
       'K3.1 Prøver · Laboratorier · via modulet Laboratorie',
     ]);
     expect(items.map((li) => li.querySelector('[data-testid="move-reason"]') !== null)).toEqual([false, true, true, false]);
+    expect(items.map((li) => li.classList.contains('held'))).toEqual([false, false, true, true]);
     // Hver kobling fører til systemlisten filtreret på kapabiliteten.
     expect(items[0].querySelector('a')?.getAttribute('href')).toBe('/systemer?capabilityId=cap-K1.1.1');
     expect(q(f, '[data-testid="capabilities-none"]')).toBeNull();
