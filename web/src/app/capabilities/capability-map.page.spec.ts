@@ -268,6 +268,8 @@ describe('CapabilityMapPage', () => {
               { id: 'sys-hr', name: 'Nordlys › HR', exclusion: null },
               { id: 'sys-r', name: 'Rune', exclusion: 'Planlagt' },
               { id: 'sys-u', name: 'Ugle', exclusion: 'Udfases' },
+              { id: 'sys-x', name: 'Xylo', exclusion: 'LokalLoesning' },
+              { id: 'sys-g', name: 'Gamle', exclusion: 'Nedlagt' },
             ],
           }),
         }),
@@ -321,12 +323,17 @@ describe('CapabilityMapPage', () => {
 
       expect(badges(row(f, 'K1.1'))).toEqual(['Overlap · 2 systemer', '1 planlagt system oven på et aktivt']);
       const members = row(f, 'K1.1').querySelector('[data-testid="members"]')!;
-      expect(text(members)).toBe('Systemer: Kompas, Nordlys › HR, Rune (planlagt), Ugle (udfases)');
+      // Alle fire årsager står med deres danske ord.
+      expect(text(members)).toBe(
+        'Systemer: Kompas, Nordlys › HR, Rune (planlagt), Ugle (udfases), Xylo (lokal løsning/udtræk), Gamle (nedlagt)',
+      );
       expect(Array.from(members.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
         '/systemer/sys-k',
         '/systemer/sys-hr',
         '/systemer/sys-r',
         '/systemer/sys-u',
+        '/systemer/sys-x',
+        '/systemer/sys-g',
       ]);
       expect(badges(row(f, 'K2.1'))).toEqual(['2 planlagte systemer oven på et aktivt']);
       for (const code of ['K1', 'K1.2', 'K2']) {
@@ -341,9 +348,12 @@ describe('CapabilityMapPage', () => {
     it('"Overlap og planlagte" viser kun dem, der skal tales om, og står i URL\'en', async () => {
       const f = await render(map());
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      const pressed = () => q(f, '[data-testid="overlap-filter"]')!.getAttribute('aria-pressed');
+      expect(pressed()).toBe('false');
 
       (q(f, '[data-testid="overlap-filter"]') as HTMLButtonElement).click();
       await settle(f);
+      expect(pressed()).toBe('true');
 
       expect(q(f, '[data-testid="tree"]')).toBeNull();
       const items = Array.from(q(f, '[data-testid="attention"]')!.querySelectorAll(':scope > li'));
@@ -355,6 +365,7 @@ describe('CapabilityMapPage', () => {
       (q(f, '[data-testid="overlap-filter"]') as HTMLButtonElement).click();
       await settle(f);
       expect(q(f, '[data-testid="tree"]')).not.toBeNull();
+      expect(pressed()).toBe('false');
       expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: { overlap: null } }));
     });
 
