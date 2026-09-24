@@ -130,6 +130,7 @@ describe('CapabilityMapPage', () => {
   it('import-knappen vises kun, når serveren giver lov', async () => {
     const admin = await render(capabilityTree([capabilityNode('K1', 0)], true));
     expect(q(admin, '[data-testid="import"]')?.getAttribute('href')).toBe('/kapabiliteter/import');
+    expect(q(admin, '[data-testid="import-couplings"]')?.getAttribute('href')).toBe('/kapabiliteter/koblinger/import');
 
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -143,6 +144,7 @@ describe('CapabilityMapPage', () => {
     http = TestBed.inject(HttpTestingController);
     const reader = await render(capabilityTree([capabilityNode('K1', 0)], false));
     expect(q(reader, '[data-testid="import"]')).toBeNull();
+    expect(q(reader, '[data-testid="import-couplings"]')).toBeNull();
     expect(q(reader, '[data-testid="download"]')).not.toBeNull(); // Alle kan hente kortet.
   });
 

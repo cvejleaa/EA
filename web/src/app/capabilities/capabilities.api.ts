@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { CapabilityImportResult, CapabilityTreeResponse } from '../api/types';
+import type { CapabilityImportResult, CapabilityTreeResponse, CouplingImportResult } from '../api/types';
 import { downloadFile } from '../core/download';
 
 @Injectable({ providedIn: 'root' })
@@ -32,6 +32,20 @@ export class CapabilitiesApi {
     }
     return firstValueFrom(
       this.http.post<CapabilityImportResult>('/api/capabilities/import', file, {
+        params,
+        headers: { 'Content-Type': 'text/csv' },
+      }),
+    );
+  }
+
+  /** Koblingsfilen (docs/csv-koblinger.md): samme protokol som kortet — tør-kørsel, derefter med fingeraftryk. */
+  importCouplings(file: Blob, dryRun: boolean, fingerprint?: string): Promise<CouplingImportResult> {
+    let params = new HttpParams().set('dryRun', dryRun);
+    if (fingerprint) {
+      params = params.set('fingerprint', fingerprint);
+    }
+    return firstValueFrom(
+      this.http.post<CouplingImportResult>('/api/capabilities/couplings/import', file, {
         params,
         headers: { 'Content-Type': 'text/csv' },
       }),

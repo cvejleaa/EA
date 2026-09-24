@@ -1,0 +1,163 @@
+<section class="page">
+  <a routerLink="/kapabiliteter">← Kapabilitetskortet</a>
+  <h1>Importér koblinger</h1>
+
+  <div class="intro">
+    <p>
+      <strong>Filen bestemmer alle koblinger for de systemer og moduler, der står i den.</strong> Koblinger, der ikke
+      står i filen, fjernes fra dem. Systemer, der slet ikke står i filen, røres ikke.
+    </p>
+    <ul>
+      <li>
+        Start fra en frisk eksport:
+        <button mat-button type="button" (click)="download()" [disabled]="downloading()" data-testid="download">
+          Hent koblinger (CSV)
+        </button>
+      </li>
+      <li><strong>Tøm koden, slet ikke rækken</strong>, når en kobling skal fjernes. En slettet række tæller ikke.</li>
+      <li>Kun <code>SystemId</code> og <code>Kode</code> indlæses. Ret status, ejere og andet på systemsiden.</li>
+    </ul>
+  </div>
+
+  @if (canImport() === false) {
+    <p class="error-text" data-testid="not-allowed">Kun enterprise arkitekten kan importere koblinger.</p>
+  } @else if (canImport()) {
+    <div class="row pick">
+      <input type="file" accept=".csv,text/csv" (change)="flow.onFile($event)" data-testid="file" />
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="flow.dryRun()"
+        [disabled]="!flow.file() || flow.busy()"
+        data-testid="dry-run"
+      >
+        Kør tør-kørsel
+      </button>
+    </div>
+  }
+
+  @if (flow.problem(); as p) {
+    <div class="problem" role="alert" data-testid="problem">
+      <p>{{ p.message }}</p>
+      @if (p.type === staleDryRun) {
+        <button mat-stroked-button type="button" (click)="flow.dryRun()" data-testid="rerun">Kør tør-kørsel igen</button>
+      }
+    </div>
+  }
+
+  @if (flow.done(); as d) {
+    <p class="success" role="status" data-testid="done">
+      Koblingerne er importeret: {{ summaryText(d.summary, true) }}. <a routerLink="/kapabiliteter">Se kortet</a>
+    </p>
+  }
+
+  @if (flow.result(); as r) {
+    @if (r.errors.length) {
+      <div data-testid="errors">
+        <p class="error-text">
+          Filen har {{ count(r.errors.length, 'fejl', 'fejl') }}. Ret dem i regnearket, og kør tør-kørslen igen.
+          Intet er gemt.
+        </p>
+        <table class="list">
+          <thead>
+            <tr><th>Linje</th><th>Kolonne</th><th>Fejl</th></tr>
+          </thead>
+          <tbody>
+            @for (e of r.errors; track $index) {
+              <tr><td>{{ e.line }}</td><td>{{ e.column ?? '' }}</td><td>{{ e.message }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <h2>Tør-kørsel</h2>
+      <p data-testid="summary">{{ summaryText(r.summary, false) }}</p>
+
+      @if (r.summary.largeRemoval) {
+        <p class="warning" role="alert" data-testid="large-removal">
+          Importen fjerner {{ r.summary.removed }} af de {{ today(r.summary) }} koblinger, systemerne i filen har i dag.
+          Er det en delvis fil?
+        </p>
+      }
+      @if (r.summary.systemsCleared > 0) {
+        <p class="warning" data-testid="cleared">{{ cleared(r.summary.systemsCleared) }}.</p>
+      }
+      @if (r.summary.systemsChangedSinceExport > 0) {
+        <p class="warning-soft" data-testid="changed-since-export">
+          {{ count(r.summary.systemsChangedSinceExport, 'system er', 'systemer er') }} ændret i registret, efter filen blev
+          hentet. Tjek, om det, der fjernes, er tilføjet siden — eller hent en ny eksport.
+        </p>
+      }
+
+      @if (r.notInFile.length) {
+        <details data-testid="not-in-file">
+          <summary>
+            {{ count(r.notInFile.length, 'system', 'systemer') }} med koblinger står ikke i filen og røres ikke.
+          </summary>
+          <ul>
+            @for (s of r.notInFile; track s.id) {
+              <li><a [routerLink]="['/systemer', s.id]">{{ s.name }}</a></li>
+            }
+          </ul>
+        </details>
+      }
+
+      @if (r.warnings.length) {
+        <details class="warning-soft" data-testid="warnings">
+          <summary>
+            {{ count(r.summary.ignoredEdits, 'række har', 'rækker har') }} rettelser i kolonner, der ikke indlæses. De
+            gemmes ikke — ret dem på systemsiden.
+          </summary>
+          <table class="list">
+            <thead>
+              <tr><th>Linje</th><th>Kolonne</th><th>Advarsel</th></tr>
+            </thead>
+            <tbody>
+              @for (w of r.warnings; track $index) {
+                <tr><td>{{ w.line }}</td><td>{{ w.column ?? '' }}</td><td>{{ w.message }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </details>
+      }
+
+      @if (r.changes.length === 0) {
+        <p data-testid="no-changes">Filen svarer til registret. Der er intet at importere.</p>
+      } @else {
+        <table class="list" data-testid="changes">
+          <thead>
+            <tr><th>Ændring</th><th>System</th><th>Kode</th><th>Kapabilitet</th></tr>
+          </thead>
+          <tbody>
+            @for (c of r.changes; track c.kind + c.system.id + c.code) {
+              <tr [class.removed]="c.kind === 'Fjernes'">
+                <td>{{ kindLabels[c.kind] }}</td>
+                <td>
+                  <a [routerLink]="['/systemer', c.system.id]">{{ c.system.name }}</a>
+                  @if (c.changedSinceExport) {
+                    &ngsp;<span class="affected" data-testid="changed-flag">Ændret i registret efter eksporten</span>
+                  }
+                </td>
+                <td class="code">{{ c.code }}</td>
+                <td>
+                  {{ c.name }}
+                  @if (c.path) {
+                    <span class="muted"> · {{ c.path }}</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+      @if (flow.canCommit()) {
+        <div class="row actions">
+          <button mat-flat-button type="button" (click)="flow.commit()" [disabled]="flow.busy()" data-testid="commit">
+            Gennemfør import
+          </button>
+          <span class="muted">Gemmer præcis det, tør-kørslen viser.</span>
+        </div>
+      }
+    }
+  }
+</section>

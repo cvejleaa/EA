@@ -41,6 +41,11 @@ export const routes: Routes = [
         loadComponent: () => import('./capabilities/capability-import.page').then((m) => m.CapabilityImportPage),
         title: 'Importér kapabilitetskortet',
       },
+      {
+        path: 'koblinger/import',
+        loadComponent: () => import('./capabilities/coupling-import.page').then((m) => m.CouplingImportPage),
+        title: 'Importér koblinger',
+      },
     ],
   },
   { path: '', pathMatch: 'full', redirectTo: 'systemer' },

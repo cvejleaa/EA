@@ -220,6 +220,8 @@ public sealed class CouplingImportTests
     [Theory]
     [InlineData("", "Filen er tom.")]
     [InlineData("Kode;Navn;ForælderKode;Beskrivelse\r\nK1;Uddannelse;;\r\n",
+        "Det er filen med kortet, ikke koblingerne. Den indlæses med \"Importér kort\" på siden Kapabiliteter.")]
+    [InlineData("SystemId;Kode\r\nx;K1\r\n",
         "Første linje skal være præcis: SystemId;FuldtNavn;Kode;Kapabilitet;Sti;Forælder;Status;Type;ForvaltendeTeam;Forretningsejer;Systemejer;SidstBekræftet;SidstÆndret;Overlap;SystemerDerTæller;AntalPlanlagte;TællerIkkeMed;DelesMed;BørFlyttes;Systembeskrivelse.")]
     [InlineData("SystemId;FuldtNavn;Kode;Kapabilitet;Sti;Forælder;Status;Type;ForvaltendeTeam;Forretningsejer;Systemejer;SidstBekræftet;SidstÆndret;Overlap;SystemerDerTæller;AntalPlanlagte;TællerIkkeMed;DelesMed;BørFlyttes;Systembeskrivelse\r\n",
         "Filen indeholder ingen rækker. Hent koblingerne, ret dem i Excel, og indlæs filen igen.")]

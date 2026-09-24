@@ -76,7 +76,8 @@ Indtil koblingen er flyttet, indgår den ikke i overlap. Kortet har en liste ove
 
 ## Indlæs filen igen
 
-**Hent koblingerne, ret dem i Excel, og indlæs filen igen.** Start altid fra en frisk eksport.
+**Hent koblingerne, ret dem i Excel, og indlæs filen igen** med "Importér koblinger" på siden Kapabiliteter.
+Start altid fra en frisk eksport.
 
 ### Det vigtigste: filen er hele sandheden for systemerne i den
 

@@ -49,7 +49,8 @@ public static class CouplingImport
             return ([], [csv.Error]);
         }
 
-        if (CsvImport.HeaderError(csv.Header, CouplingCsv.Header) is { } headerError)
+        if (CsvImport.HeaderError(csv.Header, CouplingCsv.Header, (CapabilityCsv.Header,
+                "Det er filen med kortet, ikke koblingerne. Den indlæses med \"Importér kort\" på siden Kapabiliteter.")) is { } headerError)
         {
             return ([], [headerError]);
         }

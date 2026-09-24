@@ -48,9 +48,13 @@ public static class CsvImport
 
     /// <summary>
     /// Fejlen i første linje — eller null, når overskrifterne er præcis <paramref name="expected"/> (tomme felter
-    /// til sidst tæller ikke; Excel efterlader dem gerne).
+    /// til sidst tæller ikke; Excel efterlader dem gerne). Er det i stedet registrets ANDEN fil
+    /// (<paramref name="otherFile"/>), siger fejlen det og hvor den indlæses.
     /// </summary>
-    public static ImportRowError? HeaderError(IReadOnlyList<string> header, IReadOnlyList<string> expected)
+    public static ImportRowError? HeaderError(
+        IReadOnlyList<string> header,
+        IReadOnlyList<string> expected,
+        (IReadOnlyList<string> Header, string Message)? otherFile = null)
     {
         var fields = WithoutTrailingEmpty(header);
         if (fields.Count == 0)
@@ -61,6 +65,11 @@ public static class CsvImport
         if (fields.SequenceEqual(expected))
         {
             return null;
+        }
+
+        if (otherFile is { } other && fields.SequenceEqual(other.Header))
+        {
+            return new ImportRowError(1, null, other.Message);
         }
 
         var hint = fields.Count == 1 && fields[0].Contains(',', StringComparison.Ordinal)

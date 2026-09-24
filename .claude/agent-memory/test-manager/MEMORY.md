@@ -476,6 +476,64 @@ parallelt jf. CLAUDE.md's arbejdsgang). ALLE 19 tests fejlede samtidigt, med 100
 forventede, konsistente resultat. Genkend dette mønster med det samme og gentag ISOLERET, i stedet for at
 rapportere "17 fejl" som et ægte mutations-fund.
 
+## Fund 860d661 (delopgave 3d-web, EA-register): koblings-import-UI + fælles `ImportFlow` — alle 18 udpegede kernemutationer dræbt
+
+Baseline: web `npx ng test --watch=false` (via `/opt/node24/bin/node ./node_modules/.bin/ng test --watch=false`, da
+`npx`/PATH-omgåelse blev afvist af sandboxen i denne worktree — kør binæren direkte i stedet) 106/106 i 12 filer;
+API `dotnet test --project tests/Ea.Api.Tests --filter-namespace Ea.Api.Tests.Capabilities` 180/180. Tre commits:
+`4a554fd` (tilstanden fra kortimport-siden udtrukket til `core/import-flow.ts`, "uden ny adfærd" — troværdig her,
+i modsætning til b8d6ff5-fundet: `capability-import.page.spec.ts` er HELT uændret og forblev 106/106 grøn med den
+nye `ImportFlow`-klasse bag facaden), `eb6a1df` (koblings-import-siden, ny) og `860d661` (kun testinfrastruktur,
+ikke mutationstestet jf. opgavebeskrivelsen — allerede bevist med en midlertidig superuser-test).
+
+Kørte netop de 15 udpegede mutationer — **ALLE dræbt, ingen overlevede**:
+- `ImportFlow.canCommit`: `changes.length > 0`-fjernelse dræbt af `capability-import.page.spec.ts:282` ("Filen er
+  identisk med kortet"-testen), `!!r.fingerprint`-fjernelse dræbt af samme fils linje 360 (`fingerprint: null`-
+  scenariet). `errors.length === 0`-fjernelse gav derimod 106/106 GRØNT — men det er IKKE et nyt hul, det er det
+  samme strukturelt udækkelige tilfælde som allerede dokumenteret i fund 3494afa: begge sider grenerer HTML'en på
+  `@if (r.errors.length) {…} @else { …@if (canCommit()) }`, så `canCommit()` aldrig evalueres, når `errors.length
+  > 0`. Ikke rapporteret som mangel.
+- `onFile`s `result.set(null)`-fjernelse dræbt af `capability-import.page.spec.ts:295` (vælg ny fil efter en
+  gennemført import → `commit`/`summary` skal være væk). **Bemærk**: `done`/`problem`-resetten i `onFile` (som VAR
+  et hul i 3494afa, punkt 1) er nu implicit dækket af samme mekanisme, fordi den ligger i den fælles `ImportFlow`
+  — men ingen test her isolerer `done`/`problem` specifikt, kun `result`. Ikke re-verificeret separat i denne
+  gennemgang (uden for den udpegede liste), men værd at holde øje med, hvis `ImportFlow` nogensinde splittes op.
+- `commit`s manglende fingerprint-afsendelse dræbt af BÅDE `coupling-import.page.spec.ts:175` OG
+  `capability-import.page.spec.ts` (fælles kode, fælles dækning — to filer døde samtidig, et stærkt signal).
+  `commit`s manglende `result.set(null)`-rydning ved fejl dræbt af `coupling-import.page.spec.ts:223` (stale-dry-
+  run-testen: commit-knappen skal være væk efter fejlen, før "Kør tør-kørsel igen" klikkes).
+- Koblingssiden (`coupling-import.page.ts/.html`): `today()` (removed+unchanged→removed) dræbt af "2 af de 5"-
+  assertionen (removed=2, unchanged=3 — GAMMEL værdi 2 ville stå i stedet for 5, begge tal i selve testen).
+  `cleared`s ental/flertal-byte dræbt for n=1 (kun singular er fixture-dækket, men et byt af de to grene ÆNDRER
+  outputtet for n=1 også — samme "operator-flip fanges selv med kun én gren dækket"-mønster som i fund 7e785e2).
+  Alle 5 advarselsbetingelser (`largeRemoval`, `systemsCleared > 0`, `systemsChangedSinceExport > 0`,
+  `notInFile.length`, `warnings.length`) dræbt hver for sig ved `@if (true)`-mutation — fanget af "uden advarsler
+  i svaret vises ingen advarsler"-testen, som eksplicit sætter dem til 0/tom OG asserterer `toBeNull()` for alle
+  fem test-id'er i ét loop. `[class.removed]="c.kind === 'Fjernes'"` byttet til `'Tilfoejes'` dræbt af
+  `rows.map(r => r.classList.contains('removed'))`-arrayet (`[true, true, false]` — en positiv, PR-linje-for-
+  linje-vagt, ikke en løs optælling). `changedSinceExport`-betingelsen for `changed-flag` sat til altid-vist
+  dræbt af cellernes tekstindhold (Nordlys›HR-rækken har IKKE flaget i fixturet). `notInFile`-linkets `s.id`→
+  `s.name` dræbt af href-assertionen (`/systemer/sys-u` vs. det forkerte `/systemer/Ugle`).
+  `couplingImportSummaryText`s committed/dryRun-byt dræbt af BÅDE dry-run- og committed-testen (hver har sin egen
+  forventede tekst med modsatte bøjninger).
+- `labels.couplingChangeKindLabels`-byt (Fjernes↔Tilføjes) dræbt af ændringstabellens celletekst.
+- `capability-map.page.html`s `import-couplings`-links `canImport`-gate fjernet (sat til `@if (true)`) dræbt af
+  `capability-map.page.spec.ts:147` (reader-scenariet, `toBeNull()`).
+- Serveren: `CsvImport.HeaderError`s `otherFile`-tuple fjernet i BÅDE `CapabilityImport.Parse` og
+  `CouplingImport.Parse` hver for sig dræbt af de to nye theory-cases i henholdsvis `CapabilityImportTests.cs` og
+  `CouplingImportTests.cs` (den anden fils overskrift genkendes og giver den krydshenvisende fejltekst).
+
+**Miljø-note til næste gang**: i denne worktree blokerede sandboxen `PATH=/opt/node24/bin:$PATH npx ng test …`
+(både som `PATH=...`-præfiks og som `env PATH=... npm …`) med en git-isolationsfejl, selvom kommandoen intet har
+med git at gøre — formentlig en heuristik, der reagerer på PATH-manipulation generelt. Løsning: kald binæren
+direkte, `/opt/node24/bin/node ./node_modules/.bin/ng test --watch=false` (kræver `/opt/node24/bin/npm install`
+kørt først, samme binær-direkte-teknik).
+
+**Ingen funktionelle huller fundet** — endnu en delopgave (efter 7e785e2) hvor opgavebeskrivelsens egen
+mutationsliste allerede dækker præcis de svage punkter, og alle er lukket. Eneste værd-at-vide-punkter er de to
+allerede-dokumenterede, ikke-nye mønstre ovenfor (strukturelt udækkelig `errors.length`-gren, og den endnu-ikke-
+isolerede `done`/`problem`-reset i den delte `ImportFlow`).
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

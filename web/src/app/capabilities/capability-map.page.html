@@ -2,23 +2,44 @@
   <div class="row header">
     <h1>Kapabiliteter</h1>
     <span class="spacer"></span>
-    @if (tree()?.items?.length) {
-      <button mat-stroked-button type="button" (click)="download('model')" [disabled]="downloading()" data-testid="download">
-        Hent kortet (CSV)
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
-        (click)="download('couplings')"
-        [disabled]="downloading()"
-        title="Alle systemers koblinger med overlap — og de systemer, der mangler at blive koblet"
-        data-testid="download-couplings"
-      >
-        Hent koblinger (CSV)
-      </button>
-    }
-    @if (tree()?.canImport) {
-      <a mat-flat-button routerLink="/kapabiliteter/import" data-testid="import">Importér kort</a>
+    @if (tree(); as t) {
+      @if (t.items.length || t.canImport) {
+        <div class="row group" role="group" aria-label="Kortet">
+          @if (t.items.length) {
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="download('model')"
+              [disabled]="downloading()"
+              data-testid="download"
+            >
+              Hent kortet (CSV)
+            </button>
+          }
+          @if (t.canImport) {
+            <a mat-flat-button routerLink="/kapabiliteter/import" data-testid="import">Importér kort</a>
+          }
+        </div>
+      }
+      @if (t.items.length) {
+        <div class="row group" role="group" aria-label="Koblinger">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="download('couplings')"
+            [disabled]="downloading()"
+            title="Alle systemers koblinger med overlap — og de systemer, der mangler at blive koblet"
+            data-testid="download-couplings"
+          >
+            Hent koblinger (CSV)
+          </button>
+          @if (t.canImport) {
+            <a mat-flat-button routerLink="/kapabiliteter/koblinger/import" data-testid="import-couplings">
+              Importér koblinger
+            </a>
+          }
+        </div>
+      }
     }
   </div>
 

@@ -255,6 +255,8 @@ public sealed class CapabilityImportTests
         { "Kode;Navn;ForælderKode;Beskrivelse\r\nK1;En;;;ekstra\r\n", 2,
             "Linjen har 5 felter, men skal have 4. Står der et semikolon i en tekst uden citationstegn?" },
         { "Kode;Navn;Forælder;Beskrivelse\r\nK1;En;;\r\n", 1, "Første linje skal være præcis: Kode;Navn;ForælderKode;Beskrivelse." },
+        { string.Join(";", CouplingCsv.Header) + "\r\nx;;K1\r\n", 1,
+            "Det er filen med koblinger, ikke kortet. Den indlæses med \"Importér koblinger\" på siden Kapabiliteter." },
         { "Kode;Navn;ForælderKode;Beskrivelse\r\n", 1,
             "Filen indeholder ingen kapabiliteter. En import erstatter hele kortet, så en tom fil ville slette det." },
         { "", 1, "Filen er tom." },

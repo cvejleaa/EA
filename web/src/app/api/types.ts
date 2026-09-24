@@ -46,3 +46,7 @@ export type CapabilityToMove = Schemas['CapabilityToMove'];
 export type CoupledSystem = Schemas['CoupledSystem'];
 // Nullable i kontrakten ("ingen grund"); selve typen er uden null.
 export type MoveReason = NonNullable<Schemas['MoveReason']>;
+export type CouplingImportResult = Schemas['CouplingImportResult'];
+export type CouplingImportSummary = Schemas['CouplingImportSummary'];
+export type CouplingChange = Schemas['CouplingChange'];
+export type CouplingChangeKind = Schemas['CouplingChangeKind'];

@@ -1,6 +1,8 @@
 import type {
   CapabilityChangeKind,
   CapabilityImportSummary,
+  CouplingChangeKind,
+  CouplingImportSummary,
   IntegrationRelation,
   IntegrationType,
   LifecycleStatus,
@@ -92,6 +94,25 @@ export function importSummaryText(s: CapabilityImportSummary, committed: boolean
     ...(s.reactivated > 0 ? [`${s.reactivated} ${committed ? 'genaktiveret' : 'genaktiveres'}`] : []),
     count(s.unchanged, 'uændret', 'uændrede'),
   ].join(' · ');
+}
+
+export const couplingChangeKindLabels: Record<CouplingChangeKind, string> = {
+  Fjernes: 'Fjernes',
+  Tilfoejes: 'Tilføjes',
+};
+
+/**
+ * Koblingsimportens tal i ét udsagn med enheder, fx
+ * "2 koblinger tilføjes · 1 fjernes · 12 uændrede — 3 af filens 14 systemer ændres".
+ */
+export function couplingImportSummaryText(s: CouplingImportSummary, committed: boolean): string {
+  return [
+    `${count(s.added, 'kobling', 'koblinger')} ${committed ? 'tilføjet' : 'tilføjes'}`,
+    `${s.removed} ${committed ? 'fjernet' : 'fjernes'}`,
+    `${s.unchanged} uændrede`,
+  ]
+    .join(' · ')
+    .concat(` — ${s.systemsChanged} af filens ${count(s.systemsInFile, 'system', 'systemer')} ${committed ? 'ændret' : 'ændres'}`);
 }
 
 /** "Forælder › Modul" for et modul, ellers bare navnet. */
