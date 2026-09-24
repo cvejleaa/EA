@@ -56,9 +56,9 @@ Hver delopgave kan landes alene og giver værdi for sig.
 3. **Kapabiliteter og funktionelt overlap** *(i gang; se beslutningerne
    nedenfor)*. Kapabilitetsmodellen importeres via CSV (HERM hos DTU; der
    ligger ingen HERM-tekst i repoet af hensyn til licensen). Overlap vises som
-   kapabiliteter med 2 eller flere aktive systemer. Forælder og modul,
-   planlagte udskiftninger (Indfases + Udfases) og udtræk tælles ikke som
-   overlap.
+   kapabiliteter med 2 eller flere systemer i drift eller under indfasning. Et
+   system og dets moduler er ét system, og systemer, der udfases, er nedlagte
+   eller er udtræk, tælles ikke (se beslutning E og I).
 4. **Forvaltere redigerer egne systemer og ændringshistorik**. Adgangen
    bindes til `oid` på rolletildelingen. Denne delopgave skal være landet, før
    der kommer rigtige data ind. Skift af forælder (`ParentSystemId`) skal kræve
@@ -114,17 +114,36 @@ forslagene.
 | G | **Dækning øverst på kortet**: "Kapabiliteter angivet for X af Y systemer — se de manglende". | Et tomt overlap skal kunne skelnes fra "ingen har koblet endnu". |
 | H | **Koblinger, der bør flyttes, har en fast arbejdsliste** på kortet (`toMove`): både udgåede kapabiliteter og blade, der har fået underkapabiliteter, med de berørte systemer. Ved systemet er koblingen markeret (`moveReason`). Tør-kørslen viser, hvor mange koblinger en ny version flytter. | Oprydningsarbejdet efter en ny HERM-version må ikke fejle tavst, og en tør-kørsel er ikke en arbejdsliste (QC, 3b). |
 
+### Beslutninger for 3c og 3d: overlap, dækning og koblings-CSV
+
+Arkitektens plan for de sidste skiver blev gennemgået af Quality Control og domæne-rådgiveren før koden.
+Beslutningerne herunder præciserer E og G.
+
+| # | Beslutning | Hvorfor |
+|---|---|---|
+| I | **Hvem tæller med i overlap.** Vurderingen gælder det system eller modul, der har koblingen. Det tæller med, når status er `Indfases` eller `IDrift`, og typen ikke er `LokalLoesning`. Et modul tæller heller ikke, når *forælderen* udfases eller er nedlagt. Et system og dets moduler, også to søskendemoduler, tæller som ét system. Årsagen til, at et system ikke tæller, er `OverlapExclusion`. Er der flere, vinder status (`Nedlagt`, `Udfases`) over typen (`LokalLoesning`), som vinder over `Planlagt`. | "Er systemet på vej ud, er dets moduler det også": en forvalter sætter status på forælderen, ikke på alle moduler (domæne-rådgiveren). Forrangen gør, at kun rene planer tælles som planlagte. |
+| J | **Tallene.** *Systemer, der tæller* = antal systemer (et system med moduler er ét), der tæller med. *Overlap* = 2 eller flere. *Planlagte* = antal systemer, der kun er med som planlagte. *Planlagt oven på et aktivt* = mindst ét, der tæller, og mindst ét planlagt. Serveren beregner alle fire, og klienten regner intet efter. Kun kapabiliteter, der kan vælges (blade, ikke udgåede), vurderes. Koblinger, der bør flyttes, indgår ikke i overlap, før de er flyttet. | Beslutning D: samme granularitet. At det planlagte mærke kræver et aktivt system, er en egen værdi, så CSV'ens antal ikke modsiger sig selv (QC). |
+| K | **Dækning.** Et system eller modul er dækket, når det selv, forælderen eller (for en forælder) et af dets moduler er koblet. Et søskendemoduls kobling dækker ikke. Det er samme regel som "Ikke angivet" på systemlisten. Den findes ét sted i koden, så dæknings-tallet og listen over manglende altid stemmer. Nedlagte systemer tæller ikke med i dækningen. | "Systemer" betyder to ting (overlap tæller et system med moduler som ét, dækning tæller hvert modul). Derfor hedder dæknings-tallet "X af Y systemer og moduler" (QC). |
+| L | **Koblings-CSV'en** ([`csv-koblinger.md`](csv-koblinger.md)) har én række pr. kobling og én række uden kode pr. system, der mangler efter K. Nøglerne er `SystemId` og `Kode`. Alle andre kolonner er beregnet til samtalen: forælder, status, type, team, ejere, sidst bekræftet og ændret, overlap-tallene, hvorfor systemet ikke tæller, hvem kapabiliteten deles med, og systemets beskrivelse. | Filen er EA's arbejdsliste til at koble systemerne og til overlap-samtalerne med ejerne. Den er også skabelonen til importen (3d). |
+| M | **Import af koblinger (3d).** Filen er hele sandheden for de systemer, der står i den. Systemer, der ikke står i filen, røres ikke. "Tøm koden, slet ikke rækken" står i vejledningen og på siden. Tør-kørslen: <br>• navngiver systemerne, der ikke står i filen;<br>• advarer, når over 20 % af koblingerne på systemerne i filen fjernes;<br>• advarer, når et system er ændret i registret efter eksporten (`SidstÆndret`);<br>• advarer, når kolonner, der ikke indlæses, er rettet.<br>Importen ændrer ikke "Sidst bekræftet". Kun EA.Admin må importere. | Den mest sandsynlige fejl er en slettet række eller en gammel fil, og ingen af dem må ske tavst (QC). Bekræftelsen er forvalterens udsagn og må ikke sættes af en masseimport (domæne-rådgiveren). |
+| N | **Ord på skærmen.** "Familie" om et system og dets moduler bruges aldrig (i kortet er familie HERM's øverste niveau). Skriv "et system og dets moduler tæller som ét system". "Løsninger" fjernes også fra integrationssektionen. Mærket på kortet viser serverens tal og navnene. På systemsiden er overlap neutral information ("Deles med …"), ikke en fejl. | En forvalter, der ser en fejl, fjerner den billigste kobling og ødelægger dermed data (domæne-rådgiveren). Et mærke, der modsiger listen bag linket, mister tillid (QC). |
+
 **Skæring** (hver skive lander alene, serveren før klienten):
 - **3a:** model og import (server).
 - **3a-web:** kort og import-side.
 - **3b:** koblinger (server).
 - **3b-web:** systemside, formular og filter, samt kortets arbejdsliste over koblinger, der bør flyttes, og et
   link fra hvert blad til systemlisten.
-- **3d:** import af koblinger fra regneark, hvis ejeren siger ja. Den skal ligge før 3c-web, så overlap ikke lander på tomme data.
-- **3c:** overlap, koblings-CSV og dækning.
+- **3c-1:** overlap-reglen og koblings-CSV'en med knappen "Hent koblinger (CSV)". Den mindste version, der er
+  værd at have: overlap kan filtreres i Excel.
+- **3d-server** og **3d-web:** import af koblingsfilen. Importen er en rundtur af eksporten, så den ligger efter
+  3c-1, og før overlap vises, så visningen ikke lander på tomme data.
+- **3c-2:** overlap, dækning og "deles med" i API'et.
+- **3c-web:** overlap og dækning på kortet og "deles med" på systemsiden.
 
 **Ejerens spørgsmål (forslag i parentes):**
-1. Overlap-reglen som i E? *(ja)*
+1. Overlap-reglen som i E og I? *(ja)* Skal to planlagte systemer uden et aktivt system på kapabiliteten (to
+   indkøb af det samme) også fanges? *(ikke i første omgang; de står i CSV'en som `AntalPlanlagte`)*
 2. Må EA give familier og grupper en kode? *(ja)*
 3. Kobler EA de ~300 systemer centralt via regneark (3d), mens formularen bruges til den løbende
    vedligeholdelse? *(ja)*

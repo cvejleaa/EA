@@ -20,6 +20,12 @@ public static class SystemRules
     public static readonly IReadOnlySet<SystemRole> SingleHolderRoles =
         new HashSet<SystemRole> { SystemRole.Forretningsejer, SystemRole.Systemejer };
 
+    /// <summary>
+    /// Nøglen, overlap samler på: et system og dets moduler (også to søskendemoduler) er ét system. Dækning bruger
+    /// en anden regel — se <c>CapabilityQueries.Uncovered</c>.
+    /// </summary>
+    public static Guid OverlapGroupKey(Guid systemId, Guid? parentSystemId) => parentSystemId ?? systemId;
+
     public static string? ParentChangeBlockedReason(int moduleCount) =>
         moduleCount > 0 ? "Systemet har selv moduler og kan derfor ikke gøres til modul." : null;
 

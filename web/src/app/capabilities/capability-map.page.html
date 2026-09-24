@@ -3,8 +3,18 @@
     <h1>Kapabiliteter</h1>
     <span class="spacer"></span>
     @if (tree()?.items?.length) {
-      <button mat-stroked-button type="button" (click)="download()" [disabled]="downloading()" data-testid="download">
+      <button mat-stroked-button type="button" (click)="download('model')" [disabled]="downloading()" data-testid="download">
         Hent kortet (CSV)
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="download('couplings')"
+        [disabled]="downloading()"
+        title="Alle systemers koblinger med overlap — og de systemer, der mangler at blive koblet"
+        data-testid="download-couplings"
+      >
+        Hent koblinger (CSV)
       </button>
     }
     @if (tree()?.canImport) {

@@ -803,6 +803,18 @@
         }
       }
     },
+    "/api/capabilities/couplings/export.csv": {
+      "get": {
+        "tags": [
+          "Kapabiliteter"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/capabilities/import": {
       "post": {
         "tags": [

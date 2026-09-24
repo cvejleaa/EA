@@ -23,6 +23,25 @@ public enum MoveReason
 }
 
 /// <summary>
+/// Hvorfor et system ikke tæller med i overlap på en kapabilitet. Danske koder (ekstern kontrakt: står i
+/// koblings-CSV'en). Gælder flere, vinder status over type, og type over <see cref="Planlagt"/>.
+/// </summary>
+public enum OverlapExclusion
+{
+    /// <summary>Endnu ikke i brug. Tæller ikke, men et planlagt system oven på et aktivt skal fanges.</summary>
+    Planlagt,
+
+    /// <summary>Systemet eller forælderen er nedlagt.</summary>
+    Nedlagt,
+
+    /// <summary>Systemet eller forælderen udfases — en truffet beslutning er ikke en kandidat.</summary>
+    Udfases,
+
+    /// <summary>Lokal løsning/udtræk — ikke et system, der løser opgaven for DTU.</summary>
+    LokalLoesning,
+}
+
+/// <summary>
 /// Arbejdslisten efter en ny udgave af kortet: kapabiliteter med koblinger, der bør flyttes — med de systemer, det
 /// gælder. <c>Path</c> er, hvor kapabiliteten sidder (for en udgået: hvor den sad).
 /// </summary>

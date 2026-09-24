@@ -215,7 +215,7 @@ public static class CapabilityImport
         var existingByCode = existing.ToDictionary(c => c.CodeNormalized);
         var existingCode = existing.ToDictionary(c => c.Id, c => c.Code);
         var rowByCode = rows.ToDictionary(r => CapabilityRules.NormalizeCode(r.Code));
-        var hadChildren = existing.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
+        var hadChildren = CapabilityRules.WithChildren(existing);
         var getsChildren = rows.Where(r => r.ParentCode is not null)
             .Select(r => CapabilityRules.NormalizeCode(r.ParentCode!)).ToHashSet();
 
