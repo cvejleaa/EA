@@ -206,6 +206,67 @@ alligevel — værd at genkende: en søskende-sorterings-test kan tilfældigt og
 utestet (som al anden DevSeed-kode i repoet — konsistent, ikke et nyt hul), og web-siden af kontrakten
 (`web/src/app/core/problem.ts`s `STALE_DRY_RUN`) har endnu ingen bruger, da 3a-web ikke er bygget endnu.
 
+## Fund 3494afa (delopgave 3a-web, EA-register): kapabilitetskort + import-UI — stærk kerne, fire kategorier huller
+
+Baseline `npx ng test --watch=false` fra `web/` (`PATH=/opt/node24/bin:$PATH`, kør `npm install` først i
+worktree'en): 76/76 i 11 filer. Kørte ~20 målrettede mutationer i `capability-import.page.ts/.html`,
+`capability-map.page.ts/.html`, `capabilities.api.ts`, `core/labels.ts`, `app.ts`. Dræbte: alle param/header-
+sendinger (dryRun=true/false, fingerprint til/fra, Content-Type text/csv), `onFile`s `result`-reset,
+`commit`s fejl-reset af `result`, `canCommit`s `changes.length > 0`-gren, stale-dry-run-vs-stale-version-
+skellet for "Kør tør-kørsel igen", errors-tabellens linje/kolonne-rækkefølge, largeRemoval-teksten (removed/
+currentTotal ombyttet), "ingen ændringer"-grenen, indrykningsformlen (`depth * 24`), import-knappens
+`canImport`-gate, begge tomt-kort-tekstgrene, fejlbeskeden med "Kortet kunne ikke hentes:"-præfiks, App-
+menuens login-gate og selve `/kapabiliteter`-linket, `importSummaryText`s ental/flertal OG slettes/slettet-
+skellet, `capabilityChangeKindLabels`.
+
+**Overlevede — fire kategorier:**
+
+1. **`onFile` nulstiller IKKE `done` og `problem` bevisligt — kun `result` er dækket.** Fjernede
+   `this.done.set(null)` og separat `this.problem.set(null)` fra `onFile` hver for sig → suiten (76/76) forblev
+   grøn begge gange. Testen "vælges en ny fil, forsvinder knappen" tjekker kun `commit`/`summary` (afledt af
+   `result`). Reel konsekvens: vælger brugeren en ny fil efter en gennemført import, bliver "Kortet er
+   importeret: …"-beskeden hængende, som om den nye fil også var importeret; og efter en stale-dry-run-fejl
+   bliver den gamle fejlbesked + "Kør tør-kørsel igen"-knap hængende og ville (fejlagtigt) køre tør-kørsel på
+   den NYE fil uden at gøre det tydeligt. Mangler: to assertions i den eksisterende test (eller en ny), der
+   efter `choose(f, andenFil)` tjekker `[data-testid="done"]` og `[data-testid="problem"]` er `null` — efter
+   forudgående at have sat dem (via et gennemført commit hhv. en 409-fejl).
+2. **`busy()`-delen af disabled-bindingen på BÅDE "Kør tør-kørsel" og "Gennemfør import" er utestet.**
+   `[disabled]="!file() || busy()"` → fjernede `|| busy()`: grøn. `[disabled]="busy()"` på commit-knappen →
+   ændrede til `[disabled]="false"`: grøn. Ingen test tjekker knappens `disabled`-attribut, MENS et kald er i
+   flyvning (dvs. lige efter `click(...)`, FØR http-flush). Testbart uden ny arkitektur: `HttpTestingController`
+   holder requesten åben, indtil `.flush()` kaldes — en test kan klikke, tjekke `disabled === true`, og først
+   derefter flushe. Mangler: to tests (én pr. knap) der bekræfter dette.
+3. **Rækkens `[class.removed]="c.kind === 'Slettes'"` er utestet.** Vendte betingelsen om
+   (`c.kind !== 'Slettes'`) → suiten forblev grøn — INGEN test læser `tr.classList`. Opgavebeskrivelsen
+   nævner eksplicit denne klasse. Mangler: en assertion i "tør-kørslen sender filen som text/csv…"-testen
+   (som allerede har en Slettes-, en Ændret- og en Ny-række) om, at kun Slettes-rækken har klassen `removed`.
+4. **`descriptionChanged` er kun bevist positivt.** Fjernede lighedstjekket (`(before.description ?? null)
+   !== (after.description ?? null)` → altid `!!before && !!after`) → suiten forblev grøn, fordi INGEN
+   `Aendret`-fixture har ens før/efter-beskrivelse. Klassisk "vagt der genkendes på fravær, ingen test
+   modbeviser den" — CLAUDE.dks eget mønster. Mangler: en `Aendret`-ændring i `preview()`-fixturet med samme
+   `description` før og efter (kun navn ændret), der bekræfter "· beskrivelse ændret" IKKE står i den række.
+
+**To betingelser i `canCommit` er strukturelt udækkelige — ikke reelle huller, men værd at kende:**
+`r.errors.length === 0` kan ALDRIG afgøre noget observerbart, fordi HTML'en allerede grenerer på
+`@if (r.errors.length) {…} @else { … @if (canCommit()) … }` — `canCommit()` evalueres kun i den gren, hvor
+`errors.length` allerede er 0. Fjernede betingelsen → 76/76 grønt (forventet, ikke et alarmerende fund).
+`!!r.fingerprint` er tilsvarende dækket af SERVERKONTRAKTEN, ikke af en test: `CapabilityEndpoints.Import`
+returnerer kun et ikke-null `Fingerprint` fra en fejlfri tør-kørsel (`CapabilityImport.Fingerprint` er
+non-nullable `string`), og `result` nulstilles til `null` umiddelbart efter et vellykket commit — så et
+`result` med `changes.length > 0` og `fingerprint: null` kan aldrig opstå via den rigtige API-klient. Fjernede
+betingelsen → 76/76 grønt. Billig, værdifuld ekstra-test alligevel: DTO-typen (`Fingerprint: string?`) tillader
+det stadig i TypeScript, så én test med `preview({ fingerprint: null })` og changes tilstede, der bekræfter
+knappen er skjult, ville låse invarianten fast mod fremtidige refaktoreringer af serveren.
+
+**Ikke en ny mangel, men bekræftet konsistent mønster:** `capability-map.page.ts`s `download()`-fejlgren
+(`this.error.set(toProblem(e).message)`, INGEN præfiks) er utestet — mutation (fjernede sætningen af error)
+gav 76/76 grønt. Samme mangel findes allerede i `system-list.page.spec.ts` for `downloadSystemList()` (se
+36c0817-fundet ovenfor) — konsistent, ikke nyt for denne PR, men værd at rette samlet en dag.
+
+**Bekræftet: `app.routes.ts`s nye `/kapabiliteter`-ruter (inkl. `authGuard`) er IKKE unit-testet** — men det
+er konsistent med `/systemer`-ruterne, der heller aldrig testes direkte (ingen E2E endnu, jf. CLAUDE.md). Ikke
+et PR-specifikt hul.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

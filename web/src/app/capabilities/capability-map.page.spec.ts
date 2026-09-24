@@ -122,6 +122,19 @@ describe('CapabilityMapPage', () => {
     expect(q(fixture, '[data-testid="empty"]')).toBeNull();
   });
 
+  it('en fejl ved hentning af CSV vises, og kortet står der stadig', async () => {
+    const f = await render(capabilityTree([capabilityNode('K1', 0)]));
+
+    (q(f, '[data-testid="download"]') as HTMLButtonElement).click();
+    http
+      .expectOne('/api/capabilities/export.csv')
+      .flush(new Blob(['x']), { status: 500, statusText: 'Fejl' });
+    await settle(f);
+
+    expect(text(q(f, '[role="alert"]'))).toBe('Uventet fejl (500).');
+    expect(q(f, '[data-testid="tree"]')).not.toBeNull();
+  });
+
   it('"Hent kortet (CSV)" henter eksporten under serverens filnavn', async () => {
     const f = await render(capabilityTree([capabilityNode('K1', 0)]));
     Object.assign(URL, {

@@ -19,7 +19,7 @@ describe('CapabilityImportPage', () => {
 
   const preview = (overrides: Partial<CapabilityImportResult> = {}) =>
     importResult({
-      summary: importSummary({ new: 1, changed: 1, removed: 1, unchanged: 5, currentTotal: 7 }),
+      summary: importSummary({ new: 1, changed: 2, removed: 1, unchanged: 4, currentTotal: 8 }),
       changes: [
         {
           kind: 'Slettes',
@@ -32,6 +32,12 @@ describe('CapabilityImportPage', () => {
           code: 'K1.1',
           before: { code: 'K1.1', name: 'Studier', parentCode: 'K1', description: 'a' },
           after: { code: 'K1.1', name: 'Studieadministration', parentCode: 'K1', description: 'b' },
+        },
+        {
+          kind: 'Aendret',
+          code: 'K2',
+          before: { code: 'K2', name: 'Forsk', parentCode: null, description: 'samme' },
+          after: { code: 'K2', name: 'Forskning', parentCode: null, description: 'samme' },
         },
         {
           kind: 'Ny',
@@ -95,7 +101,7 @@ describe('CapabilityImportPage', () => {
     request.flush(preview());
     await settle(f);
 
-    expect(text(q(f, '[data-testid="summary"]'))).toBe('1 ny · 1 ændret · 1 slettes · 5 uændrede');
+    expect(text(q(f, '[data-testid="summary"]'))).toBe('1 ny · 2 ændrede · 1 slettes · 4 uændrede');
     const rows = Array.from(el(f).querySelectorAll('[data-testid="changes"] tbody tr')).map((tr) =>
       Array.from(tr.querySelectorAll('td')).map((td) => text(td)),
     );
@@ -107,8 +113,15 @@ describe('CapabilityImportPage', () => {
         'Studier (under K1)',
         'Studieadministration (under K1) · beskrivelse ændret',
       ],
+      ['Ændret', 'K2', 'Forsk (øverste niveau)', 'Forskning (øverste niveau)'], // Samme beskrivelse: ingen markering.
       ['Ny', 'K4', '—', 'Ny ting (øverste niveau)'],
     ]);
+    // Kun det, der slettes, er markeret (rødt).
+    expect(
+      Array.from(el(f).querySelectorAll('[data-testid="changes"] tbody tr')).map((tr) =>
+        tr.classList.contains('removed'),
+      ),
+    ).toEqual([true, false, false, false]);
     expect(q(f, '[data-testid="large-removal"]')).toBeNull();
     expect(q(f, '[data-testid="commit"]')).not.toBeNull();
   });
@@ -129,7 +142,7 @@ describe('CapabilityImportPage', () => {
     await settle(f);
 
     expect(text(q(f, '[data-testid="done"]'))).toBe(
-      'Kortet er importeret: 1 ny · 1 ændret · 1 slettet · 5 uændrede. Se kortet',
+      'Kortet er importeret: 1 ny · 2 ændrede · 1 slettet · 4 uændrede. Se kortet',
     );
     expect(q(f, '[data-testid="commit"]')).toBeNull();
   });
@@ -212,6 +225,70 @@ describe('CapabilityImportPage', () => {
 
     expect(q(f, '[data-testid="commit"]')).toBeNull();
     expect(q(f, '[data-testid="summary"]')).toBeNull();
+  });
+
+  it('en ny fil efter en gennemført import fjerner beskeden om den gamle', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    importRequest().flush(preview());
+    await settle(f);
+    await click(f, 'commit');
+    importRequest().flush(preview({ committed: true, fingerprint: null }));
+    await settle(f);
+    expect(q(f, '[data-testid="done"]')).not.toBeNull();
+
+    await choose(f, new File(['andet'], 'andet.csv'));
+
+    expect(q(f, '[data-testid="done"]')).toBeNull();
+  });
+
+  it('en ny fil efter en fejl fjerner fejlen og "Kør tør-kørsel igen"', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    importRequest().flush(preview());
+    await settle(f);
+    await click(f, 'commit');
+    importRequest().flush(
+      { type: 'urn:ea:problem:stale-dry-run', detail: 'Kortet er ændret.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    await settle(f);
+    expect(q(f, '[data-testid="problem"]')).not.toBeNull();
+
+    await choose(f, new File(['andet'], 'andet.csv'));
+
+    expect(q(f, '[data-testid="problem"]')).toBeNull();
+    expect(q(f, '[data-testid="rerun"]')).toBeNull();
+  });
+
+  it('knapperne er spærret, mens en tør-kørsel eller import er i gang', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    const dryRun = importRequest();
+    expect((q(f, '[data-testid="dry-run"]') as HTMLButtonElement).disabled).toBe(true);
+    dryRun.flush(preview());
+    await settle(f);
+    expect((q(f, '[data-testid="dry-run"]') as HTMLButtonElement).disabled).toBe(false);
+
+    await click(f, 'commit');
+    const commit = importRequest();
+    expect((q(f, '[data-testid="commit"]') as HTMLButtonElement).disabled).toBe(true);
+    commit.flush(preview({ committed: true, fingerprint: null }));
+    await settle(f);
+  });
+
+  it('uden fingeraftryk fra serveren er der intet at gennemføre', async () => {
+    const f = await render();
+    await choose(f, file);
+    await click(f, 'dry-run');
+    importRequest().flush(preview({ fingerprint: null }));
+    await settle(f);
+
+    expect(q(f, '[data-testid="changes"]')).not.toBeNull();
+    expect(q(f, '[data-testid="commit"]')).toBeNull();
   });
 
   it.each([
