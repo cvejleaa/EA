@@ -1,0 +1,10 @@
+.intro { max-width: 760px; }
+.pick { align-items: center; gap: 12px; margin: 16px 0; }
+.list { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
+.list th, .list td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--mat-sys-outline-variant); vertical-align: top; }
+.list tr.removed td { color: var(--mat-sys-error); }
+.code { font-family: ui-monospace, monospace; white-space: nowrap; }
+.warning { color: var(--mat-sys-error); font-weight: 600; }
+.success { color: var(--mat-sys-primary); }
+.actions { align-items: center; gap: 12px; }
+.problem { border-left: 4px solid var(--mat-sys-error); padding: 4px 12px; margin: 12px 0; }

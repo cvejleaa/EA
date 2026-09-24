@@ -1,4 +1,4 @@
-import { count, relativeAge, systemDisplayName } from './labels';
+import { count, importSummaryText, relativeAge, systemDisplayName } from './labels';
 
 describe('relativeAge', () => {
   const now = new Date('2026-09-24T12:00:00Z');
@@ -32,5 +32,16 @@ describe('systemDisplayName', () => {
   it('viser forælder › modul for moduler og ellers navnet', () => {
     expect(systemDisplayName({ name: 'HR', parent: { name: 'Nordlys' } })).toBe('Nordlys › HR');
     expect(systemDisplayName({ name: 'Kompas', parent: null })).toBe('Kompas');
+  });
+});
+
+describe('importSummaryText', () => {
+  it('skriver ental og flertal ved hvert tal og skelner tør-kørsel fra gennemført import', () => {
+    const one = { new: 1, changed: 1, removed: 1, unchanged: 1, currentTotal: 3, largeRemoval: false };
+    const many = { new: 3, changed: 2, removed: 4, unchanged: 10, currentTotal: 16, largeRemoval: false };
+
+    expect(importSummaryText(one, false)).toBe('1 ny · 1 ændret · 1 slettes · 1 uændret');
+    expect(importSummaryText(many, false)).toBe('3 nye · 2 ændrede · 4 slettes · 10 uændrede');
+    expect(importSummaryText(many, true)).toBe('3 nye · 2 ændrede · 4 slettet · 10 uændrede');
   });
 });

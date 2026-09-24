@@ -1,0 +1,47 @@
+<section class="page">
+  <div class="row header">
+    <h1>Kapabiliteter</h1>
+    <span class="spacer"></span>
+    @if (tree()?.items?.length) {
+      <button mat-stroked-button type="button" (click)="download()" [disabled]="downloading()" data-testid="download">
+        Hent kortet (CSV)
+      </button>
+    }
+    @if (tree()?.canImport) {
+      <a mat-flat-button routerLink="/kapabiliteter/import" data-testid="import">Importér kort</a>
+    }
+  </div>
+
+  @if (error()) {
+    <p class="error-text" role="alert">{{ error() }}</p>
+  }
+
+  @if (tree(); as t) {
+    @if (t.items.length === 0) {
+      <p class="muted" data-testid="empty">
+        Kapabilitetskortet er ikke indlæst endnu.
+        @if (t.canImport) {
+          Importér DTU's kort fra en CSV-fil med knappen ovenfor.
+        } @else {
+          Enterprise arkitekten indlæser det.
+        }
+      </p>
+    } @else {
+      <p class="muted" data-testid="count">
+        {{ count(t.items.length, 'kapabilitet', 'kapabiliteter') }} · kortet ændres kun ved import
+      </p>
+      <ul class="tree" data-testid="tree">
+        @for (n of t.items; track n.id) {
+          <li [style.padding-left.px]="n.depth * 24" [class.top]="n.depth === 0">
+            <span class="code">{{ n.code }}</span>&ngsp;<span class="name">{{ n.name }}</span>
+            @if (n.description) {
+              <span class="description muted">{{ n.description }}</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  } @else if (!error()) {
+    <p class="muted">Henter…</p>
+  }
+</section>

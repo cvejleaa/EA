@@ -1,4 +1,8 @@
 import type {
+  CapabilityImportResult,
+  CapabilityImportSummary,
+  CapabilityNode,
+  CapabilityTreeResponse,
   IntegrationDto,
   MeResponse,
   SystemDetail,
@@ -107,4 +111,20 @@ export function integrations(
     canAdd: false,
     ...overrides,
   };
+}
+
+export function capabilityNode(code: string, depth: number, overrides: Partial<CapabilityNode> = {}): CapabilityNode {
+  return { id: `cap-${code}`, code, name: `Navn ${code}`, description: null, parentId: null, depth, ...overrides };
+}
+
+export function capabilityTree(items: CapabilityNode[], canImport = true): CapabilityTreeResponse {
+  return { items, canImport };
+}
+
+export function importSummary(overrides: Partial<CapabilityImportSummary> = {}): CapabilityImportSummary {
+  return { new: 0, changed: 0, removed: 0, unchanged: 0, currentTotal: 0, largeRemoval: false, ...overrides };
+}
+
+export function importResult(overrides: Partial<CapabilityImportResult> = {}): CapabilityImportResult {
+  return { committed: false, errors: [], summary: importSummary(), changes: [], fingerprint: null, ...overrides };
 }

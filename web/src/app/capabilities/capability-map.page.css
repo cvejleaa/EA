@@ -1,0 +1,7 @@
+.header h1 { margin: 0; }
+.spacer { flex: 1; }
+.tree { list-style: none; margin: 0; padding: 0; }
+.tree li { padding-top: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+.tree li.top { font-weight: 600; padding-top: 12px; }
+.code { font-family: ui-monospace, monospace; color: var(--mat-sys-on-surface-variant); margin-right: 4px; }
+.description { display: block; font: var(--mat-sys-body-small); }
