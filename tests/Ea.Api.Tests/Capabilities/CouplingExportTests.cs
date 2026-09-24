@@ -98,4 +98,34 @@ public sealed class CouplingExportTests
         Assert.Equal(none, empty);
         Assert.DoesNotContain(coveredModule.Name, empty);
     }
+
+    [Fact]
+    public async Task Et_system_og_dets_moduler_deler_ikke_med_hinanden()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        await admin.ImportAsync(Model);
+        var leaf = await admin.CapabilityIdAsync("K2.1");
+
+        // Forælder, modul og søskendemodul på samme kapabilitet er ét system — kun Kompas er "et andet".
+        var nordlys = await admin.CreateSystemAsync("Nordlys");
+        var hr = await admin.CreateSystemAsync("HR", nordlys.Id);
+        var loen = await admin.CreateSystemAsync("Løn", nordlys.Id);
+        var kompas = await admin.CreateSystemAsync("Kompas");
+        foreach (var system in new[] { nordlys, hr, loen, kompas })
+        {
+            await (await admin.CoupleAsync(await admin.GetSystemAsync(system.Id), leaf)).ExpectAsync(HttpStatusCode.OK);
+        }
+
+        var rows = await ExportAsync(admin);
+
+        Assert.Equal(
+        [
+            ("Kompas", "2", "Nordlys | Nordlys > HR | Nordlys > Løn"),
+            ("Nordlys", "2", "Kompas"),
+            ("Nordlys > HR", "2", "Kompas"),
+            ("Nordlys > Løn", "2", "Kompas"),
+        ],
+            rows.Select(r => (r["FuldtNavn"], r["SystemerDerTæller"], r["DelesMed"])));
+    }
 }
