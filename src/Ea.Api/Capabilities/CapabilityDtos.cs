@@ -5,9 +5,35 @@ namespace Ea.Api.Capabilities;
 /// <summary>
 /// En knude i kortet, i visningsrækkefølge. <c>Depth</c> 0 er øverste niveau. <c>Path</c> er navnene ovenover
 /// (til vælgeren). <c>Selectable</c>: et system kan få en ny kobling hertil (et blad — samme regel som ved gem).
+/// <c>Overlap</c>: serverens vurdering — null for en kapabilitet, der ikke kan vælges (den vurderes ikke).
 /// </summary>
 public sealed record CapabilityNode(
-    Guid Id, string Code, string Name, string? Description, Guid? ParentId, int Depth, string Path, bool Selectable);
+    Guid Id,
+    string Code,
+    string Name,
+    string? Description,
+    Guid? ParentId,
+    int Depth,
+    string Path,
+    bool Selectable,
+    CapabilityOverlap? Overlap);
+
+/// <summary>Et system eller modul i en overlap-vurdering. <c>Exclusion</c> er null, når det tæller med.</summary>
+public sealed record OverlapMember(Guid Id, string Name, OverlapExclusion? Exclusion);
+
+/// <summary>
+/// Overlap på én kapabilitet, som serveren vurderer det (docs/plan.md, beslutning I og J) — klienten regner aldrig
+/// selv. <c>Counted</c>: systemer, der tæller (et system med moduler er ét). <c>Planned</c>: systemer, der kun er med
+/// som planlagte. <c>Members</c>: alle, der er koblet, i navneorden.
+/// </summary>
+public sealed record CapabilityOverlap(
+    int Counted, int Planned, bool IsOverlap, bool PlannedOnTopOfActive, IReadOnlyList<OverlapMember> Members);
+
+/// <summary>
+/// Dækningen (beslutning K): <c>Covered</c> af <c>Total</c> systemer og moduler, nedlagte undtaget. De manglende er
+/// præcis systemlistens <c>capabilityId=none</c>.
+/// </summary>
+public sealed record CouplingCoverage(int Covered, int Total);
 
 /// <summary>Et system, vist med fuldt navn ("Forælder › Modul" for et modul).</summary>
 public sealed record CoupledSystem(Guid Id, string Name);
@@ -49,7 +75,7 @@ public sealed record CapabilityToMove(
     Guid Id, string Code, string Name, string Path, MoveReason Reason, IReadOnlyList<CoupledSystem> Systems);
 
 public sealed record CapabilityTreeResponse(
-    IReadOnlyList<CapabilityNode> Items, IReadOnlyList<CapabilityToMove> ToMove, bool CanImport);
+    IReadOnlyList<CapabilityNode> Items, IReadOnlyList<CapabilityToMove> ToMove, bool CanImport, CouplingCoverage Coverage);
 
 /// <summary>
 /// Kapabiliteten, som den vises ved et system. <c>Path</c> er navnene ovenover (for en udgået: hvor den sad).
@@ -60,8 +86,16 @@ public sealed record CapabilityRef(Guid Id, string Code, string Name, string Pat
 /// <summary>
 /// En kobling på systemsiden. <c>HeldBy</c> er null for systemets egne koblinger; ellers det familiemedlem, der har
 /// koblingen (et modul på forælderens side, forælderen på et moduls side). Kun egne koblinger redigeres her.
+/// <c>Overlap</c> er serverens vurdering af kapabiliteten (null, når den ikke vurderes). <c>OwnExclusion</c>: hvorfor
+/// koblingens holder ikke tæller med. <c>SharedWith</c>: de ANDRE systemer på kapabiliteten — systemets egne moduler
+/// og forælder er ét system med det og står der ikke.
 /// </summary>
-public sealed record SystemCapabilityDto(CapabilityRef Capability, Ea.Api.Systems.SystemRef? HeldBy);
+public sealed record SystemCapabilityDto(
+    CapabilityRef Capability,
+    Ea.Api.Systems.SystemRef? HeldBy,
+    CapabilityOverlap? Overlap,
+    OverlapExclusion? OwnExclusion,
+    IReadOnlyList<OverlapMember> SharedWith);
 
 /// <summary>Hvad en import gør ved én kapabilitet. Danske koder, som resten af API'et (ekstern kontrakt).</summary>
 public enum CapabilityChangeKind

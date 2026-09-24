@@ -50,3 +50,8 @@ export type CouplingImportResult = Schemas['CouplingImportResult'];
 export type CouplingImportSummary = Schemas['CouplingImportSummary'];
 export type CouplingChange = Schemas['CouplingChange'];
 export type CouplingChangeKind = Schemas['CouplingChangeKind'];
+export type CapabilityOverlap = Schemas['CapabilityOverlap'];
+export type OverlapMember = Schemas['OverlapMember'];
+export type CouplingCoverage = Schemas['CouplingCoverage'];
+// Nullable i kontrakten ("tæller med"); selve typen er uden null.
+export type OverlapExclusion = NonNullable<Schemas['OverlapExclusion']>;

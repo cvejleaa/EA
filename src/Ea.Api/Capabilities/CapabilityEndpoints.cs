@@ -36,6 +36,7 @@ public static partial class CapabilityEndpoints
         var all = await db.Capabilities.AsNoTracking().ToListAsync(ct);
         var byId = all.ToDictionary(c => c.Id);
         var parents = CapabilityRules.WithChildren(all);
+        var holders = await CapabilityQueries.OverlapHoldersAsync(db, null, ct);
         var items = CapabilityRules.Ordered(all)
             .Select(n => new CapabilityNode(
                 n.Capability.Id,
@@ -45,7 +46,9 @@ public static partial class CapabilityEndpoints
                 n.Capability.ParentId,
                 n.Depth,
                 CapabilityRules.PathOf(n.Capability, byId),
-                CapabilityRules.CoupleBlockedReason(n.Capability, parents.Contains(n.Capability.Id)) is null))
+                CapabilityRules.CoupleBlockedReason(n.Capability, parents.Contains(n.Capability.Id)) is null,
+                CapabilityQueries.ToDto(CapabilityRules.OverlapOf(
+                    n.Capability, parents.Contains(n.Capability.Id), holders[n.Capability.Id]))))
             .ToList();
 
         var coupled = await CapabilityQueries.CoupledSystemsAsync(db, ct);
@@ -60,7 +63,9 @@ public static partial class CapabilityEndpoints
             .ToList();
 
         var canImport = (await auth.AuthorizeAsync(user, Policies.ManageCapabilities)).Succeeded;
-        return TypedResults.Ok(new CapabilityTreeResponse(items, toMove, canImport));
+        var total = await db.Systems.InUse().CountAsync(ct);
+        var coverage = new CouplingCoverage(total - await db.Systems.Missing().CountAsync(ct), total);
+        return TypedResults.Ok(new CapabilityTreeResponse(items, toMove, canImport, coverage));
     }
 
     private static async Task<FileContentHttpResult> Export(EaDbContext db, TimeProvider time, CancellationToken ct)
@@ -85,12 +90,7 @@ public static partial class CapabilityEndpoints
             .AsSplitQuery()
             .AsNoTracking()
             .ToListAsync(ct);
-        var missing = (await db.Systems
-                .Where(CapabilityQueries.Uncovered)
-                .Where(s => s.LifecycleStatus != Systems.LifecycleStatus.Nedlagt)
-                .Select(s => s.Id)
-                .ToListAsync(ct))
-            .ToHashSet();
+        var missing = (await db.Systems.Missing().Select(s => s.Id).ToListAsync(ct)).ToHashSet();
         var capabilities = await db.Capabilities.AsNoTracking().ToListAsync(ct);
         var date = time.GetUtcNow().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         return TypedResults.File(

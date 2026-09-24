@@ -1099,7 +1099,8 @@
           "parentId",
           "depth",
           "path",
-          "selectable"
+          "selectable",
+          "overlap"
         ],
         "type": "object",
         "properties": {
@@ -1135,6 +1136,48 @@
           },
           "selectable": {
             "type": "boolean"
+          },
+          "overlap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CapabilityOverlap"
+              }
+            ]
+          }
+        }
+      },
+      "CapabilityOverlap": {
+        "required": [
+          "counted",
+          "planned",
+          "isOverlap",
+          "plannedOnTopOfActive",
+          "members"
+        ],
+        "type": "object",
+        "properties": {
+          "counted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "planned": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isOverlap": {
+            "type": "boolean"
+          },
+          "plannedOnTopOfActive": {
+            "type": "boolean"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverlapMember"
+            }
           }
         }
       },
@@ -1241,7 +1284,8 @@
         "required": [
           "items",
           "toMove",
-          "canImport"
+          "canImport",
+          "coverage"
         ],
         "type": "object",
         "properties": {
@@ -1259,6 +1303,9 @@
           },
           "canImport": {
             "type": "boolean"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/CouplingCoverage"
           }
         }
       },
@@ -1329,6 +1376,23 @@
           "Fjernes",
           "Tilfoejes"
         ]
+      },
+      "CouplingCoverage": {
+        "required": [
+          "covered",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "covered": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "CouplingImportResult": {
         "required": [
@@ -1956,6 +2020,42 @@
           null
         ]
       },
+      "OverlapExclusion": {
+        "enum": [
+          "Planlagt",
+          "Nedlagt",
+          "Udfases",
+          "LokalLoesning",
+          null
+        ]
+      },
+      "OverlapMember": {
+        "required": [
+          "id",
+          "name",
+          "exclusion"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "exclusion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OverlapExclusion"
+              }
+            ]
+          }
+        }
+      },
       "PersonDto": {
         "required": [
           "id",
@@ -2020,7 +2120,10 @@
       "SystemCapabilityDto": {
         "required": [
           "capability",
-          "heldBy"
+          "heldBy",
+          "overlap",
+          "ownExclusion",
+          "sharedWith"
         ],
         "type": "object",
         "properties": {
@@ -2036,6 +2139,32 @@
                 "$ref": "#/components/schemas/SystemRef"
               }
             ]
+          },
+          "overlap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CapabilityOverlap"
+              }
+            ]
+          },
+          "ownExclusion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OverlapExclusion"
+              }
+            ]
+          },
+          "sharedWith": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverlapMember"
+            }
           }
         }
       },

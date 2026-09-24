@@ -82,7 +82,7 @@ public static class SystemEndpoints
 
         if (capabilityId == None)
         {
-            query = query.Where(CapabilityQueries.Uncovered);
+            query = query.Missing();
         }
         else if (Guid.TryParse(capabilityId, out var capability))
         {
@@ -657,16 +657,29 @@ public static class SystemEndpoints
         var treeOrder = CapabilityRules.Ordered(byId.Values)
             .Select((n, index) => (n.Capability.Id, index))
             .ToDictionary(x => x.Id, x => x.index);
+        var holders = await CapabilityQueries.OverlapHoldersAsync(db, links.Select(l => l.CapabilityId).Distinct().ToList(), ct);
+        var ownGroup = SystemRules.OverlapGroupKey(s.Id, s.ParentSystemId);
         return links
             .Select(l => (Link: l, Capability: byId[l.CapabilityId]))
-            .Select(x => new SystemCapabilityDto(
-                new CapabilityRef(
-                    x.Capability.Id,
-                    x.Capability.Code,
-                    x.Capability.Name,
-                    CapabilityRules.DisplayPath(x.Capability, byId),
-                    CapabilityRules.MoveReasonOf(x.Capability, parents.Contains(x.Capability.Id))),
-                x.Link.SystemId == s.Id ? null : new SystemRef(x.Link.SystemId, family[x.Link.SystemId])))
+            .Select(x =>
+            {
+                // Ikke vurderet (udgået eller ikke et blad): intet overlap og ingen "deles med", før koblingen er flyttet.
+                var overlap = CapabilityRules.OverlapOf(x.Capability, parents.Contains(x.Capability.Id), holders[x.Capability.Id]);
+                return new SystemCapabilityDto(
+                    new CapabilityRef(
+                        x.Capability.Id,
+                        x.Capability.Code,
+                        x.Capability.Name,
+                        CapabilityRules.DisplayPath(x.Capability, byId),
+                        CapabilityRules.MoveReasonOf(x.Capability, parents.Contains(x.Capability.Id))),
+                    x.Link.SystemId == s.Id ? null : new SystemRef(x.Link.SystemId, family[x.Link.SystemId]),
+                    CapabilityQueries.ToDto(overlap),
+                    overlap?.Members.First(m => m.Holder.SystemId == x.Link.SystemId).Exclusion,
+                    overlap?.Members
+                        .Where(m => m.Holder.GroupKey != ownGroup)
+                        .Select(m => new OverlapMember(m.Holder.SystemId, m.Holder.Name, m.Exclusion))
+                        .ToList() ?? []);
+            })
             .OrderBy(c => c.HeldBy is not null)
             .ThenBy(c => treeOrder.GetValueOrDefault(c.Capability.Id, int.MaxValue)) // Kortets rækkefølge; udgåede sidst.
             .ThenBy(c => c.Capability.Code, CapabilityRules.CodeOrder)

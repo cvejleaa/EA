@@ -168,7 +168,7 @@ describe('SystemListPage', () => {
       const { fixture, systems } = await openWith('none');
 
       expect(systems.request.params.get('capabilityId')).toBe('none');
-      expect(selected(fixture)).toBe('Ikke angivet');
+      expect(selected(fixture)).toBe('Ikke angivet (nedlagte undtaget)');
       // afterEach(http.verify) fejler, hvis kortet blev hentet.
     });
   });
