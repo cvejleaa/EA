@@ -258,6 +258,25 @@ public sealed class IntegrationEndpointsTests
     }
 
     [Fact]
+    public async Task Enum_felter_accepterer_kun_de_faste_tekstkoder()
+    {
+        await using var app = await TestApp.StartAsync();
+        var l = await BuildAsync(app);
+
+        // Et tal i et enum-felt ville ellers blive gemt og sendt videre som en værdi, klienten ikke kender.
+        var integration = await l.Admin.PostAsync("/api/integrations", new StringContent(
+            $"{{\"fromSystemId\":\"{l.Hr.Id}\",\"toSystemId\":\"{l.Id.Id}\",\"type\":99}}",
+            System.Text.Encoding.UTF8, "application/json"));
+        var system = await l.Admin.PostAsync("/api/systems", new StringContent(
+            "{\"name\":\"Tal\",\"lifecycleStatus\":2}", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, integration.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, system.StatusCode);
+        Assert.Empty((await l.Admin.SystemIntegrationsAsync(l.Hr.Id)).Items);
+        Assert.Equal(4, (await l.Admin.ListSystemsAsync()).Total);
+    }
+
+    [Fact]
     public async Task Ukendt_integration_giver_404()
     {
         await using var app = await TestApp.StartAsync();

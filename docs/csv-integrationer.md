@@ -88,8 +88,12 @@ Eksempelfilen viser præcis det mønster (`Månedligt lønudtræk`).
   `Type` og `ViaPlatform` sammen med `Navn`.
 - **Rækker, der ikke står i filen, slettes aldrig.** En eksport fra ét system indeholder kun det systems
   integrationer, og det er fint at sende en delmængde tilbage.
-- Et felt, der i filen starter med `'` foran `=`, `+`, `-` eller `@`, har fået apostroffen for at forhindre
-  Excel i at tolke teksten som en formel. Importen fjerner den igen.
+- **Apostroffer mod formler.** Registret sætter `'` foran `=`, `+`, `-` og `@` (også fuldbredde-varianterne
+  `＝ ＋ － ＠`), når tegnet står først i et felt eller lige efter et komma eller en tabulator. Det sker
+  også, når feltet starter med en tabulator eller et linjeskift. Formålet er, at et regneark aldrig
+  tolker tekst fra registret som en formel, heller ikke hvis filen åbnes med komma som skilletegn. En
+  bindestreg alene eller foran et mellemrum, fx `100,- kr.`, får ikke apostrof. Importen fjerner
+  apostrofferne igen.
 
 ## Excel
 

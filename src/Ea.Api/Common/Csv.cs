@@ -4,16 +4,19 @@ namespace Ea.Api.Common;
 
 /// <summary>
 /// CSV til dansk Excel: UTF-8 MED BOM (så æøå vises rigtigt ved dobbeltklik), semikolon som separator,
-/// CRLF og citering efter RFC 4180. Felter, der starter med = + - @ TAB eller CR, får et foranstillet '
-/// (formel-neutralisering), så et regneark aldrig udfører indhold fra registret som formel. Importen fjerner det igen.
+/// CRLF og citering efter RFC 4180.
+/// Formel-neutralisering, så et regneark aldrig udfører indhold fra registret som formel — heller ikke hvis
+/// filen åbnes med komma eller tabulator som skilletegn (andre sprogindstillinger):
+/// et ' sættes foran = + - @ (og fuldbredde-varianterne) i starten af et felt og lige efter et komma eller en
+/// tabulator. Importen fjerner det igen (docs/csv-integrationer.md).
 /// </summary>
-public static class Csv
+public static partial class Csv
 {
     public const char Separator = ';';
     public const char FormulaGuard = '\'';
 
-    private static readonly char[] FormulaStart = ['=', '+', '-', '@', '\t', '\r'];
-    private static readonly char[] NeedsQuoting = [Separator, '"', '\r', '\n'];
+    private static readonly char[] FormulaStart = ['=', '+', '-', '@', '＝', '＋', '－', '＠', '\t', '\r'];
+    private static readonly char[] NeedsQuoting = [Separator, ',', '\t', '"', '\r', '\n'];
 
     public static byte[] Write(IReadOnlyList<string> header, IEnumerable<IReadOnlyList<string?>> rows)
     {
@@ -44,6 +47,9 @@ public static class Csv
             value = FormulaGuard + value;
         }
 
+        // Et andet skilletegn (komma, tabulator) kan gøre midten af et felt til starten af en celle.
+        value = AfterOtherSeparator().Replace(value, "$0" + FormulaGuard);
+
         var quote = value.IndexOfAny(NeedsQuoting) >= 0 || char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]);
         return quote ? "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : value;
     }
@@ -62,6 +68,10 @@ public static class Csv
 
         text.Append("\r\n");
     }
+
+    // "-" alene eller før mellemrum (fx dansk "100,- kr.") er ikke en formel og efterlades.
+    [System.Text.RegularExpressions.GeneratedRegex("[,\\t](?=[=+@＝＋＠]|[-－][^\\s])")]
+    private static partial System.Text.RegularExpressions.Regex AfterOtherSeparator();
 
     /// <summary>ASCII-venligt filnavn ud fra et systemnavn (æøå omskrives, resten bliver bindestreger).</summary>
     public static string Slug(string name)

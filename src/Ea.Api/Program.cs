@@ -20,7 +20,8 @@ builder.Services.AddHealthChecks().AddDbContextCheck<EaDbContext>();
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     // Enums som tekst i API'et (fx "IDrift") — samme navne som i databasen og CSV-skabelonen.
-    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    // Kun tekstkoderne — et tal ville blive gemt og sendt videre som en værdi, klienten ikke kender.
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
     // Tal er tal (ikke "tal eller tekst") — giver en stram kontrakt og rene TypeScript-typer.
     o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
 });

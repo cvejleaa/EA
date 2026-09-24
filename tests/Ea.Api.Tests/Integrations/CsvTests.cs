@@ -64,6 +64,51 @@ public sealed class CsvTests
         Assert.Equal("'" + value, field);
     }
 
+    private static readonly char[] Dangerous = ['=', '+', '-', '@', '＝', '＋', '－', '＠'];
+
+    /// <summary>Læser filen med et andet skilletegn — som et regneark med andre sprogindstillinger ville.</summary>
+    private static List<string[]> ReadBackWith(byte[] bytes, string delimiter)
+    {
+        using var parser = new TextFieldParser(new MemoryStream(bytes), Encoding.UTF8, detectEncoding: true);
+        parser.SetDelimiters(delimiter);
+        parser.HasFieldsEnclosedInQuotes = false;
+        parser.TrimWhiteSpace = false;
+        var rows = new List<string[]>();
+        while (!parser.EndOfData)
+        {
+            rows.Add(parser.ReadFields()!);
+        }
+
+        return rows;
+    }
+
+    [Theory]
+    [InlineData("tekst,=1+1")]
+    [InlineData("tekst,+1+1")]
+    [InlineData("tekst,-1+1")]
+    [InlineData("tekst,@SUM(1)")]
+    [InlineData("tekst\t=1+1")]
+    [InlineData("＝1+1")]
+    [InlineData("tekst,＝1+1")]
+    public void Ingen_celle_bliver_en_formel_uanset_skilletegn(string value)
+    {
+        var bytes = Csv.Write(Header, [["1", value]]);
+
+        foreach (var delimiter in new[] { ";", ",", "\t" })
+        {
+            var cells = ReadBackWith(bytes, delimiter).SelectMany(r => r).Select(c => c.TrimStart('"'));
+            Assert.DoesNotContain(cells, c => c.Length > 0 && Dangerous.Contains(c[0]));
+        }
+    }
+
+    [Theory]
+    [InlineData("1,5 mio. kr.")]
+    [InlineData("A, B og C")]
+    [InlineData("pris 100,-")]
+    [InlineData("pris 100,- kr.")]
+    public void Almindelige_kommaer_efterlades_uaendrede(string value) =>
+        Assert.Equal(["1", value], ReadBack(Csv.Write(Header, [["1", value]]))[1]);
+
     [Fact]
     public void Tomme_og_manglende_felter_skrives_tomme() =>
         Assert.Equal("Id;Tekst\r\n;\r\n", Encoding.UTF8.GetString(Csv.Write(Header, [[null, ""]])[3..]));
