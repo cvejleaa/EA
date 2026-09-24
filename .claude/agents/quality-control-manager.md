@@ -42,20 +42,28 @@ Start med `git diff` mod base-branchen, og læs den fulde fil omkring hver
    rettelser, der kun lukker det symptom, der blev nævnt.
 
 2. **Hvad ellers rører den ved?** Hvem kalder den ændrede funktion? Deles
-   koden mellem flere apps, sider eller miljøer? [TILPAS: nævn projektets
-   delte flader — fx fælles regler, delte moduler, spejlede filer.]
+   koden mellem flere apps, sider eller miljøer? Delte flader her:
+   `Systems/SystemRules.cs` (bruges af endpoints OG af de permissions,
+   klienten viser knapper ud fra), API-kontrakten (`web/src/api/openapi.json`
+   → `schema.d.ts`) og enum-labels i `web/src/app/core/labels.ts`.
 
-3. **Projektets kendte fælder.** [TILPAS — skriv de 2-4 fælder, der har bidt
-   jer, som konkrete spørgsmål til diffen. Generelle eksempler:]
-   - Strammet server-læseregel → matcher klientens forespørgsel stadig
-     præcist, eller ser brugeren en tom liste uden fejlbesked?
-   - Findes logik i to eksemplarer (klient + server) → er begge opdateret, og
-     findes der en paritetstest?
-   - Rører ændringen penge/point/adgang → findes håndhævelsen server-side,
-     eller kun som klient-validering?
+3. **Projektets kendte fælder.**
+   - Lover en knap noget, serveren afviser? Knapper skal styres af
+     server-beregnede `permissions` (med begrundelse, når de er blokeret).
+   - Er et nyt felt obligatorisk? Kun `Name` og `LifecycleStatus` er det — et
+     tvunget felt bliver udfyldt forkert ved import. Kan EA FINDE hullerne
+     (filter "Ikke angivet")?
+   - Rigtige DTU-data i repoet (seed, tests, skærmbilleder)? Afvis.
+   - Ændrer en redigering data uden at røre bekræftelsen — eller omvendt
+     ("Bekræft uændret" må aldrig ændre data eller `UpdatedAt`)?
+   - Rører ændringen adgang → findes håndhævelsen server-side, før skrivningen?
 
-4. **Projektets invarianter.** [TILPAS: de 1-3 felter/mekanismer, som mange
-   ting afhænger af. Rører ændringen dem, så følg hele kæden igennem.]
+4. **Projektets invarianter.** (a) Enum-værdierne (`LifecycleStatus`,
+   `SystemType`, `SystemRole`) er en ekstern kontrakt (API, database som
+   tekst, kommende CSV-skabelon) — de omdøbes aldrig. (b) Moduler ligger
+   præcis ét niveau under et system, og navne er unikke inden for samme
+   forælder. (c) `Version` (xmin) beskytter hver skrivning mod at overskrive
+   en andens ændring. Rører ændringen dem, så følg hele kæden igennem.
 
 5. **Kan brugeren forstå resultatet?** Konkrete fejlbeskeder på produktets
    sprog. Peger de på noget, brugeren faktisk kan gøre? En fejl om et felt,

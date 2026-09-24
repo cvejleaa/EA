@@ -11,8 +11,8 @@ bagud. Et scheduled job, der stille er holdt op med at køre. En dokumentation,
 der beskriver en app, vi ikke har mere.
 
 Det er dét, dette eftersyn er til. Kør det i en **rolig periode** — ca. hver
-anden måned. [TILPAS: hvad er en rolig periode i dette produkt? Aldrig midt i
-spidsbelastning — flere af punkterne inviterer til ændringer.]
+anden måned — ikke midt i en dataindsamling/import eller op til en
+foranalyse-aflevering; flere af punkterne inviterer til ændringer.
 
 ## Sådan kører du det
 
@@ -22,8 +22,9 @@ bevidst lever med.
 
 ### 1. Forbrug og kvoter
 
-[TILPAS: hvad koster penge i dette projekt — database-læsninger, API-kald,
-compute, mails?] Led efter det, der er vokset stille: brede
+Prototypen koster intet i drift endnu. Når den står i DTU's Azure: compute
+til API'et, PostgreSQL Flexible Server og (senere) kald til eksterne feeds
+(EOL, sårbarheder). Led efter det, der er vokset stille: brede
 lyttere/forespørgsler der filtrerer i klienten, jobs der fyrer pr. element
 hvor de kunne køre pr. batch, fuld-scan hvor et opslag ville gøre. Regn på det
 største fund: mængde pr. periode gange antal brugere. Et tal er mere

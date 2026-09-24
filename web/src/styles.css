@@ -1,0 +1,25 @@
+/* Fælles, små hjælpeklasser. Komponent-specifik styling ligger i komponenterne. */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.muted {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.error-text {
+  color: var(--mat-sys-error);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+a {
+  color: var(--mat-sys-primary);
+}

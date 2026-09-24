@@ -1,0 +1,130 @@
+<section class="page">
+  <div class="row header">
+    <h1>Systemer</h1>
+    <span class="spacer"></span>
+    @if (canCreate()) {
+      <a mat-flat-button routerLink="/systemer/ny">Nyt system</a>
+    }
+  </div>
+
+  <div class="row filters">
+    <mat-form-field class="search">
+      <mat-label>Søg i navn, alias og beskrivelse</mat-label>
+      <input matInput type="search" [value]="filter().q ?? ''" (input)="onSearch($any($event.target).value)" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Status</mat-label>
+      <mat-select [value]="filter().status ?? ''" (selectionChange)="setFilter('status', $event.value)">
+        <mat-option value="">Alle</mat-option>
+        @for (s of lifecycleOptions; track s) {
+          <mat-option [value]="s">{{ lifecycleLabels[s] }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Type</mat-label>
+      <mat-select [value]="filter().type ?? ''" (selectionChange)="setFilter('type', $event.value)">
+        <mat-option value="">Alle</mat-option>
+        @for (t of typeOptions; track t) {
+          <mat-option [value]="t">{{ typeLabels[t] }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Forvaltende team</mat-label>
+      <mat-select [value]="filter().teamId ?? ''" (selectionChange)="setFilter('teamId', $event.value)">
+        <mat-option value="">Alle</mat-option>
+        <mat-option value="none">Ikke angivet</mat-option>
+        @for (t of teams(); track t.id) {
+          <mat-option [value]="t.id">{{ t.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Forretningsejer</mat-label>
+      <mat-select [value]="filter().businessOwnerId ?? ''" (selectionChange)="setFilter('businessOwnerId', $event.value)">
+        <mat-option value="">Alle</mat-option>
+        <mat-option value="none">Ikke angivet</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <p class="count muted" data-testid="count">
+    @if (isFiltered()) {
+      Viser {{ items().length }} af {{ total() }} systemer
+      <button mat-button type="button" (click)="clearFilters()">Nulstil filtre</button>
+    } @else {
+      {{ total() }} systemer
+    }
+  </p>
+
+  @if (error()) {
+    <p class="error-text" role="alert">{{ error() }}</p>
+  }
+
+  <table mat-table [dataSource]="rows()" matSort (matSortChange)="sort.set($event)" class="systems">
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Navn</th>
+      <td mat-cell *matCellDef="let s">
+        <a [routerLink]="['/systemer', s.id]" [class.module]="s.parent">
+          @if (s.parent) {
+            <span class="muted">{{ s.parent.name }} › </span>
+          }
+          {{ s.name }}
+        </a>
+        @if (s.matchedAlias) {
+          <span class="muted alias"> (kendt som {{ s.matchedAlias }})</span>
+        }
+        @if (s.moduleCount > 0) {
+          <span class="muted"> · {{ s.moduleCount }} {{ s.moduleCount === 1 ? 'modul' : 'moduler' }}</span>
+        }
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="type">
+      <th mat-header-cell *matHeaderCellDef>Type</th>
+      <td mat-cell *matCellDef="let s">{{ s.type ? typeLabels[asType(s.type)] : 'Ikke angivet' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="status">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+      <td mat-cell *matCellDef="let s">{{ lifecycleLabels[asStatus(s.lifecycleStatus)] }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="team">
+      <th mat-header-cell *matHeaderCellDef>Forvaltende team</th>
+      <td mat-cell *matCellDef="let s" [class.missing]="!s.managingTeam">{{ s.managingTeam?.name ?? 'Ikke angivet' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="owner">
+      <th mat-header-cell *matHeaderCellDef>Forretningsejer</th>
+      <td mat-cell *matCellDef="let s" [class.missing]="!s.businessOwner">
+        @if (s.businessOwner) {
+          {{ s.businessOwner.displayName }}
+          @if (s.businessOwner.department) {
+            <span class="muted"> · {{ s.businessOwner.department }}</span>
+          }
+        } @else {
+          Ikke angivet
+        }
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="confirmed">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Bekræftet</th>
+      <td mat-cell *matCellDef="let s">{{ age(s.lastConfirmedAt) }}</td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+    <tr class="mat-mdc-row" *matNoDataRow>
+      <td class="mat-mdc-cell empty" [attr.colspan]="columns.length">
+        {{ loading() ? 'Henter…' : 'Ingen systemer matcher.' }}
+      </td>
+    </tr>
+  </table>
+</section>

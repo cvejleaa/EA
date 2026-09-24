@@ -1,63 +1,57 @@
-# Projekt-skabelon
+# EA-register
 
-Udgangspunkt for nye projekter: gennemgangs-modellen med tre faste roller på
-hver ændring (Test Manager, Quality Control, Release Manager) plus tre
-betingede (Arkitekt på alt større end en enkelt rettelse, Security Reviewer
-og en domæne-rådgiver), som subagenter i `.claude/agents/`, og arbejdsgangen
-i `CLAUDE.md`.
+Et letvægts enterprise-arkitektur-værktøj ("LeanIX-light") for
+IT Forretningsløsninger på DTU: et register over systemer, hvem der ejer dem
+(også i forretningen), hvad der hænger sammen — og senere teknologi,
+sårbarheder, SOP'er og kontrakter. Plan, faser og beslutninger står i
+[`docs/plan.md`](docs/plan.md).
 
-## Nyt projekt fra skabelonen
+> **Prototype med fiktive data.** Rigtige DTU-data må aldrig committes her.
 
-1. På GitHub: **New repository → Repository template: cvejleaa/skabelon**
-   (kræver at dette repo er markeret som template under Settings →
-   ☑ Template repository).
-2. Åbn det nye repo i Claude Code og sig: *"Gennemgå skabelonens
-   [TILPAS]-markeringer sammen med mig og udfyld dem for det her projekt."*
+## Status
 
-## Tilpasnings-tjekliste (det, `[TILPAS]` markerer)
+Delopgave 1 — systemregistret:
 
-| Fil | Skal udfyldes |
+- Systemer med aliaser, type, livscyklus, forvaltende team og moduler (ét
+  niveau, fx en ERP-suite med moduler).
+- Roller pr. system: **forretningsejer** (den i forretningen, der ejer
+  processen), systemejer og systemforvaltere. Personer har en afdeling, så
+  listen viser forretningsvinklen.
+- Søgning i navn, aliaser, beskrivelse og forælder. Filtre på status, type,
+  team og "uden forretningsejer/team", så EA kan finde hullerne.
+- Friskhed: "senest bekræftet" pr. system og knappen **Bekræft uændret**.
+- Adgang håndhæves på serveren: alle skal være logget ind. I prototypen er det
+  kun enterprise arkitekten (rollen `EA.Admin`), der redigerer.
+
+## Kør lokalt
+
+Kræver .NET SDK 10, Node 24 og PostgreSQL 16.
+
+```bash
+./scripts/dev-db.sh                                   # start PostgreSQL + opret rolle/database
+dotnet run --project src/Ea.Api --launch-profile http # API på :5080 — migrerer og seeder fiktive data
+cd web && npm ci && npm start                         # web på :4200 (proxy til API'et)
+```
+
+Åbn http://localhost:4200 og vælg en fiktiv bruger. *Eva Arkitekt* kan
+redigere, *Leo Læser* kan kun læse.
+
+Test-, lint- og build-kommandoerne står i [`CLAUDE.md`](CLAUDE.md#test-kommandoer).
+
+## Struktur
+
+| Sti | Indhold |
 |---|---|
-| `CLAUDE.md` | test-/lint-/build-kommandoer nederst, CI-jobbene i trin 4, og sproget i Faste regler |
-| `.claude/agents/release-manager.md` | miljø/workflow-tabellen, sti → kræver-tabellen, lumske deploy-defaults |
-| `.claude/agents/security-reviewer.md` | trusselsbilledet (hvem er den realistiske angriber?) og hvilke stier der udløser rollen |
-| `.claude/agents/quality-control-manager.md` | projektets fælder, invarianter og delte flader |
-| `.claude/agents/test-manager.md` | forretningskritiske områder og test-lagene |
-| `.claude/agents/arkitekt.md` | projektets grundform (apps/miljøer, spejlede filer) og hvor adgang afgøres |
-| `.claude/agents/domaene-raadgiver.md` | HELE rollen — omdøb den gerne til noget produktnært (i spillet hed den Spilfører) |
-| `.claude/commands/eftersyn.md` | hvad koster penge (punkt 1), og hvad en rolig periode er |
+| `src/Ea.Api/` | ASP.NET Core-API (minimal APIs, EF Core + PostgreSQL), feature-mapper |
+| `src/Ea.Api/Authorization/` | Det ene sted, adgang afgøres |
+| `tests/Ea.Api.Tests/` | xUnit v3: regler, HTTP-tests mod rigtig PostgreSQL, kontrakttest |
+| `web/` | Angular 22 + Angular Material, Vitest |
+| `web/src/api/` | API-kontrakten (`openapi.json`) og de genererede TypeScript-typer |
+| `.claude/` | Gennemgangsrollerne og deres hukommelse (se `CLAUDE.md`) |
 
-Skabelonen må gerne starte uudfyldt — rollerne virker fra dag ét og bliver
-skarpere, efterhånden som felterne udfyldes og deres hukommelse i
-`.claude/agent-memory/` vokser. (Reglerne for hukommelsen og modelvalget står
-i `CLAUDE.md`, så de overlever, når denne README skrives om.)
+## Arbejdsgang
 
-## Bevidst udeladt fra kilden
-
-Skabelonen er afledt af et levende projekts setup. Disse dele er IKKE med —
-som beslutning, ikke forglemmelse:
-
-- **Agent-hukommelsernes indhold** (`.claude/agent-memory/*.md`): projekt-
-  specifik viden. Mappen er med (tom), og hvert projekt bygger sin egen op.
-- **Kildens historiske eksempler** ("hver rolle har blokeret noget ægte",
-  konkrete fejl med navne): de bærende lærestreger er anonymiseret ind i
-  rolle-filerne og CLAUDE.md; resten er projekthistorie. Skriv jeres egne
-  eksempler ind, når de sker — det er dem, der gør reglerne troværdige.
-- **Drift- og vedligeholdelsesdokumenter** (`docs/drift.md` m.fl.): opret
-  projektets egne, når der er drift at dokumentere. Eftersynets punkt 2 og
-  Release Managers fire driftsspørgsmål peger på behovet.
-
-## De tre principper, der bærer det hele
-
-1. **Commit før gennemgang.** Gennemgange og mutationstest ser kun det
-   committede — og mutationers tilbagerulning kan slette ukommitteret
-   arbejde.
-2. **En grøn suite beviser intet i sig selv.** Kun en mutation, der gør den
-   rød, beviser dækning.
-3. **Gennemgangs-rollerne skal kunne blokere — og alle roller skal sige
-   klart fra eller klart god.** (Domæne-rådgiveren er bevidst kun
-   rådgivende.) En rolle, der altid siger "ser fint ud", holder man op med
-   at læse.
-
-*(Slet dette afsnit og skriv projektets egen README, når projektet er i
-gang — men behold tilpasnings-tjeklisten, til den er tom.)*
+Hver ændring gennemgås af faste roller (Test Manager, Quality Control,
+Release Manager) og efter behov Arkitekt, Security Reviewer og
+domæne-rådgiver — se [`CLAUDE.md`](CLAUDE.md). Projektet er oprettet fra
+skabelonen `cvejleaa/skabelon`, og alle tilpasningsfelter er udfyldt.

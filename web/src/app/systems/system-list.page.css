@@ -1,0 +1,9 @@
+.header h1 { margin: 0; }
+.spacer { flex: 1; }
+.filters mat-form-field { width: 190px; }
+.filters .search { width: 320px; }
+.count { min-height: 36px; display: flex; align-items: center; gap: 8px; }
+.systems { width: 100%; }
+.module { padding-left: 16px; display: inline-block; }
+.missing { color: var(--mat-sys-on-surface-variant); font-style: italic; }
+.empty { padding: 16px; }

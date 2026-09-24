@@ -1,0 +1,156 @@
+<section class="page">
+  <a [routerLink]="existing() ? ['/systemer', existing()!.id] : ['/systemer']" class="back">← Tilbage</a>
+  <h1>{{ isEdit() ? 'Rediger ' + (existing()?.name ?? '') : 'Nyt system' }}</h1>
+
+  @if (loadError()) {
+    <p class="error-text" role="alert">{{ loadError() }}</p>
+  }
+
+  @if (isEdit() && !existing()) {
+    @if (!loadError()) {
+      <p class="muted" data-testid="loading">Henter…</p>
+    }
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="save()" class="form" novalidate>
+      <mat-form-field>
+        <mat-label>Navn</mat-label>
+        <input matInput formControlName="name" required />
+        <mat-error>Navn skal udfyldes.</mat-error>
+        @if (fieldError('name')) {
+          <mat-hint class="error-text">{{ fieldError('name') }}</mat-hint>
+        }
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Andre navne (aliaser)</mat-label>
+        <input matInput formControlName="aliases" />
+        <mat-hint>Adskil med komma — fx det navn, brugerne selv kalder systemet.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Beskrivelse</mat-label>
+        <textarea matInput formControlName="description" rows="3"></textarea>
+      </mat-form-field>
+
+      <div class="row">
+        <mat-form-field>
+          <mat-label>Status</mat-label>
+          <mat-select formControlName="lifecycleStatus" required data-testid="status">
+            @for (s of lifecycleOptions; track s) {
+              <mat-option [value]="s">{{ lifecycleLabels[s] }}</mat-option>
+            }
+          </mat-select>
+          <mat-error>{{ fieldError('lifecycleStatus') ?? 'Vælg en status.' }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Type</mat-label>
+          <mat-select formControlName="type">
+            <mat-option value="">Ikke angivet</mat-option>
+            @for (t of typeOptions; track t) {
+              <mat-option [value]="t">{{ typeLabels[t] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Forvaltende team</mat-label>
+          <mat-select formControlName="managingTeamId">
+            <mat-option value="">Ikke angivet</mat-option>
+            @for (t of teams(); track t.id) {
+              <mat-option [value]="t.id">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>Det IT-team, der forvalter systemet.</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field>
+        <mat-label>Modul af</mat-label>
+        <mat-select formControlName="parentSystemId">
+          <mat-option value="">Intet — selvstændigt system</mat-option>
+          @for (p of parentCandidates(); track p.id) {
+            <mat-option [value]="p.id">{{ p.name }}</mat-option>
+          }
+        </mat-select>
+        @if (parentBlockedReason()) {
+          <mat-hint data-testid="parent-blocked">{{ parentBlockedReason() }}</mat-hint>
+        } @else if (fieldError('parentSystemId')) {
+          <mat-hint class="error-text">{{ fieldError('parentSystemId') }}</mat-hint>
+        } @else {
+          <mat-hint>Vælg et system, hvis dette er et modul af det (fx et modul i en ERP-suite).</mat-hint>
+        }
+      </mat-form-field>
+
+      <h2>Roller</h2>
+      <div class="row">
+        <mat-form-field>
+          <mat-label>Forretningsejer</mat-label>
+          <mat-select formControlName="businessOwnerId" data-testid="business-owner">
+            <mat-option value="">Ikke angivet</mat-option>
+            @for (p of persons(); track p.id) {
+              <mat-option [value]="p.id">{{ p.displayName }}{{ p.department ? ' · ' + p.department : '' }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>Den i forretningen, der ejer processen, systemet understøtter.</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Systemejer</mat-label>
+          <mat-select formControlName="systemOwnerId">
+            <mat-option value="">Ikke angivet</mat-option>
+            @for (p of persons(); track p.id) {
+              <mat-option [value]="p.id">{{ p.displayName }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Systemforvaltere</mat-label>
+          <mat-select formControlName="stewardIds" multiple>
+            @for (p of persons(); track p.id) {
+              <mat-option [value]="p.id">{{ p.displayName }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+      @if (fieldError('roles')) {
+        <p class="error-text">{{ fieldError('roles') }}</p>
+      }
+
+      @if (canManagePersons()) {
+        @if (!addingPerson()) {
+          <button mat-button type="button" (click)="addingPerson.set(true)">Personen findes ikke på listen?</button>
+        } @else {
+          <div class="new-person row" [formGroup]="newPerson">
+            <mat-form-field>
+              <mat-label>Navn</mat-label>
+              <input matInput formControlName="displayName" />
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>Afdeling</mat-label>
+              <input matInput formControlName="department" />
+            </mat-form-field>
+            <button mat-stroked-button type="button" (click)="addPerson()">Tilføj person</button>
+            <button mat-button type="button" (click)="addingPerson.set(false)">Annullér</button>
+            <p class="muted hint">I prototypen oprettes fiktive personer her. Senere slås de op i DTU's brugerkatalog.</p>
+          </div>
+        }
+      }
+
+      @if (problem(); as p) {
+        <div class="problem" role="alert" data-testid="problem">
+          <p class="error-text">{{ p.message }}</p>
+          @if (p.status === 409 && isEdit()) {
+            <button mat-stroked-button type="button" (click)="reload()">Hent nyeste version (dine ændringer kasseres)</button>
+          }
+        </div>
+      }
+
+      <div class="row actions">
+        <button mat-flat-button type="submit" [disabled]="saving()">{{ isEdit() ? 'Gem ændringer' : 'Opret system' }}</button>
+        <a mat-button [routerLink]="existing() ? ['/systemer', existing()!.id] : ['/systemer']">Annullér</a>
+      </div>
+    </form>
+  }
+</section>

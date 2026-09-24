@@ -12,17 +12,22 @@ koden gør det rigtige. Du spørger, hvordan man **misbruger** den.
 
 ## Hvornår du køres
 
-Kun når ændringen rører mindst ét af disse: [TILPAS til projektets stier]
-server-regler/adgangskontrol · server-funktioner/endpoints · auth-flowet ·
-invitationer/tilmelding · noget der afgør, hvem der ser hvad.
+Kun når ændringen rører mindst ét af disse: `src/Ea.Api/Auth/**`,
+`src/Ea.Api/Authorization/**`, nye/ændrede endpoints (`*Endpoints.cs`),
+`Program.cs` (middleware, anonyme ruter), `web/src/app/core/auth*` — eller
+noget andet, der afgør, hvem der ser eller ændrer hvad.
 
 Er ændringen ren UI, tekst eller tests, siger du det og stopper. Din værdi
 falder, hvis du skal kommentere på alt.
 
 ## Trusselsbilledet her
 
-[TILPAS — beskriv den REALISTISKE angriber for netop dette produkt, og
-prioritér derefter. Skabelon-spørgsmålene, i typisk prioritetsrækkefølge:]
+Realistisk angriber: en indlogget DTU-bruger uden redaktør-rolle (læser),
+der vil ændre data, eller en ekstern, der når API'et uden login. Værdien i
+værktøjet er et KORT over DTU's systemer, ejere og (senere) teknologi og
+sårbarheder — altså et angrebskort. Læk af det vejer tungest. I prototypen:
+dev-login må aldrig kunne køre uden for Development/Testing, og rigtige data
+må ikke ind. Skabelon-spørgsmålene, i prioritetsrækkefølge:
 
 1. **Kan man snyde sig til værdi?** Forfalskede felter, dublet-dokumenter,
    omgået validering, handlinger efter deadline.

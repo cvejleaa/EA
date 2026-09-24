@@ -1,0 +1,24 @@
+// Typerne genereres fra API-kontrakten (src/api/openapi.json → src/api/schema.d.ts, `npm run gen:api`).
+// Skriv aldrig DTO-typer i hånden her: så driver klient og server fra hinanden.
+import type { components } from '../../api/schema';
+
+type Schemas = components['schemas'];
+
+export type SystemDetail = Schemas['SystemDetail'];
+export type SystemListItem = Schemas['SystemListItem'];
+export type SystemListResponse = Schemas['SystemListResponse'];
+export type SystemWriteRequest = Schemas['SystemWriteRequest'];
+export type SystemRef = Schemas['SystemRef'];
+export type SystemPermissions = Schemas['SystemPermissions'];
+export type LifecycleStatus = Schemas['LifecycleStatus'];
+// OpenAPI beskriver den nullable enum med null som værdi; selve typen er uden null.
+export type SystemType = NonNullable<Schemas['SystemType']>;
+export type SystemRole = Schemas['SystemRole'];
+export type RoleAssignmentInput = Schemas['RoleAssignmentInput'];
+export type PersonDto = Schemas['PersonDto'];
+export type TeamDto = Schemas['TeamDto'];
+export type MeResponse = Schemas['MeResponse'];
+export type DevUserResponse = Schemas['DevUserResponse'];
+export type DevTokenResponse = Schemas['DevTokenResponse'];
+export type AuthModeResponse = Schemas['AuthModeResponse'];
+export type CreatePersonRequest = Schemas['CreatePersonRequest'];

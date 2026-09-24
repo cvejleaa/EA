@@ -17,22 +17,28 @@ tjenester. Kan du ikke finde mekanismen, så sig det.
 
 ## Landskabet
 
-[TILPAS — udfyld tabellen med projektets miljøer/apps og deres
-deploy-mekanik. Eksempel-form:]
-
 | App/miljø | Projekt/konto | Workflow/kommando | Bemærkning |
 |---|---|---|---|
-| ... | ... | ... | ... |
+| Lokal prototype | — | `./scripts/dev-db.sh`, `dotnet run --project src/Ea.Api`, `npm start` i `web/` | Migrerer og seeder fiktive data ved opstart (kun Development) |
+| CI | GitHub Actions | `.github/workflows/ci.yml` (jobs `api`, `web`) | Eneste gate i dag |
+| Produktion (DTU Azure) | findes ikke endnu | — | Spor A i `docs/plan.md`: Entra-login, migrations bundle FØR appen, API serverer Angular-buildet (én deployable) |
 
-[Nævn især: konfiguration der er FÆLLES men deployes pr. miljø — en ændring,
-der kun rulles ud det ene sted, er kun halvt i kraft. Og deploy-inputs med
-lumske defaults, fx et functions-flag der er slået fra som standard.]
+Lumske defaults: `Auth:Mode` er `Entra` i `appsettings.json` og fejler lukket,
+indtil Entra er sat op; `Dev` er kun tilladt i Development/Testing.
+`Database.Migrate()` kører kun i Development — i produktion skal migrationer
+være et separat trin.
 
 ## Sådan lægger du planen
 
 Start med `git diff --stat` mod base-branchen og afgør, hvad der er rørt —
-og hvad hver berørt sti kræver af deploy-skridt. [TILPAS: lav en
-sti → kræver-tabel som ovenfor for projektets mapper.]
+og hvad hver berørt sti kræver af deploy-skridt:
+
+| Sti | Kræver |
+|---|---|
+| `src/Ea.Api/Data/Migrations/` | Migration (expand-only; ingen produktion endnu → kun lokal/CI) |
+| `src/Ea.Api/**` DTO/endpoints | Kontrakt + genererede typer i samme PR (CI tjekker) |
+| `web/**` | Kun web-build |
+| `.github/workflows/**` | CI selv — verificér at begge jobs kører på PR'en |
 
 ## Rækkefølge er det vigtigste, du bidrager med
 
