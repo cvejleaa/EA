@@ -321,3 +321,20 @@ alle tre egne koblinger).
 - moveReasonLabels (lang form, kort/systemsiden) og moveReasonShortLabels (kort form, chip på formularen) er to
   Records for samme enum — ikke en dobbelt-vagt (begge er ren tekst, ingen forretningslogik), men et mønster at
   genkende, hvis en fremtidig gennemgang undrer sig over to labels-opslag for samme enum.
+
+## Plan-gennemgang 3c/3d (2026-09-24, Arkitektens plan A→E, main 391e82b). Tjek ved kode-gennemgangen:
+- ENHEDER PÅ KORTET: dækning "X af Y systemer" tæller RÆKKER (moduler for sig, nedlagte med), overlap "N systemer"
+  tæller FAMILIER (FamilyKey inkl. søskende). Samme ord, to enheder på samme skærm → krævede "systemer og moduler".
+- Badge vs. listen bag linket: bladets link viser HOLDERE (alle statusser, modul og forælder som to rækker), badgen
+  tæller familier der tæller. Krævede medlemsnavne (OverlapMember) i Kun overlap-visningen.
+- O4 "Planned=0 når Counted=0" giver en CSV-række med TællerIkkeMed=Planlagt og AntalPlanlagte=0 → selvmodsigelse.
+  Forslag: rå tal + server-boolean for mærket. Og "Kun overlap"-filteret skjuler "planlagt oven på aktivt".
+- 3d "filen er det fulde sæt for systemerne i filen": at slette et systems SIDSTE række = "spring over", ikke
+  "fjern" → usynligt. Forslag: vejledning "tøm Kode", og tør-kørslen NAVNGIVER systemer, der ikke står i filen.
+- Gammel eksport genindlæst: UpdatedAt er IKKE rørt af /confirm (kun LastConfirmed*) → en `SidstÆndret`-kolonne
+  kan advare uden de falske alarmer, Arkitekten frygtede ved xmin/Version. Genbrug-idé til fremtidige imports.
+- Beregnede kolonner i en import-CSV (Status, Forretningsejer…) ser redigerbare ud i Excel og ignoreres tavst →
+  spørg altid: opdager tør-kørslen, at en ignoreret kolonne er ændret?
+- system-integrations.component.ts skriver stadig "lokale løsninger/udtræk" (flertal) på systemsiden → en
+  "løsninger står ikke på skærmen"-test på systemsiden er kun grøn, hvis fixturet mangler ≥2 lokale løsninger.
+- "Familie" i UI/docs = HERM's øverste niveau (csv-kapabiliteter.md). Brug aldrig ordet om system+moduler på skærmen.
