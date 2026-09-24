@@ -156,6 +156,13 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
     de `permissions`, klienten får — knapper afgøres aldrig i klienten.
   - Claim-navne (`Auth/ClaimNames.cs`) er kontrakten mellem dev-login og
     Entra ID.
+  - CSV-skabelonen er en EKSTERN kontrakt (til foranalysen):
+    `Integrations/IntegrationCsv.cs` ⇄ `docs/csv/integrationer-eksempel.csv`
+    (golden-fil, `UPDATE_CONTRACT=1`) ⇄ `docs/csv-integrationer.md`
+    (kolonner og typekoder — en test tjekker, at alle er nævnt).
+  - Konflikt-typer (`Common/Problems.cs`, fx `urn:ea:problem:stale-version`)
+    ⇄ `web/src/app/core/problem.ts`. Kun en forældet version må tilbyde
+    "Hent nyeste version".
 - **Serveren er eneste autoritet.** Validering i klienten kan omgås. Server-
   adgangstjek må aldrig være mere gavmilde end klientens regler — og de skal
   ligge FØR de dyre operationer, så en afvisning er billig.

@@ -45,7 +45,7 @@ export function me(canEdit: boolean): MeResponse {
     oid: 'oid-1',
     name: canEdit ? 'Eva Arkitekt' : 'Leo Læser',
     roles: canEdit ? ['EA.Admin'] : [],
-    permissions: { canCreateSystems: canEdit, canManagePersons: canEdit },
+    permissions: { canCreateSystems: canEdit, canManagePersons: canEdit, canManageDataObjects: canEdit },
   };
 }
 

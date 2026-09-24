@@ -9,4 +9,6 @@ public static class Policies
     public const string CreateSystem = nameof(CreateSystem);
     public const string EditSystem = nameof(EditSystem);
     public const string ManagePersons = nameof(ManagePersons);
+    public const string EditIntegration = nameof(EditIntegration);
+    public const string ManageDataObjects = nameof(ManageDataObjects);
 }

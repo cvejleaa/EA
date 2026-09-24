@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Ea.Api.Auth;
 using Ea.Api.CurrentUser;
 using Ea.Api.Data;
+using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
 using Ea.Api.Teams;
@@ -19,7 +20,8 @@ builder.Services.AddHealthChecks().AddDbContextCheck<EaDbContext>();
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     // Enums som tekst i API'et (fx "IDrift") — samme navne som i databasen og CSV-skabelonen.
-    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    // Kun tekstkoderne — et tal ville blive gemt og sendt videre som en værdi, klienten ikke kender.
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
     // Tal er tal (ikke "tal eller tekst") — giver en stram kontrakt og rene TypeScript-typer.
     o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
 });
@@ -43,6 +45,8 @@ app.MapMeEndpoints();
 app.MapTeamEndpoints();
 app.MapPersonEndpoints();
 app.MapSystemEndpoints();
+app.MapIntegrationEndpoints();
+app.MapDataObjectEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

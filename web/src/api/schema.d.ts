@@ -109,6 +109,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/systems/{id}/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SystemIntegrationsResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dev/users": {
         parameters: {
             query?: never;
@@ -371,6 +415,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/systems/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/systems/{id}": {
         parameters: {
             query?: never;
@@ -539,6 +616,276 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    systemId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IntegrationDto"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IntegrationUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IntegrationDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IntegrationCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IntegrationDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/data-objects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DataObjectDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateDataObjectRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DataObjectDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -550,10 +897,18 @@ export interface components {
             /** Format: uint32 */
             version: null | number;
         };
+        CreateDataObjectRequest: {
+            name: null | string;
+        };
         CreatePersonRequest: {
             displayName: null | string;
             email: null | string;
             department: null | string;
+        };
+        DataObjectDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         DevTokenRequest: {
             userId: string;
@@ -577,11 +932,71 @@ export interface components {
                 [key: string]: string[];
             };
         };
+        IntegrationCreateRequest: {
+            /** Format: uuid */
+            fromSystemId: null | string;
+            /** Format: uuid */
+            toSystemId: null | string;
+            /** Format: uuid */
+            viaPlatformId: null | string;
+            type: null | components["schemas"]["IntegrationType"];
+            name: null | string;
+            description: null | string;
+            dataObjectIds: null | string[];
+        };
+        IntegrationDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            from: components["schemas"]["SystemLink"];
+            to: components["schemas"]["SystemLink"];
+            via: null | components["schemas"]["SystemLink"];
+            type: null | components["schemas"]["IntegrationType"];
+            description: null | string;
+            dataObjects: components["schemas"]["DataObjectDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: uint32 */
+            version: number;
+            permissions: components["schemas"]["IntegrationPermissions"];
+        };
+        IntegrationPermissions: {
+            canEdit: boolean;
+        };
+        /** @enum {unknown} */
+        IntegrationRelation: "Ud" | "Via" | "Ind" | "Intern";
+        IntegrationSummary: {
+            /** Format: int32 */
+            receivers: number;
+            /** Format: int32 */
+            suppliers: number;
+            /** Format: int32 */
+            viaPlatform: number;
+            /** Format: int32 */
+            localSolutions: number;
+            /** Format: int32 */
+            directDb: number;
+        };
+        /** @enum {unknown} */
+        IntegrationType: "Api" | "Fil" | "Event" | "DirekteDb" | "Udtraek" | null;
+        IntegrationUpdateRequest: {
+            /** Format: uuid */
+            viaPlatformId: null | string;
+            type: null | components["schemas"]["IntegrationType"];
+            name: null | string;
+            description: null | string;
+            dataObjectIds: null | string[];
+            /** Format: uint32 */
+            version: null | number;
+        };
         /** @enum {unknown} */
         LifecycleStatus: "Planlagt" | "Indfases" | "IDrift" | "Udfases" | "Nedlagt";
         MePermissions: {
             canCreateSystems: boolean;
             canManagePersons: boolean;
+            canManageDataObjects: boolean;
         };
         MeResponse: {
             oid: string;
@@ -633,6 +1048,25 @@ export interface components {
             /** Format: uint32 */
             version: number;
             permissions: components["schemas"]["SystemPermissions"];
+        };
+        SystemIntegrationItem: {
+            relation: components["schemas"]["IntegrationRelation"];
+            counterpart: null | components["schemas"]["SystemLink"];
+            localModule: null | components["schemas"]["SystemRef"];
+            integration: components["schemas"]["IntegrationDto"];
+        };
+        SystemIntegrationsResponse: {
+            summary: components["schemas"]["IntegrationSummary"];
+            items: components["schemas"]["SystemIntegrationItem"][];
+            canAdd: boolean;
+        };
+        SystemLink: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            parent: null | components["schemas"]["SystemRef"];
+            type: null | components["schemas"]["SystemType"];
+            lifecycleStatus: components["schemas"]["LifecycleStatus"];
         };
         SystemListItem: {
             /** Format: uuid */

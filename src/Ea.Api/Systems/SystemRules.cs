@@ -1,5 +1,8 @@
 namespace Ea.Api.Systems;
 
+/// <summary>Hvad afhænger af et system: moduler, integrationer (som ende) og integrationer via det (som platform).</summary>
+public sealed record SystemUsage(int Modules, int Integrations, int PlatformFor);
+
 /// <summary>Minimal oplysning om et muligt forældersystem.</summary>
 public sealed record ParentInfo(Guid Id, string Name, Guid? ParentSystemId);
 
@@ -20,8 +23,32 @@ public static class SystemRules
     public static string? ParentChangeBlockedReason(int moduleCount) =>
         moduleCount > 0 ? "Systemet har selv moduler og kan derfor ikke gøres til modul." : null;
 
-    public static string? DeleteBlockedReason(string name, int moduleCount) =>
-        moduleCount > 0 ? $"{name} har moduler ({moduleCount}) — flyt eller slet dem først." : null;
+    /// <summary>
+    /// Et system, der er i brug, kan ikke slettes — sletning er til fejloprettelser og må ikke fjerne historik.
+    /// Samme funktion bruges ved sletning og i de permissions, klienten viser knappen ud fra.
+    /// </summary>
+    public static string? DeleteBlockedReason(string name, SystemUsage usage)
+    {
+        var parts = new List<string>();
+        if (usage.Modules > 0)
+        {
+            parts.Add($"har moduler ({usage.Modules})");
+        }
+
+        if (usage.Integrations > 0)
+        {
+            parts.Add($"indgår i integrationer ({usage.Integrations})");
+        }
+
+        if (usage.PlatformFor > 0)
+        {
+            parts.Add($"er platform for integrationer ({usage.PlatformFor})");
+        }
+
+        return parts.Count == 0
+            ? null
+            : $"{name} {string.Join(" og ", parts)} — flyt eller slet dem først, eller sæt status til Nedlagt.";
+    }
 
     /// <summary>Moduler ligger præcis ét niveau under et system.</summary>
     public static string? ValidateParent(Guid? systemId, int moduleCount, Guid? proposedParentId, ParentInfo? proposedParent)

@@ -1,3 +1,4 @@
+using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
 using Ea.Api.Teams;
@@ -9,8 +10,10 @@ namespace Ea.Api.Data;
 /// FIKTIVE eksempeldata til lokal udvikling. Ingen rigtige DTU-systemer, -personer eller -integrationer:
 /// fiktive oplysninger om et rigtigt system bliver forvekslet med fakta.
 /// </summary>
-public static class DevSeed
+public static partial class DevSeed
 {
+    private static readonly string[] SeedDataObjects = ["Medarbejder", "Studerende", "Organisationsenhed", "Brugerkonto", "Løn"];
+
     /// <summary>Samme oid som dev-brugeren "frida" i appsettings.Development.json (forberedt til delopgave 4).</summary>
     public const string FridaOid = "00000000-0000-0000-0000-00000000f001";
 
@@ -19,14 +22,25 @@ public static class DevSeed
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<EaDbContext>();
         var time = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DevSeed));
 
         await db.Database.MigrateAsync();
-        if (await db.Systems.AnyAsync())
+        var now = time.GetUtcNow();
+
+        // Hver del har sin egen vagt, så en eksisterende udviklingsdatabase også får de nyere eksempeldata.
+        if (!await db.Systems.AnyAsync())
         {
-            return;
+            await SeedSystemsAsync(db, now);
         }
 
-        var now = time.GetUtcNow();
+        if (!await db.Integrations.AnyAsync())
+        {
+            await SeedIntegrationsAsync(db, now, logger);
+        }
+    }
+
+    private static async Task SeedSystemsAsync(EaDbContext db, DateTimeOffset now)
+    {
         var persons = new Dictionary<string, Person>
         {
             ["bo"] = NewPerson("Bo Bogholder", "Økonomi (fiktiv)"),
@@ -123,4 +137,69 @@ public static class DevSeed
             EntraObjectId = oid,
         };
     }
+
+    /// <summary>
+    /// Fiktive integrationer samlet om "Identitetskilde (fiktiv)", så "hvad rammes" kan demonstreres — inkl. et
+    /// DirekteDb-brud, et udtræk til en lokal løsning og en integration via platformen.
+    /// </summary>
+    private static async Task SeedIntegrationsAsync(EaDbContext db, DateTimeOffset now, ILogger logger)
+    {
+        // Navne er kun unikke inden for en forælder — tag det første, hvis en udvikler har lavet dubletter.
+        var systems = (await db.Systems.ToListAsync()).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First());
+        var dataObjects = SeedDataObjects
+            .ToDictionary(n => n, n => new DataObject { Id = Guid.CreateVersion7(now), Name = n });
+        db.DataObjects.AddRange(dataObjects.Values);
+
+        const string idSource = "Identitetskilde (fiktiv)";
+        const string platform = "Integrationsplatform (fiktiv)";
+        var added = 0;
+
+        void Add(string from, string to, IntegrationType? type, string? via, string[] data, string? description = null, string? name = null)
+        {
+            if (!systems.TryGetValue(from, out var source) || !systems.TryGetValue(to, out var target)
+                || (via is not null && !systems.ContainsKey(via)))
+            {
+                LogSkipped(logger, from, to);
+                return;
+            }
+
+            var integration = new Integration
+            {
+                Id = Guid.CreateVersion7(now),
+                SourceSystemId = source.Id,
+                TargetSystemId = target.Id,
+                ViaPlatformId = via is null ? null : systems[via].Id,
+                Type = type,
+                Name = name,
+                Description = description,
+                CreatedAt = now.AddDays(-60),
+                UpdatedAt = now.AddDays(-20),
+            };
+            integration.DataObjects = data
+                .Select(d => new IntegrationDataObject { IntegrationId = integration.Id, DataObjectId = dataObjects[d].Id })
+                .ToList();
+            db.Integrations.Add(integration);
+            added++;
+        }
+
+        Add("Nordlys HR", idSource, IntegrationType.Api, platform, ["Medarbejder", "Organisationsenhed"],
+            "Nye og ændrede medarbejdere sendes til identitetskilden.");
+        Add(idSource, "Kompas Sag", IntegrationType.Event, platform, ["Brugerkonto"]);
+        Add(idSource, "Laborant", IntegrationType.DirekteDb, null, ["Brugerkonto"],
+            "Laborant læser direkte i identitetskildens database — principbrud, bør erstattes af API.");
+        Add(idSource, "Studium", IntegrationType.Api, null, ["Studerende"], "Planlagt sammen med Studium.");
+        Add(idSource, "Servicedesk Plus (fiktiv)", IntegrationType.Fil, platform, ["Brugerkonto"], name: "Natlig brugerfil");
+        Add("Nordlys HR", "Lønudtræk-regneark", IntegrationType.Udtraek, null, ["Løn", "Medarbejder"],
+            "Månedligt udtræk til et regneark hos lønkontoret.");
+        Add("Nordlys HR", "Nordlys Økonomi", null, null, ["Medarbejder"]);
+
+        await db.SaveChangesAsync();
+        LogSeeded(logger, added);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "DevSeed: integrationen {From} → {To} springes over — et system mangler.")]
+    private static partial void LogSkipped(ILogger logger, string from, string to);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "DevSeed: {Count} fiktive integrationer oprettet.")]
+    private static partial void LogSeeded(ILogger logger, int count);
 }

@@ -23,7 +23,7 @@ public sealed class OpenApiContractTests
     {
         await using var app = await TestApp.StartAsync();
         var served = Normalize(await app.Anonymous().GetStringAsync("/openapi/v1.json"));
-        var path = Path.Combine(RepoRoot(), "web", "src", "api", "openapi.json");
+        var path = RepoPaths.File("web", "src", "api", "openapi.json");
 
         if (Environment.GetEnvironmentVariable("UPDATE_CONTRACT") == "1")
         {
@@ -44,18 +44,5 @@ public sealed class OpenApiContractTests
         // Serverens URL afhænger af, hvor testen kører — den er ikke en del af kontrakten.
         node.AsObject().Remove("servers");
         return node.ToJsonString(Pretty).ReplaceLineEndings("\n") + "\n";
-    }
-
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "EA.slnx")))
-            {
-                return dir.FullName;
-            }
-        }
-
-        throw new InvalidOperationException("Kunne ikke finde repo-roden (EA.slnx).");
     }
 }

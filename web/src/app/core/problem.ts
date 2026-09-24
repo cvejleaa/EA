@@ -1,7 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
+/** ProblemDetails-typen for en forældet version — den ENESTE konflikt, hvor "Hent nyeste version" giver mening. */
+export const STALE_VERSION = 'urn:ea:problem:stale-version';
+
 export interface ProblemInfo {
   status: number;
+  /** ProblemDetails.type, fx STALE_VERSION. Skelner konflikter, der ellers alle er 409. */
+  type?: string;
   /** Beskeden til brugeren (ProblemDetails.detail eller .title). */
   message: string;
   /** Feltfejl fra et ValidationProblem, nøglet på feltnavn (camelCase). */
@@ -11,7 +16,12 @@ export interface ProblemInfo {
 /** Oversætter et fejlsvar fra API'et til noget, brugeren kan læse og handle på. */
 export function toProblem(error: unknown): ProblemInfo {
   if (error instanceof HttpErrorResponse) {
-    const body = (error.error ?? {}) as { detail?: string; title?: string; errors?: Record<string, string[]> };
+    const body = (error.error ?? {}) as {
+      type?: string;
+      detail?: string;
+      title?: string;
+      errors?: Record<string, string[]>;
+    };
     if (error.status === 0) {
       return { status: 0, message: 'Kunne ikke kontakte serveren. Prøv igen.', fieldErrors: {} };
     }
@@ -20,6 +30,7 @@ export function toProblem(error: unknown): ProblemInfo {
     }
     return {
       status: error.status,
+      type: body.type,
       message: body.detail ?? body.title ?? `Uventet fejl (${error.status}).`,
       fieldErrors: body.errors ?? {},
     };

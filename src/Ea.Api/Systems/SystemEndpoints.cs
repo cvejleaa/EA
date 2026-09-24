@@ -3,12 +3,12 @@ using Ea.Api.Auth;
 using Ea.Api.Authorization;
 using Ea.Api.Common;
 using Ea.Api.Data;
+using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Teams;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Ea.Api.Systems;
 
@@ -23,6 +23,7 @@ public static class SystemEndpoints
 
         group.MapGet("/", ListSystems);
         group.MapGet("/parent-candidates", ParentCandidates);
+        group.MapGet("/export.csv", ExportSystems).Produces(StatusCodes.Status200OK, contentType: "text/csv");
         group.MapGet("/{id:guid}", GetSystem);
         group.MapPost("/", CreateSystem).RequireAuthorization(Policies.CreateSystem);
         group.MapPut("/{id:guid}", UpdateSystem);
@@ -141,6 +142,14 @@ public static class SystemEndpoints
         return aliases.FirstOrDefault(a => a.Contains(search, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Referenceliste over alle systemer (præcise navne til den, der udfylder integrations-CSV'en).</summary>
+    private static async Task<FileContentHttpResult> ExportSystems(EaDbContext db, TimeProvider time, CancellationToken ct)
+    {
+        var systems = await db.Systems.AsNoTracking().Include(s => s.ParentSystem).ToListAsync(ct);
+        var date = time.GetUtcNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        return TypedResults.File(SystemCsv.Write(systems), "text/csv; charset=utf-8", $"systemer-{date}.csv");
+    }
+
     /// <summary>Gyldige forældre for et (nyt eller eksisterende) system — samme regel som ved gem.</summary>
     private static async Task<Ok<List<SystemRef>>> ParentCandidates(Guid? forSystemId, EaDbContext db, CancellationToken ct)
     {
@@ -170,7 +179,7 @@ public static class SystemEndpoints
             return TypedResults.NotFound();
         }
 
-        return TypedResults.Ok(await ToDetail(system, user, auth));
+        return TypedResults.Ok(await ToDetail(system, user, auth, db, ct));
     }
 
     private static async Task<Results<Created<SystemDetail>, ValidationProblem, ProblemHttpResult>> CreateSystem(
@@ -204,7 +213,7 @@ public static class SystemEndpoints
         }
 
         var created = await LoadAggregate(db.Systems.AsNoTracking(), system.Id, ct);
-        return TypedResults.Created($"/api/systems/{system.Id}", await ToDetail(created!, user, auth));
+        return TypedResults.Created($"/api/systems/{system.Id}", await ToDetail(created!, user, auth, db, ct));
     }
 
     private static async Task<Results<Ok<SystemDetail>, NotFound, ForbidHttpResult, ValidationProblem, ProblemHttpResult>> UpdateSystem(
@@ -237,9 +246,11 @@ public static class SystemEndpoints
             return Problems.Validation(errors);
         }
 
-        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så.
+        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
+        // (IsModified), så tjekket også sker, når kun rollerne ændres, og uret ikke har flyttet sig.
         db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
         Touch(system, user, time.GetUtcNow());
+        db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
 
         var failure = await Save(db, system, ct);
         if (failure is not null)
@@ -248,7 +259,7 @@ public static class SystemEndpoints
         }
 
         var updated = await LoadAggregate(db.Systems.AsNoTracking(), id, ct);
-        return TypedResults.Ok(await ToDetail(updated!, user, auth));
+        return TypedResults.Ok(await ToDetail(updated!, user, auth, db, ct));
     }
 
     /// <summary>"Bekræft uændret": sætter kun bekræftelsen — data og UpdatedAt røres ikke.</summary>
@@ -282,6 +293,8 @@ public static class SystemEndpoints
         system.LastConfirmedAt = time.GetUtcNow();
         system.LastConfirmedByOid = user.ObjectId();
         system.LastConfirmedByName = user.DisplayName();
+        // Skrives altid — også i samme øjeblik som sidste bekræftelse — så versionen altid tjekkes.
+        db.Entry(system).Property(s => s.LastConfirmedAt).IsModified = true;
 
         var failure = await Save(db, system, ct);
         if (failure is not null)
@@ -290,7 +303,7 @@ public static class SystemEndpoints
         }
 
         var confirmed = await LoadAggregate(db.Systems.AsNoTracking(), id, ct);
-        return TypedResults.Ok(await ToDetail(confirmed!, user, auth));
+        return TypedResults.Ok(await ToDetail(confirmed!, user, auth, db, ct));
     }
 
     private static async Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
@@ -307,11 +320,10 @@ public static class SystemEndpoints
             return TypedResults.Forbid();
         }
 
-        var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
-        var blocked = SystemRules.DeleteBlockedReason(system.Name, moduleCount);
+        var blocked = SystemRules.DeleteBlockedReason(system.Name, await CountUsage(db, id, ct));
         if (blocked is not null)
         {
-            return Problems.Conflict(blocked);
+            return Problems.Blocked(blocked);
         }
 
         db.Systems.Remove(system);
@@ -448,31 +460,34 @@ public static class SystemEndpoints
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Problems.StaleVersion();
+            return Problems.StaleVersion("Systemet");
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: EaDbContext.SystemNameIndex,
-        })
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex, EaDbContext.SystemNameIndex))
         {
             if (system.ParentSystemId is null)
             {
-                return Problems.Conflict($"Der findes allerede et system med navnet \"{system.Name}\".");
+                return Problems.Duplicate($"Der findes allerede et system med navnet \"{system.Name}\".");
             }
 
             var parentName = await db.Systems.AsNoTracking()
                 .Where(s => s.Id == system.ParentSystemId)
                 .Select(s => s.Name)
                 .FirstAsync(ct);
-            return Problems.Conflict($"{parentName} har allerede et modul med navnet \"{system.Name}\".");
+            return Problems.Duplicate($"{parentName} har allerede et modul med navnet \"{system.Name}\".");
         }
     }
 
-    private static async Task<SystemDetail> ToDetail(SystemEntity s, ClaimsPrincipal user, IAuthorizationService auth)
+    /// <summary>Hvad afhænger af systemet — bruges af både sletning og permissions (én kilde).</summary>
+    internal static async Task<SystemUsage> CountUsage(EaDbContext db, Guid id, CancellationToken ct) => new(
+        await db.Systems.CountAsync(s => s.ParentSystemId == id, ct),
+        await db.Integrations.CountAsync(i => i.SourceSystemId == id || i.TargetSystemId == id, ct),
+        await db.Integrations.CountAsync(i => i.ViaPlatformId == id, ct));
+
+    private static async Task<SystemDetail> ToDetail(
+        SystemEntity s, ClaimsPrincipal user, IAuthorizationService auth, EaDbContext db, CancellationToken ct)
     {
         var canEdit = (await auth.AuthorizeAsync(user, s, Policies.EditSystem)).Succeeded;
-        var deleteBlocked = SystemRules.DeleteBlockedReason(s.Name, s.Modules.Count);
+        var deleteBlocked = SystemRules.DeleteBlockedReason(s.Name, await CountUsage(db, s.Id, ct));
 
         return new SystemDetail(
             s.Id,

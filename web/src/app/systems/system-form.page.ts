@@ -17,7 +17,7 @@ import type {
 } from '../api/types';
 import { AuthService } from '../core/auth.service';
 import { lifecycleLabels, lifecycleOptions, systemTypeLabels, systemTypeOptions } from '../core/labels';
-import { ProblemInfo, toProblem } from '../core/problem';
+import { ProblemInfo, STALE_VERSION, toProblem } from '../core/problem';
 import { SystemsApi } from './systems.api';
 
 @Component({
@@ -38,6 +38,7 @@ export class SystemFormPage implements OnInit {
   protected readonly lifecycleOptions = lifecycleOptions;
   protected readonly typeLabels = systemTypeLabels;
   protected readonly typeOptions = systemTypeOptions;
+  protected readonly staleVersion = STALE_VERSION;
 
   protected readonly form = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] }),

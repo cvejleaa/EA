@@ -37,11 +37,17 @@ public sealed class SystemRulesTests
         Assert.Null(SystemRules.ValidateParent(Self, 0, Other, new ParentInfo(Other, "Nordlys", null)));
 
     [Fact]
-    public void Sletning_blokeres_kun_af_moduler()
-    {
-        Assert.Null(SystemRules.DeleteBlockedReason("Nordlys", 0));
-        Assert.Equal("Nordlys har moduler (1) — flyt eller slet dem først.", SystemRules.DeleteBlockedReason("Nordlys", 1));
-    }
+    public void Sletning_er_tilladt_naar_intet_afhaenger_af_systemet() =>
+        Assert.Null(SystemRules.DeleteBlockedReason("Nordlys", new SystemUsage(0, 0, 0)));
+
+    [Theory]
+    [InlineData(1, 0, 0, "Nordlys har moduler (1) — flyt eller slet dem først, eller sæt status til Nedlagt.")]
+    [InlineData(0, 2, 0, "Nordlys indgår i integrationer (2) — flyt eller slet dem først, eller sæt status til Nedlagt.")]
+    [InlineData(0, 0, 3, "Nordlys er platform for integrationer (3) — flyt eller slet dem først, eller sæt status til Nedlagt.")]
+    [InlineData(1, 2, 3,
+        "Nordlys har moduler (1) og indgår i integrationer (2) og er platform for integrationer (3) — flyt eller slet dem først, eller sæt status til Nedlagt.")]
+    public void Sletning_blokeres_af_moduler_integrationer_og_platformbrug(int modules, int integrations, int platformFor, string expected) =>
+        Assert.Equal(expected, SystemRules.DeleteBlockedReason("Nordlys", new SystemUsage(modules, integrations, platformFor)));
 
     [Fact]
     public void Samme_person_i_samme_rolle_to_gange_afvises()
