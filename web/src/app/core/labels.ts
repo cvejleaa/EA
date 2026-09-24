@@ -1,4 +1,12 @@
-import type { IntegrationRelation, IntegrationType, LifecycleStatus, SystemRole, SystemType } from '../api/types';
+import type {
+  CapabilityChangeKind,
+  CapabilityImportSummary,
+  IntegrationRelation,
+  IntegrationType,
+  LifecycleStatus,
+  SystemRole,
+  SystemType,
+} from '../api/types';
 
 // Danske visningsnavne. Nøglerne er API'ets enum-værdier; `Record` gør, at en ny værdi i kontrakten
 // giver en kompileringsfejl her, indtil den har fået et navn.
@@ -43,6 +51,13 @@ export const integrationRelationLabels: Record<IntegrationRelation, string> = {
   Intern: 'Internt',
 };
 
+/** Hvad en import gør ved én kapabilitet (tør-kørslens ændringsliste). */
+export const capabilityChangeKindLabels: Record<CapabilityChangeKind, string> = {
+  Ny: 'Ny',
+  Aendret: 'Ændret',
+  Slettes: 'Slettes',
+};
+
 export const lifecycleOptions = Object.keys(lifecycleLabels) as LifecycleStatus[];
 export const integrationTypeOptions = Object.keys(integrationTypeLabels) as IntegrationType[];
 
@@ -52,6 +67,16 @@ export function count(n: number, singular: string, plural: string): string {
 }
 
 /** "Forælder › Modul" for et modul, ellers bare navnet. */
+/** Tør-kørslens (eller importens) tal i ét udsagn, fx "3 nye · 1 ændret · 2 slettes · 10 uændrede". */
+export function importSummaryText(s: CapabilityImportSummary, committed: boolean): string {
+  return [
+    count(s.new, 'ny', 'nye'),
+    count(s.changed, 'ændret', 'ændrede'),
+    `${s.removed} ${committed ? 'slettet' : 'slettes'}`,
+    count(s.unchanged, 'uændret', 'uændrede'),
+  ].join(' · ');
+}
+
 export function systemDisplayName(system: { name: string; parent: { name: string } | null }): string {
   return system.parent ? `${system.parent.name} › ${system.name}` : system.name;
 }

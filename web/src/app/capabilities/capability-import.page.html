@@ -1,0 +1,98 @@
+<section class="page">
+  <a routerLink="/kapabiliteter">← Kapabilitetskortet</a>
+  <h1>Importér kapabilitetskortet</h1>
+
+  <p class="intro">
+    Upload den nye udgave af <strong>hele</strong> kortet som CSV. Kapabiliteter, der ikke står i filen,
+    <strong>slettes</strong>. Start fra en eksport: hent kortet, ret i Excel, og indlæs hele filen igen. Du ser
+    forskellen, før noget gemmes.
+  </p>
+
+  @if (canImport() === false) {
+    <p class="error-text" data-testid="not-allowed">Kun enterprise arkitekten kan importere kortet.</p>
+  } @else if (canImport()) {
+    <div class="row pick">
+      <input type="file" accept=".csv,text/csv" (change)="onFile($event)" data-testid="file" />
+      <button mat-stroked-button type="button" (click)="dryRun()" [disabled]="!file() || busy()" data-testid="dry-run">
+        Kør tør-kørsel
+      </button>
+    </div>
+  }
+
+  @if (problem(); as p) {
+    <div class="problem" role="alert" data-testid="problem">
+      <p>{{ p.message }}</p>
+      @if (p.type === staleDryRun) {
+        <button mat-stroked-button type="button" (click)="dryRun()" data-testid="rerun">Kør tør-kørsel igen</button>
+      }
+    </div>
+  }
+
+  @if (done(); as d) {
+    <p class="success" role="status" data-testid="done">
+      Kortet er importeret: {{ summaryText(d.summary, true) }}. <a routerLink="/kapabiliteter">Se kortet</a>
+    </p>
+  }
+
+  @if (result(); as r) {
+    @if (r.errors.length) {
+      <div data-testid="errors">
+        <p class="error-text">
+          Filen har {{ count(r.errors.length, 'fejl', 'fejl') }}. Ret dem i regnearket, og kør tør-kørslen igen.
+          Intet er gemt.
+        </p>
+        <table class="list">
+          <thead>
+            <tr><th>Linje</th><th>Kolonne</th><th>Fejl</th></tr>
+          </thead>
+          <tbody>
+            @for (e of r.errors; track $index) {
+              <tr><td>{{ e.line }}</td><td>{{ e.column ?? '' }}</td><td>{{ e.message }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <h2>Tør-kørsel</h2>
+      <p data-testid="summary">{{ summaryText(r.summary, false) }}</p>
+      @if (r.summary.largeRemoval) {
+        <p class="warning" role="alert" data-testid="large-removal">
+          Importen sletter {{ r.summary.removed }} af kortets {{ r.summary.currentTotal }} kapabiliteter. Filen skal
+          være hele kortet — er det en delvis fil?
+        </p>
+      }
+      @if (r.changes.length === 0) {
+        <p data-testid="no-changes">Filen er identisk med kortet. Der er intet at importere.</p>
+      } @else {
+        <table class="list" data-testid="changes">
+          <thead>
+            <tr><th>Ændring</th><th>Kode</th><th>Før</th><th>Efter</th></tr>
+          </thead>
+          <tbody>
+            @for (c of r.changes; track c.code) {
+              <tr [class.removed]="c.kind === 'Slettes'">
+                <td>{{ kindLabels[c.kind] }}</td>
+                <td class="code">{{ c.code }}</td>
+                <td>{{ describe(c.before) }}</td>
+                <td>
+                  {{ describe(c.after) }}
+                  @if (descriptionChanged(c.before, c.after)) {
+                    <span class="muted"> · beskrivelse ændret</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+      @if (canCommit()) {
+        <div class="row actions">
+          <button mat-flat-button type="button" (click)="commit()" [disabled]="busy()" data-testid="commit">
+            Gennemfør import
+          </button>
+          <span class="muted">Gemmer præcis det, tør-kørslen viser.</span>
+        </div>
+      }
+    }
+  }
+</section>

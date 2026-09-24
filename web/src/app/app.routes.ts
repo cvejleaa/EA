@@ -27,6 +27,22 @@ export const routes: Routes = [
       },
     ],
   },
+  {
+    path: 'kapabiliteter',
+    canActivate: [authGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./capabilities/capability-map.page').then((m) => m.CapabilityMapPage),
+        title: 'Kapabiliteter',
+      },
+      {
+        path: 'import',
+        loadComponent: () => import('./capabilities/capability-import.page').then((m) => m.CapabilityImportPage),
+        title: 'Importér kapabilitetskortet',
+      },
+    ],
+  },
   { path: '', pathMatch: 'full', redirectTo: 'systemer' },
   { path: '**', redirectTo: 'systemer' },
 ];
