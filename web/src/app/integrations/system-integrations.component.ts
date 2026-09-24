@@ -48,7 +48,7 @@ export class SystemIntegrationsComponent {
       // Tælles på tværs af begge retninger (serveren tager foreningen), så teksten må ikke lyde som en delmængde
       // af kun det sidste tal.
       const n = s.localSolutions;
-      parts.push(`${n} af modparterne er ${n === 1 ? 'en lokal løsning/udtræk' : 'lokale løsninger/udtræk'}`);
+      parts.push(`${n} af modparterne er af typen Lokal løsning/udtræk`);
     }
     if (s.viaPlatform > 0) {
       parts.push(`${count(s.viaPlatform, 'integration går', 'integrationer går')} via platformen`);
@@ -78,7 +78,7 @@ export class SystemIntegrationsComponent {
     return type ? integrationTypeLabels[type] : 'Ikke angivet';
   }
 
-  /** Markeringer, der kræver opmærksomhed: livscyklus ≠ I drift og lokale løsninger (skygge-IT). */
+  /** Markeringer, der kræver opmærksomhed: livscyklus ≠ I drift og typen Lokal løsning/udtræk (skygge-IT). */
   protected flags(system: SystemLink | null): string[] {
     if (!system) {
       return [];

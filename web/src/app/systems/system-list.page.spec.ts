@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { MatSelect } from '@angular/material/select';
 import { provideDanishLocale } from '../core/locale';
 import { Router, provideRouter } from '@angular/router';
 import type { SystemListItem } from '../api/types';
@@ -133,6 +135,11 @@ describe('SystemListPage', () => {
 
     const selected = (f: ComponentFixture<unknown>) =>
       text((f.nativeElement as HTMLElement).querySelector('[data-testid="capability-filter"] .mat-mdc-select-value'));
+    /** Værdierne i kapabilitets-vælgerens menu (også når den er lukket). */
+    const options = (f: ComponentFixture<unknown>) =>
+      (f.debugElement.query(By.css('[data-testid="capability-filter"]')).injector.get(MatSelect).options ?? []).map(
+        (o) => o.value as string,
+      );
 
     it('filtrerer på kapabiliteten fra linket og viser dens navn', async () => {
       const { fixture, systems } = await openWith('cap-K1.1', (r) =>
@@ -141,6 +148,11 @@ describe('SystemListPage', () => {
 
       expect(systems.request.params.get('capabilityId')).toBe('cap-K1.1');
       expect(selected(fixture)).toBe('K1.1 Optagelse');
+      expect(options(fixture)).toEqual(['', 'none', 'cap-K1.1']);
+      // Listen viser alle, der er koblet direkte — ikke overlap-tallet; det siger hjælpelinjen.
+      expect(text((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]'))).toBe(
+        'Viser alle systemer og moduler, der er koblet direkte til kapabiliteten. Overlap på kortet regner et system og dets moduler som ét system og tæller ikke planlagte, udfasede og nedlagte systemer eller systemer af typen Lokal løsning/udtræk med.',
+      );
     });
 
     it('en udgået kapabilitet findes på listen over koblinger, der bør flyttes', async () => {
@@ -169,6 +181,9 @@ describe('SystemListPage', () => {
 
       expect(systems.request.params.get('capabilityId')).toBe('none');
       expect(selected(fixture)).toBe('Ikke angivet (nedlagte undtaget)');
+      // Ingen ekstra "Valgt kapabilitet" med værdien none i menuen.
+      expect(options(fixture)).toEqual(['', 'none']);
+      expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]')).toBeNull();
       // afterEach(http.verify) fejler, hvis kortet blev hentet.
     });
   });

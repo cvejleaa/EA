@@ -64,6 +64,28 @@
       <p class="muted hint" data-testid="hint">
         Systemer kobles til kapabiliteterne på nederste niveau. Klik på én for at se de systemer, der er koblet til den.
       </p>
+      <p class="coverage" data-testid="coverage">
+        Kapabiliteter angivet for {{ t.coverage.covered }} af {{ count(t.coverage.total, 'system og modul', 'systemer og moduler') }}
+        @if (t.coverage.covered < t.coverage.total) {
+          — <a [routerLink]="['/systemer']" [queryParams]="{ capabilityId: 'none' }" data-testid="missing">se de manglende</a>
+        }
+      </p>
+      <div class="row attention-bar">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="toggleOverlap()"
+          [attr.aria-pressed]="overlapOnly()"
+          [class.active]="overlapOnly()"
+          data-testid="overlap-filter"
+        >
+          {{ overlapOnly() ? 'Vis hele kortet' : 'Overlap og planlagte' }}
+        </button>
+        <span class="muted" data-testid="attention-count">
+          {{ count(overlapCount(), 'kapabilitet', 'kapabiliteter') }} med overlap ·
+          {{ plannedCount() }} med et planlagt system oven på et aktivt
+        </span>
+      </div>
       @if (t.toMove.length) {
         <section class="to-move" aria-labelledby="to-move-heading" data-testid="to-move">
           <h2 id="to-move-heading">Koblinger, der bør flyttes ({{ t.toMove.length }})</h2>
@@ -90,21 +112,62 @@
           </ul>
         </section>
       }
-      <ul class="tree" data-testid="tree">
-        @for (n of t.items; track n.id) {
-          <li [style.padding-left.px]="n.depth * 24" [class.top]="n.depth === 0">
-            <span class="code">{{ n.code }}</span>&ngsp;
-            @if (n.selectable) {
-              <a class="name" [routerLink]="['/systemer']" [queryParams]="{ capabilityId: n.id }">{{ n.name }}</a>
-            } @else {
-              <span class="name">{{ n.name }}</span>
-            }
-            @if (n.description) {
-              <span class="description muted">{{ n.description }}</span>
-            }
-          </li>
+      <ng-template #overlapDetails let-n>
+        @for (b of badges(n.overlap); track b) {
+          &ngsp;<span class="badge" data-testid="badge">{{ b }}</span>
         }
-      </ul>
+        @if (needsAttention(n)) {
+          <span class="members muted" data-testid="members">
+            Systemer:
+            @for (m of n.overlap.members; track m.id; let last = $last) {
+              <a [routerLink]="['/systemer', m.id]">{{ memberText(m) }}</a>{{ last ? '' : ', ' }}
+            }
+          </span>
+        }
+      </ng-template>
+      @if (overlapOnly()) {
+        @if (attention().length) {
+          <p class="muted">
+            Et system og dets moduler tæller som ét system. Planlagte, udfasede og nedlagte systemer og systemer af typen
+            Lokal løsning/udtræk tæller ikke med — de står med årsag i parentes.
+          </p>
+          <ul class="tree flat" data-testid="attention">
+            @for (n of attention(); track n.id) {
+              <li>
+                <span class="code">{{ n.code }}</span>&ngsp;<a
+                  class="name"
+                  [routerLink]="['/systemer']"
+                  [queryParams]="{ capabilityId: n.id }"
+                  >{{ n.name }}</a
+                >
+                @if (n.path) {
+                  <span class="muted"> · {{ n.path }}</span>
+                }
+                <ng-container *ngTemplateOutlet="overlapDetails; context: { $implicit: n }" />
+              </li>
+            }
+          </ul>
+        } @else {
+          <p data-testid="no-attention">Ingen kapabiliteter har overlap eller et planlagt system oven på et aktivt.</p>
+        }
+      } @else {
+        <ul class="tree" data-testid="tree">
+          @for (n of t.items; track n.id) {
+            <li [style.padding-left.px]="n.depth * 24" [class.top]="n.depth === 0">
+              <span class="code">{{ n.code }}</span>&ngsp;
+              @if (n.selectable) {
+                <a class="name" [routerLink]="['/systemer']" [queryParams]="{ capabilityId: n.id }">{{ n.name }}</a>
+              } @else {
+                <span class="name">{{ n.name }}</span>
+              }
+              <ng-container *ngTemplateOutlet="overlapDetails; context: { $implicit: n }" />
+              @if (n.description) {
+                <span class="description muted">{{ n.description }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
     }
   } @else if (!error()) {
     <p class="muted">Henter…</p>

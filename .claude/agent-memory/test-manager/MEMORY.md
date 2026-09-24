@@ -600,3 +600,69 @@ overlap er null (`En_kobling_der_boer_flyttes_vurderes_ikke`-testen), og `ToDto`
 FØR testene kan afsløre noget. Brug i stedet en betingelse compileren ikke kan bevise er
 konstant (fx `Environment.TickCount == -1`, eller fjern selve linjen/branchen helt i stedet
 for at "slukke" den med en litteral).
+
+**Samme fælde i Angular-templates**: `@if (false) { … c.ownExclusion … }` fejler builden med
+TS2531/TS2538 ("Object is possibly 'null'"), fordi typeindsnævringen fra `@if (c.ownExclusion)`
+forsvinder, men resten af blokken stadig bruger `c.ownExclusion` unarrowed. Brug i stedet en
+runtime-falsk, ikke-compiletids-bevislig betingelse, fx `c.ownExclusion && c.ownExclusion.length < 0`
+(bevarer narrowing), i stedet for at erstatte hele udtrykket med `false`.
+
+## Fund d2a134a (delopgave 3c-web, EA-register): overlap og dækning på kortet og systemsiden — meget stærk kerne, ingen blokerende huller
+
+Baseline: `npx ng test --watch=false` (web/, Node 24, `npm install` først i worktree'en) 114/114
+i 12 filer. `npm run lint` og `npm run build` grønne. Kørte 13 mutationer i
+`capability-map.page.ts/.html` og `system-detail.page.ts/.html` og `system-list.page.html` —
+**alle 13 dræbt præcist**, ofte af netop ÉN linje i den relevante nye test:
+
+1. `badges()`s `count(o.counted, 'system', 'systemer')`-argumentrækkefølge byttet (isOverlap-badge) → dræbt
+   (`'Overlap · 2 system'` mod ventet `'2 systemer'`, counted=2 i fixturet).
+2. Samme bytte på `count(o.planned, 'planlagt system', 'planlagte systemer')` (plannedOnTopOfActive-badge) →
+   dræbt (K1.1 planned=1 forventer ental, blev flertal).
+3. `memberText()` (kort) uden exclusion-parentes → dræbt (`'Systemer: Kompas, ..., Rune, Ugle'` mod ventet
+   `'Rune (planlagt), Ugle (udfases)'`).
+4. Dæknings-linjens link-betingelse `t.coverage.covered < t.coverage.total` → `true` → dræbt (linket
+   "se de manglende" dukkede op selv ved 8/8 dækket).
+5. `attention`-computed'ens `|| n.overlap.plannedOnTopOfActive`-gren fjernet (kun `isOverlap` tilbage) →
+   dræbt (K2.1, som KUN har `plannedOnTopOfActive`, forsvandt fra både filter-visningen og
+   attention-count).
+6. `toggleOverlap()`s `router.navigate(...)`-kald fjernet (kun signalet sat) → dræbt
+   (`navigate`-spy'en blev aldrig kaldt — retter IKKE URL'en, kun den lokale tilstand).
+7. Initial `overlapOnly`-signal hardkodet til `false` i stedet for at læse
+   `route.snapshot.queryParamMap.get('overlap') === '1'` → dræbt (testen, der navigerer direkte til
+   `/?overlap=1` og forventer filtreret visning fra start, fanger det).
+8. `system-detail.page.ts`s `hasShared()` → altid `false` OG altid `true` (begge retninger) → begge dræbt
+   (shared-hint vises/skjules forkert i hver sin test).
+9. `system-detail.page.html`s `c.heldBy ? c.heldBy.name : 'Dette system'` → altid `'Dette system'` → dræbt
+   (modul-testen forventer `'Løn tæller ikke med...'`, ikke `'Dette system tæller ikke med...'`).
+10. `@if (c.sharedWith.length)` → falsk → dræbt (tom "Deles med"-tekst mod ventet indhold).
+11. `@if (c.ownExclusion)` → falsk (se narrowing-fælden ovenfor) → dræbt.
+12. `system-list.page.html`s NYE `capability-help`-betingelse (linje 76, `&& filter().capabilityId !== 'none'`
+    fjernet) → dræbt af den eksisterende `none`-test, som eksplicit forventer `capability-help` er `null`.
+13. `attention-count`s `count(overlapCount(), 'kapabilitet', 'kapabiliteter')`-argumenter byttet → dræbt
+    (overlapCount=1, forventer ental "1 kapabilitet", fik "1 kapabiliteter").
+
+**Bekræftet ubetinget: `overlapExclusionLabels['Nedlagt']` er utestet i denne PR.** Ændrede værdien til en
+tydeligt forkert streng → 114/114 forblev grønt. Alle fixtures i denne PR bruger kun `Planlagt`,
+`Udfases` og `LokalLoesning` (kort + systemside). Lav risiko (samme mekanisme, 3/4 værdier ER dækket via
+samme opslagstabel — en generel `Record`-mutation ville stadig ramme en dækket værdi), men nævnes til
+protokols.
+
+**Bekræftet, PRÆ-EKSISTERENDE, IKKE del af denne PR's diff**: `system-list.page.html:67`s
+`@if (filter().capabilityId && filter().capabilityId !== 'none')`-betingelse omkring den ekstra
+`<mat-option [value]="filter().capabilityId">` (den, der viser navnet på den valgte, ikke-'none'
+kapabilitet) — fjernede kun `&& filter().capabilityId !== 'none'`-halvdelen (beholdt
+`@if (filter().capabilityId)`) → **114/114 forblev grønt**. Bekræftet identisk på `origin/main` (samme
+linjer, ordret) — IKKE introduceret eller rørt af 3c-web-diffen (kun linje 76's NYE `capability-help`-
+betingelse, som bruger samme mønster, ER dækket, se mutation 12 ovenfor). Mekanisme: ved `capabilityId
+=== 'none'` ville denne mutation tilføje en ANDEN `<mat-option value="none">` (dublet af den faste
+"Ikke angivet"-option lige over), men ingen test tjekker antallet af `<mat-option>`-elementer eller at der
+IKKE findes en dubleret 'none'-værdi — kun den viste tekst (`selected(fixture)`), som tilsyneladende
+forbliver korrekt uanset dubletten. Hører IKKE til denne PR's dækning (linjen er urørt), men er en reel,
+selvstændig test-gæld i `system-list.page.spec.ts` — mangler fx en test, der vælger en kapabilitet, sætter
+filteret til `'none'`, og tjekker `querySelectorAll('mat-option').length` (eller fravær af en dubleret
+'none'-option), i stedet for kun den synlige tekst.
+
+**Konklusion:** ingen blokerende huller i selve 3c-web-ændringen. Testene rammer indhold (ental/flertal på
+tal, EKSAKTE exclusion-labels, ikke bare "der står noget"), bruger rige fixtures (4 kapabiliteter med
+forskellige overlap-kombinationer, ikke ét tomt træ), og dækker eksplicit initial `?overlap=1` via
+`Router.navigateByUrl` FØR komponenten oprettes. Klar til at lande.

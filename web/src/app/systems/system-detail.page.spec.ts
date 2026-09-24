@@ -133,4 +133,57 @@ describe('SystemDetailPage', () => {
 
     expect(text(q(f, '[role="alert"]'))).toBe('Systemet er ændret af en anden.');
   });
+
+  describe('overlap på systemsiden', () => {
+    it('"Deles med" er neutral information med links, og det siges, når en kobling ikke tæller med', async () => {
+      const loen = { id: 'sys-l', name: 'Løn' };
+      const own = systemCapability('K1.1', null, { name: 'Optagelse' });
+      const viaModule = systemCapability('K2.1', loen, { name: 'Løn og personale' });
+      const f = await render(
+        systemDetail({
+          modules: [{ id: loen.id, name: loen.name, lifecycleStatus: 'IDrift' }],
+          capabilities: [
+            {
+              ...own,
+              ownExclusion: 'Udfases',
+              sharedWith: [
+                { id: 'sys-k', name: 'Kompas', exclusion: null },
+                { id: 'sys-u', name: 'Ugle', exclusion: 'Udfases' },
+              ],
+            },
+            { ...viaModule, ownExclusion: 'LokalLoesning', sharedWith: [] },
+          ],
+        }),
+      );
+
+      const items = Array.from(q(f, '[data-testid="capabilities"]')!.querySelectorAll('li'));
+      const shared = items[0].querySelector('[data-testid="shared-with"]')!;
+      expect(text(shared)).toBe('Deles med: Kompas, Ugle (udfases)');
+      expect(Array.from(shared.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/systemer/sys-k',
+        '/systemer/sys-u',
+      ]);
+      // Neutral, ikke en fejl: en forvalter må ikke fristes til at fjerne en korrekt kobling.
+      expect(shared.classList.contains('muted')).toBe(true);
+      expect(q(f, '[role="alert"]')).toBeNull();
+      expect(text(items[0].querySelector('[data-testid="own-exclusion"]'))).toBe(
+        'Dette system tæller ikke med i overlap (udfases).',
+      );
+      expect(items[1].querySelector('[data-testid="shared-with"]')).toBeNull();
+      expect(text(items[1].querySelector('[data-testid="own-exclusion"]'))).toBe(
+        'Løn tæller ikke med i overlap (lokal løsning/udtræk).',
+      );
+      expect(text(q(f, '[data-testid="shared-hint"]'))).toBe(
+        '"Deles med" er andre systemer, der er koblet til samme kapabilitet. Et system og dets moduler tæller som ét system.',
+      );
+    });
+
+    it('uden andre systemer på kapabiliteterne er der hverken "Deles med" eller forklaring', async () => {
+      const f = await render(systemDetail({ capabilities: [systemCapability('K1.1')] }));
+
+      expect(q(f, '[data-testid="shared-with"]')).toBeNull();
+      expect(q(f, '[data-testid="own-exclusion"]')).toBeNull();
+      expect(q(f, '[data-testid="shared-hint"]')).toBeNull();
+    });
+  });
 });

@@ -89,9 +89,30 @@
               @if (c.capability.moveReason) {
                 &ngsp;<span class="flag" data-testid="move-reason">{{ moveReasonLabels[c.capability.moveReason] }}</span>
               }
+              @if (c.sharedWith.length) {
+                <span class="shared muted" data-testid="shared-with">
+                  Deles med:
+                  @for (m of c.sharedWith; track m.id; let last = $last) {
+                    <a [routerLink]="['/systemer', m.id]">{{ memberText(m) }}</a>{{ last ? '' : ', ' }}
+                  }
+                </span>
+              }
+              @if (c.ownExclusion) {
+                <span class="shared muted" data-testid="own-exclusion"
+                  >{{ c.heldBy ? c.heldBy.name : 'Dette system' }} tæller ikke med i overlap ({{
+                    exclusionLabels[c.ownExclusion]
+                  }}).</span
+                >
+              }
             </li>
           }
         </ul>
+        @if (hasShared(s)) {
+          <p class="muted hint" data-testid="shared-hint">
+            "Deles med" er andre systemer, der er koblet til samme kapabilitet. Et system og dets moduler tæller som ét
+            system.
+          </p>
+        }
       } @else {
         <p class="missing" data-testid="capabilities-none">Ikke angivet</p>
       }

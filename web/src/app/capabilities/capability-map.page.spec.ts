@@ -1,8 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
-import type { CapabilityTreeResponse } from '../api/types';
+import { Router, provideRouter } from '@angular/router';
+import type { CapabilityOverlap, CapabilityTreeResponse } from '../api/types';
 import { provideDanishLocale } from '../core/locale';
 import { capabilityNode, capabilityTree, settle, text } from '../testing/fixtures';
 import { CapabilityMapPage } from './capability-map.page';
@@ -238,5 +238,153 @@ describe('CapabilityMapPage', () => {
     await settle(f);
 
     expect(clicked).toEqual(['kapabiliteter-2026-09-24.csv']);
+  });
+
+  describe('overlap og dækning', () => {
+    const overlap = (o: Partial<CapabilityOverlap>): CapabilityOverlap => ({
+      counted: 1,
+      planned: 0,
+      isOverlap: false,
+      plannedOnTopOfActive: false,
+      members: [],
+      ...o,
+    });
+
+    /** K1.1: overlap og et planlagt oven på. K1.2: ét system. K2.1: kun et planlagt oven på et aktivt. */
+    const map = (): CapabilityTreeResponse => ({
+      ...capabilityTree([
+        capabilityNode('K1', 0, { name: 'Uddannelse' }),
+        capabilityNode('K1.1', 1, {
+          name: 'Optagelse',
+          path: 'Uddannelse',
+          selectable: true,
+          overlap: overlap({
+            counted: 2,
+            planned: 1,
+            isOverlap: true,
+            plannedOnTopOfActive: true,
+            members: [
+              { id: 'sys-k', name: 'Kompas', exclusion: null },
+              { id: 'sys-hr', name: 'Nordlys › HR', exclusion: null },
+              { id: 'sys-r', name: 'Rune', exclusion: 'Planlagt' },
+              { id: 'sys-u', name: 'Ugle', exclusion: 'Udfases' },
+              { id: 'sys-x', name: 'Xylo', exclusion: 'LokalLoesning' },
+              { id: 'sys-g', name: 'Gamle', exclusion: 'Nedlagt' },
+            ],
+          }),
+        }),
+        capabilityNode('K1.2', 1, {
+          name: 'Undervisning',
+          path: 'Uddannelse',
+          selectable: true,
+          overlap: overlap({ members: [{ id: 'sys-k', name: 'Kompas', exclusion: null }] }),
+        }),
+        capabilityNode('K2', 0, { name: 'Forskning' }),
+        capabilityNode('K2.1', 1, {
+          name: 'Laboratorier',
+          path: 'Forskning',
+          selectable: true,
+          overlap: overlap({
+            planned: 2,
+            plannedOnTopOfActive: true,
+            members: [
+              { id: 'sys-l', name: 'Laborant', exclusion: null },
+              { id: 'sys-a', name: 'Alfa', exclusion: 'Planlagt' },
+              { id: 'sys-b', name: 'Beta', exclusion: 'Planlagt' },
+            ],
+          }),
+        }),
+      ]),
+      coverage: { covered: 6, total: 8 },
+    });
+
+    const row = (f: ComponentFixture<unknown>, code: string) =>
+      Array.from(el(f).querySelectorAll('li')).find((li) => text(li.querySelector('.code')) === code)!;
+    const badges = (li: Element) => Array.from(li.querySelectorAll('[data-testid="badge"]')).map((b) => text(b));
+
+    it('dæknings-linjen siger X af Y systemer og moduler og linker til de manglende', async () => {
+      const f = await render(map());
+
+      expect(text(q(f, '[data-testid="coverage"]'))).toBe(
+        'Kapabiliteter angivet for 6 af 8 systemer og moduler — se de manglende',
+      );
+      expect(q(f, '[data-testid="missing"]')?.getAttribute('href')).toBe('/systemer?capabilityId=none');
+    });
+
+    it('når alle er dækket, er der intet link til de manglende', async () => {
+      const f = await render({ ...map(), coverage: { covered: 8, total: 8 } });
+
+      expect(text(q(f, '[data-testid="coverage"]'))).toBe('Kapabiliteter angivet for 8 af 8 systemer og moduler');
+      expect(q(f, '[data-testid="missing"]')).toBeNull();
+    });
+
+    it('bladene viser serverens mærker og navnene — grupper og blade uden noget at tale om viser intet', async () => {
+      const f = await render(map());
+
+      expect(badges(row(f, 'K1.1'))).toEqual(['Overlap · 2 systemer', '1 planlagt system oven på et aktivt']);
+      const members = row(f, 'K1.1').querySelector('[data-testid="members"]')!;
+      // Alle fire årsager står med deres danske ord.
+      expect(text(members)).toBe(
+        'Systemer: Kompas, Nordlys › HR, Rune (planlagt), Ugle (udfases), Xylo (lokal løsning/udtræk), Gamle (nedlagt)',
+      );
+      expect(Array.from(members.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/systemer/sys-k',
+        '/systemer/sys-hr',
+        '/systemer/sys-r',
+        '/systemer/sys-u',
+        '/systemer/sys-x',
+        '/systemer/sys-g',
+      ]);
+      expect(badges(row(f, 'K2.1'))).toEqual(['2 planlagte systemer oven på et aktivt']);
+      for (const code of ['K1', 'K1.2', 'K2']) {
+        expect(badges(row(f, code)), code).toEqual([]);
+        expect(row(f, code).querySelector('[data-testid="members"]'), code).toBeNull();
+      }
+      expect(text(q(f, '[data-testid="attention-count"]'))).toBe(
+        '1 kapabilitet med overlap · 2 med et planlagt system oven på et aktivt',
+      );
+    });
+
+    it('"Overlap og planlagte" viser kun dem, der skal tales om, og står i URL\'en', async () => {
+      const f = await render(map());
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      const pressed = () => q(f, '[data-testid="overlap-filter"]')!.getAttribute('aria-pressed');
+      expect(pressed()).toBe('false');
+
+      (q(f, '[data-testid="overlap-filter"]') as HTMLButtonElement).click();
+      await settle(f);
+      expect(pressed()).toBe('true');
+
+      expect(q(f, '[data-testid="tree"]')).toBeNull();
+      const items = Array.from(q(f, '[data-testid="attention"]')!.querySelectorAll(':scope > li'));
+      expect(items.map((li) => text(li.querySelector('.code')))).toEqual(['K1.1', 'K2.1']);
+      expect(text(items[0])).toContain('Optagelse · Uddannelse');
+      expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: { overlap: 1 } }));
+      expect(text(q(f, '[data-testid="overlap-filter"]'))).toBe('Vis hele kortet');
+
+      (q(f, '[data-testid="overlap-filter"]') as HTMLButtonElement).click();
+      await settle(f);
+      expect(q(f, '[data-testid="tree"]')).not.toBeNull();
+      expect(pressed()).toBe('false');
+      expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: { overlap: null } }));
+    });
+
+    it('et link med ?overlap=1 åbner direkte i filteret — og siger det, hvis der intet er', async () => {
+      await TestBed.inject(Router).navigateByUrl('/?overlap=1');
+      const f = await render(capabilityTree([capabilityNode('K1', 0), capabilityNode('K1.1', 1, { selectable: true })]));
+
+      expect(q(f, '[data-testid="tree"]')).toBeNull();
+      expect(text(q(f, '[data-testid="no-attention"]'))).toBe(
+        'Ingen kapabiliteter har overlap eller et planlagt system oven på et aktivt.',
+      );
+    });
+
+    it('ordene "løsninger" og "familie" står ikke på kortet', async () => {
+      const f = await render(map());
+      (q(f, '[data-testid="overlap-filter"]') as HTMLButtonElement).click();
+      await settle(f);
+
+      expect(text(el(f))).not.toMatch(/løsninger|famili/i);
+    });
   });
 });

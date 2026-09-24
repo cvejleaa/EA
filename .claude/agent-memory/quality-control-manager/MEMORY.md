@@ -470,3 +470,48 @@ counted=0, planned=1, plannedOnTopOfActive=FALSE — modsat Kompas Sag/Studium: 
   resultat (Missing() udelukker nedlagte pr. definition) — logisk konsekvent med den nye label "Ikke angivet
   (nedlagte undtaget)", ingen modsigelse, men listen har ingen forklarende tomme-tilstand for netop DENNE
   filterkombination. Lav risiko, ingen handling krævet nu.
+
+## Kode-gennemgang delopg. 3c-web (d2a134a, PR #13, branch claude/trusting-brahmagupta-4v2ukj) — kun web
+Konklusion: GOD AT LANDE. Ingen blokerende fund. Verificeret ved kørsel (node24 via /opt/nvm — installeret i
+denne session, se note nedenfor): `ng lint` ren, 114/114 web-tests grønne (op fra 106), `ng build` OK,
+`npm run gen:api` mod kørende dev-API (:5080) uden diff (kontrakt i sync, ingen ny DTO i denne skive — 3c-2's
+DTO'er genbruges råt).
+- Alle plan-punkter E/F/I/J/K/N er ført ind, ikke kun i tekst men i data-flow: dæknings-linjen
+  (`t.coverage.covered/total`) og "se de manglende"-linket (`/systemer?capabilityId=none`) bruger BEGGE
+  serverens `CapabilityQueries.Missing()` uændret fra 3c-2 (ingen ny klient-beregning). Badge og medlemsliste på
+  kortet læses fra SAMME `n.overlap`-objekt (badges()/memberText() er rene formatter-funktioner, ingen egen
+  tælling) — kan pr. konstruktion ikke modsige hinanden.
+- LUKKER to tidligere noterede fund fra denne fil: (1) "familie" om system+moduler → omdøbt til "Kapabiliteter
+  via forælder eller moduler" (system-form.page.html) og "Et system og dets moduler tæller som ét system"
+  (system-detail, capability-map); (2) "lokale løsninger/udtræk" (flertal) i system-integrations.component.ts →
+  "af typen Lokal løsning/udtræk" (ental, enum-navnet), MED en positiv OG en negativ test
+  (`not.toContain('løsninger')` og en tilsvarende regex-test på hele kortsiden `not.toMatch(/løsninger|famili/i)`
+  efter toggle) — godt mønster, genkender på fravær af det forbudte ord over HELE sidens tekst, ikke kun én linje.
+- Own-exclusion-teksten skelner korrekt mellem egen kobling og familiens: `c.heldBy` er null for systemets EGEN
+  kobling → "Dette system tæller ikke med i overlap (…)"; for en kobling arvet fra forælder/modul → "{modulnavn}
+  tæller ikke med i overlap (…)". Testet eksplicit begge grene i samme test (system-detail.page.spec.ts) — det
+  var netop den fælde, opgaven bad om at tjekke.
+- "Deles med" og own-exclusion er bekræftet NEUTRAL, ikke en fejl: `.shared`/`.muted`-klasse (ingen
+  error-container-farve som `.flag`/moveReason bruger), `role="alert"` bekræftet FRAVÆRENDE i testen. God
+  adskillelse af "informativ" vs. "kræver handling"-styling på samme skærm.
+- Toggle "Overlap og planlagte" bruger `router.navigate(..., replaceUrl: true)` — SAMME etablerede mønster som
+  system-list.page.ts's søge-/dropdown-filtre (allerede godkendt tidligere, ikke nyt). Gennemgået: browser-tilbage
+  virker korrekt, fordi replaceUrl ændrer URL'en på den SIDDENDE historik-post (så et link/tilbage til den post
+  stadig bærer `?overlap=1`); komponenten gendannes fra `route.snapshot` ved ny instansiering (væk fra og tilbage
+  til siden), ikke fra en løbende subscription — testet eksplicit at `?overlap=1` i URL'en giver korrekt
+  starttilstand ved direkte navigation. INGEN ny historik-post pr. toggle-klik (bevidst, matcher eksisterende
+  filter-mønster; forskellige toggle-tilstande er ikke hver sin "tilbage"-destination) — konsistent, ikke en fejl.
+- IKKE-BLOKERENDE (test-hul, værd at nævne for Test Manager): `[attr.aria-pressed]="overlapOnly()"` findes i
+  HTML'en (functionelt korrekt — Angular sætter "true"/"false"-strengen på selve DOM-attributten for boolean attr-
+  bindings, fjerner den ikke ved false), men INGEN test læser selve attributværdien (kun knappens synlige tekst
+  testes). En mutation, der fjerner bindingen eller bytter den om, ville ikke blive fanget af nuværende suite.
+  Foreslå: en test der læser `button.getAttribute('aria-pressed')` før/efter klik.
+- MINDRE (ikke blokerende, ren tekstnuance): attention-linjen "N kapabilitet(er) med overlap · M med et planlagt
+  system oven på et aktivt" udelader ordet "kapabilitet(er)" i andet led (kun tallet M) — grammatisk gyldigt (der
+  refereres til "kapabiliteter" implicit fra sætningens opbygning), men lidt tættere formuleret end første led.
+  Ikke en fejl, bare en mulig fremtidig klarhedsforbedring hvis nogen render tvivl.
+- Node-miljø: dette sandbox havde hverken node24 (kun node22 forudinstalleret) — løst med `nvm install 24` via
+  `/opt/nvm` (NVM_DIR=/opt/nvm, IKKE $HOME/.nvm — bash -lc og efterfølgende separate Bash-kald har forskellige
+  shell-init, så `source ~/.nvm/nvm.sh` fejlede i et senere kald selvom installationen lykkedes). Genbrug denne
+  opskrift (`export NVM_DIR=/opt/nvm; . "$NVM_DIR/nvm.sh"; nvm use 24`) i stedet for at gengive node22-fejlen som
+  et kodeproblem.

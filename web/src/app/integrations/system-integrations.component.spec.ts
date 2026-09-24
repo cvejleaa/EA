@@ -74,7 +74,7 @@ describe('SystemIntegrationsComponent', () => {
     expect(q(f, '[data-testid="direct-db"]')).toBeNull();
   });
 
-  it('tællelinjen nævner lokale løsninger, platformtrafik og direkte databaseadgang, når de findes', async () => {
+  it('tællelinjen nævner lokale løsninger/udtræk, platformtrafik og direkte databaseadgang, når de findes', async () => {
     const f = await render(
       integrations([integrationItem()], {
         summary: { receivers: 1, suppliers: 0, viaPlatform: 2, localSolutions: 1, directDb: 3 },
@@ -82,7 +82,7 @@ describe('SystemIntegrationsComponent', () => {
     );
 
     expect(text(q(f, '[data-testid="summary"]'))).toBe(
-      'Sender data til 1 system · modtager data fra 0 systemer · 1 af modparterne er en lokal løsning/udtræk · 2 integrationer går via platformen',
+      'Sender data til 1 system · modtager data fra 0 systemer · 1 af modparterne er af typen Lokal løsning/udtræk · 2 integrationer går via platformen',
     );
     expect(text(q(f, '[data-testid="direct-db"]'))).toBe('3 integrationer med direkte databaseadgang (brud på API First)');
   });
@@ -93,7 +93,9 @@ describe('SystemIntegrationsComponent', () => {
     );
 
     expect(text(q(f, '[data-testid="direct-db"]'))).toBe('1 integration med direkte databaseadgang (brud på API First)');
-    expect(text(q(f, '[data-testid="summary"]'))).toContain('2 af modparterne er lokale løsninger/udtræk');
+    expect(text(q(f, '[data-testid="summary"]'))).toContain('2 af modparterne er af typen Lokal løsning/udtræk');
+    // Beslutning F: "løsninger" (flertal) må ikke stå på skærmen.
+    expect(text(el(f))).not.toContain('løsninger');
   });
 
   it('tom tilstand lover ikke, at intet hænger på systemet', async () => {
