@@ -338,30 +338,40 @@ public static class SystemEndpoints
         return TypedResults.Ok(await ToDetail(confirmed!, user, auth, db, ct));
     }
 
-    private static async Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
-        Guid id, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct)
-    {
-        var system = await db.Systems.FirstOrDefaultAsync(s => s.Id == id, ct);
-        if (system is null)
+    /// <summary>
+    /// Sletning fjerner systemets koblinger (cascade). Koblingslåsen tages FØR systemrækken — samme rækkefølge som
+    /// formularen og importerne — så en samtidig koblingsimport ikke kan ende i en deadlock.
+    /// </summary>
+    private static Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
+        Guid id, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct) =>
+        db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            return TypedResults.NotFound();
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE", ct);
 
-        if (!(await auth.AuthorizeAsync(user, system, Policies.EditSystem)).Succeeded)
-        {
-            return TypedResults.Forbid();
-        }
+            var system = await db.Systems.FirstOrDefaultAsync(s => s.Id == id, ct);
+            if (system is null)
+            {
+                return (Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>)TypedResults.NotFound();
+            }
 
-        var blocked = SystemRules.DeleteBlockedReason(system.Name, await CountUsage(db, id, ct));
-        if (blocked is not null)
-        {
-            return Problems.Blocked(blocked);
-        }
+            if (!(await auth.AuthorizeAsync(user, system, Policies.EditSystem)).Succeeded)
+            {
+                return TypedResults.Forbid();
+            }
 
-        db.Systems.Remove(system);
-        await db.SaveChangesAsync(ct);
-        return TypedResults.NoContent();
-    }
+            var blocked = SystemRules.DeleteBlockedReason(system.Name, await CountUsage(db, id, ct));
+            if (blocked is not null)
+            {
+                return Problems.Blocked(blocked);
+            }
+
+            db.Systems.Remove(system);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return TypedResults.NoContent();
+        });
 
     private static Task<SystemEntity?> LoadAggregate(IQueryable<SystemEntity> source, Guid id, CancellationToken ct) =>
         source

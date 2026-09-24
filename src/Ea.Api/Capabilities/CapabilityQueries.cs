@@ -19,6 +19,9 @@ public static class CapabilityQueries
             ? s.Modules.All(m => m.CapabilityLinks.Count == 0)
             : s.ParentSystem!.CapabilityLinks.Count == 0);
 
+    /// <summary>Et system, som det vises på skærmen: "Forælder › Modul" for et modul.</summary>
+    public static string DisplayName(string name, string? parent) => parent is null ? name : $"{parent} › {name}";
+
     /// <summary>Systemerne koblet til hver kapabilitet, med fuldt navn og i navneorden.</summary>
     public static async Task<Dictionary<Guid, IReadOnlyList<CoupledSystem>>> CoupledSystemsAsync(EaDbContext db, CancellationToken ct)
     {
@@ -40,7 +43,7 @@ public static class CapabilityQueries
             .ToDictionary(
                 g => g.Key,
                 g => (IReadOnlyList<CoupledSystem>)g
-                    .Select(l => new CoupledSystem(l.Id, l.Parent is null ? l.Name : $"{l.Parent} › {l.Name}"))
+                    .Select(l => new CoupledSystem(l.Id, DisplayName(l.Name, l.Parent)))
                     .OrderBy(s => s.Name, StringComparer.Ordinal)
                     .ThenBy(s => s.Id)
                     .ToList());

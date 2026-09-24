@@ -19,6 +19,13 @@ public static class CouplingCsv
         "AntalPlanlagte", "TællerIkkeMed", "DelesMed", "BørFlyttes", "Systembeskrivelse",
     ];
 
+    /// <summary>
+    /// Kolonnerne om systemet selv, som importen IKKE indlæser (de rettes på systemsiden). Retter nogen dem i filen,
+    /// advarer tør-kørslen — de beregnes af <see cref="SystemValues"/>, samme funktion som eksporten bruger.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SystemColumns =
+        ["Forælder", "Status", "Type", "ForvaltendeTeam", "Forretningsejer", "Systemejer", "SidstBekræftet", "Systembeskrivelse"];
+
     /// <summary>Adskiller systemerne i <c>DelesMed</c> (samme tegn som dataobjekter i integrations-CSV'en).</summary>
     public const string Joiner = IntegrationCsv.DataObjectJoiner;
 
@@ -73,37 +80,50 @@ public static class CouplingCsv
             .Select(r => r.Row));
     }
 
-    private static IReadOnlyList<string?> Row(
+    /// <summary>Værdierne i <see cref="SystemColumns"/>, som eksporten skriver dem for systemet i dag.</summary>
+    public static IReadOnlyDictionary<string, string?> SystemValues(SystemEntity system)
+    {
+        string? Holder(SystemRole role) => system.Roles.FirstOrDefault(r => r.Role == role)?.Person.DisplayName;
+        return new Dictionary<string, string?>
+        {
+            ["Forælder"] = system.ParentSystem?.Name,
+            ["Status"] = system.LifecycleStatus.ToString(),
+            ["Type"] = system.Type?.ToString(),
+            ["ForvaltendeTeam"] = system.ManagingTeam?.Name,
+            ["Forretningsejer"] = Holder(SystemRole.Forretningsejer),
+            ["Systemejer"] = Holder(SystemRole.Systemejer),
+            ["SidstBekræftet"] = system.LastConfirmedAt.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["Systembeskrivelse"] = system.Description,
+        };
+    }
+
+    /// <summary>Tidspunktet i <c>SidstÆndret</c>: importen sammenligner det med systemets, som det er nu.</summary>
+    public static string ChangedToken(SystemEntity system) =>
+        system.UpdatedAt.UtcDateTime.ToString(ChangedFormat, CultureInfo.InvariantCulture);
+
+    private static List<string?> Row(
         SystemEntity system, string name, Capability? capability, string? path, OverlapAssessment? overlap, MoveReason? moveReason)
     {
         var own = overlap?.Members.First(m => m.Holder.SystemId == system.Id);
         var sharedWith = overlap?.Members
             .Where(m => m.Holder.GroupKey != own!.Holder.GroupKey)
             .Select(m => m.Exclusion is { } exclusion ? $"{m.Holder.Name} ({exclusion})" : m.Holder.Name);
-        string? Holder(SystemRole role) => system.Roles.FirstOrDefault(r => r.Role == role)?.Person.DisplayName;
 
-        return
-        [
-            system.Id.ToString(),
-            name,
-            capability?.Code,
-            capability?.Name,
-            path,
-            system.ParentSystem?.Name,
-            system.LifecycleStatus.ToString(),
-            system.Type?.ToString(),
-            system.ManagingTeam?.Name,
-            Holder(SystemRole.Forretningsejer),
-            Holder(SystemRole.Systemejer),
-            system.LastConfirmedAt.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            system.UpdatedAt.UtcDateTime.ToString(ChangedFormat, CultureInfo.InvariantCulture),
-            overlap is null ? null : overlap.IsOverlap ? "Ja" : "Nej",
-            overlap?.Counted.ToString(CultureInfo.InvariantCulture),
-            overlap?.Planned.ToString(CultureInfo.InvariantCulture),
-            own?.Exclusion?.ToString(),
-            sharedWith is null ? null : string.Join(Joiner, sharedWith),
-            moveReason?.ToString(),
-            system.Description,
-        ];
+        var values = new Dictionary<string, string?>(SystemValues(system))
+        {
+            ["SystemId"] = system.Id.ToString(),
+            ["FuldtNavn"] = name,
+            ["Kode"] = capability?.Code,
+            ["Kapabilitet"] = capability?.Name,
+            ["Sti"] = path,
+            ["SidstÆndret"] = ChangedToken(system),
+            ["Overlap"] = overlap is null ? null : overlap.IsOverlap ? "Ja" : "Nej",
+            ["SystemerDerTæller"] = overlap?.Counted.ToString(CultureInfo.InvariantCulture),
+            ["AntalPlanlagte"] = overlap?.Planned.ToString(CultureInfo.InvariantCulture),
+            ["TællerIkkeMed"] = own?.Exclusion?.ToString(),
+            ["DelesMed"] = sharedWith is null ? null : string.Join(Joiner, sharedWith),
+            ["BørFlyttes"] = moveReason?.ToString(),
+        };
+        return Header.Select(column => values[column]).ToList();
     }
 }

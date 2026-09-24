@@ -1039,6 +1039,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/capabilities/couplings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: {
+                    dryRun?: boolean;
+                    fingerprint?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "text/csv": string;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CouplingImportResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1134,6 +1185,46 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        CouplingChange: {
+            kind: components["schemas"]["CouplingChangeKind"];
+            system: components["schemas"]["CoupledSystem"];
+            code: string;
+            name: string;
+            path: string;
+            changedSinceExport: boolean;
+        };
+        /** @enum {unknown} */
+        CouplingChangeKind: "Fjernes" | "Tilfoejes";
+        CouplingImportResult: {
+            committed: boolean;
+            errors: components["schemas"]["ImportRowError"][];
+            warnings: components["schemas"]["ImportRowError"][];
+            summary: components["schemas"]["CouplingImportSummary"];
+            changes: components["schemas"]["CouplingChange"][];
+            notInFile: components["schemas"]["CoupledSystem"][];
+            fingerprint: null | string;
+        };
+        CouplingImportSummary: {
+            /** Format: int32 */
+            systemsInFile: number;
+            /** Format: int32 */
+            systemsChanged: number;
+            /** Format: int32 */
+            added: number;
+            /** Format: int32 */
+            removed: number;
+            /** Format: int32 */
+            unchanged: number;
+            /** Format: int32 */
+            systemsCleared: number;
+            largeRemoval: boolean;
+            /** Format: int32 */
+            systemsChangedSinceExport: number;
+            /** Format: int32 */
+            systemsNotInFile: number;
+            /** Format: int32 */
+            ignoredEdits: number;
         };
         CreateDataObjectRequest: {
             name: null | string;
