@@ -41,7 +41,7 @@ public static class CouplingCsv
     /// </summary>
     /// <param name="systems">Alle systemer med forælder, team, roller (med person) og koblinger indlæst.</param>
     /// <param name="capabilities">Hele kortet, også udgåede.</param>
-    /// <param name="missing">Systemer uden dækning (<see cref="CapabilityQueries.Uncovered"/>), som skal kobles.</param>
+    /// <param name="missing">Systemer, der mangler at blive koblet (<see cref="CapabilityQueries.Missing"/>).</param>
     public static byte[] Write(
         IReadOnlyCollection<SystemEntity> systems, IReadOnlyCollection<Capability> capabilities, IReadOnlySet<Guid> missing)
     {

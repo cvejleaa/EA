@@ -22,7 +22,7 @@ public static class SystemRules
 
     /// <summary>
     /// Nøglen, overlap samler på: et system og dets moduler (også to søskendemoduler) er ét system. Dækning bruger
-    /// en anden regel — se <c>CapabilityQueries.Uncovered</c>.
+    /// en anden regel — se <c>CapabilityQueries.Missing</c>.
     /// </summary>
     public static Guid OverlapGroupKey(Guid systemId, Guid? parentSystemId) => parentSystemId ?? systemId;
 
