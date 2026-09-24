@@ -1,4 +1,12 @@
-import type { MeResponse, SystemDetail, SystemListItem } from '../api/types';
+import type {
+  IntegrationDto,
+  MeResponse,
+  SystemDetail,
+  SystemIntegrationItem,
+  SystemIntegrationsResponse,
+  SystemLink,
+  SystemListItem,
+} from '../api/types';
 
 // FIKTIVE testdata.
 
@@ -61,4 +69,42 @@ export async function settle(fixture: { whenStable(): Promise<unknown>; detectCh
     await fixture.whenStable();
   }
   fixture.detectChanges();
+}
+
+export function systemLink(name: string, overrides: Partial<SystemLink> = {}): SystemLink {
+  return { id: `id-${name}`, name, parent: null, type: 'Egenudviklet', lifecycleStatus: 'IDrift', ...overrides };
+}
+
+export function integration(overrides: Partial<IntegrationDto> = {}): IntegrationDto {
+  return {
+    id: 'int-1',
+    name: null,
+    from: systemLink('Kompas'),
+    to: systemLink('Laborant'),
+    via: null,
+    type: 'Api',
+    description: null,
+    dataObjects: [],
+    createdAt: '2026-08-01T10:00:00Z',
+    updatedAt: '2026-08-01T10:00:00Z',
+    version: 3,
+    permissions: { canEdit: true },
+    ...overrides,
+  };
+}
+
+export function integrationItem(overrides: Partial<SystemIntegrationItem> = {}): SystemIntegrationItem {
+  return { relation: 'Ud', counterpart: systemLink('Laborant'), localModule: null, integration: integration(), ...overrides };
+}
+
+export function integrations(
+  items: SystemIntegrationItem[] = [],
+  overrides: Partial<SystemIntegrationsResponse> = {},
+): SystemIntegrationsResponse {
+  return {
+    summary: { receivers: 0, suppliers: 0, viaPlatform: 0, localSolutions: 0, directDb: 0 },
+    items,
+    canAdd: false,
+    ...overrides,
+  };
 }

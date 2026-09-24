@@ -5,11 +5,12 @@ import { Router, RouterLink } from '@angular/router';
 import type { LifecycleStatus, PersonDto, SystemDetail, SystemRole, SystemType } from '../api/types';
 import { lifecycleLabels, relativeAge, roleLabels, systemTypeLabels } from '../core/labels';
 import { toProblem } from '../core/problem';
+import { SystemIntegrationsComponent } from '../integrations/system-integrations.component';
 import { SystemsApi } from './systems.api';
 
 @Component({
   selector: 'ea-system-detail-page',
-  imports: [RouterLink, DatePipe, MatButtonModule],
+  imports: [RouterLink, DatePipe, MatButtonModule, SystemIntegrationsComponent],
   templateUrl: './system-detail.page.html',
   styleUrl: './system-detail.page.css',
 })

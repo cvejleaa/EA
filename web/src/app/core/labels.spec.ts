@@ -1,4 +1,4 @@
-import { relativeAge } from './labels';
+import { count, relativeAge, systemDisplayName } from './labels';
 
 describe('relativeAge', () => {
   const now = new Date('2026-09-24T12:00:00Z');
@@ -15,5 +15,22 @@ describe('relativeAge', () => {
     [800, 'for 2 år siden'],
   ])('%i dage → %s', (days, expected) => {
     expect(relativeAge(daysAgo(days), now)).toBe(expected);
+  });
+});
+
+describe('count', () => {
+  it.each([
+    [0, '0 systemer'],
+    [1, '1 system'],
+    [2, '2 systemer'],
+  ])('%i → %s', (n, expected) => {
+    expect(count(n, 'system', 'systemer')).toBe(expected);
+  });
+});
+
+describe('systemDisplayName', () => {
+  it('viser forælder › modul for moduler og ellers navnet', () => {
+    expect(systemDisplayName({ name: 'HR', parent: { name: 'Nordlys' } })).toBe('Nordlys › HR');
+    expect(systemDisplayName({ name: 'Kompas', parent: null })).toBe('Kompas');
   });
 });

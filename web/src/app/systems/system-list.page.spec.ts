@@ -80,6 +80,28 @@ describe('SystemListPage', () => {
     );
   });
 
+  it('"Hent systemliste (CSV)" henter referencelisten og viser en fejl, hvis det ikke lykkes', async () => {
+    const f = await render([listItem()], 1);
+    Object.assign(URL, { createObjectURL: vi.fn().mockReturnValue('blob:s'), revokeObjectURL: vi.fn() });
+    const clicked: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.download);
+    });
+    const button = (f.nativeElement as HTMLElement).querySelector('[data-testid="download-systems"]') as HTMLButtonElement;
+
+    button.click();
+    http.expectOne('/api/systems/export.csv').flush(new Blob(['x'])); // uden Content-Disposition → reservenavnet
+    await settle(f);
+    expect(clicked).toEqual(['systemer.csv']);
+    expect((f.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
+
+    button.click();
+    http.expectOne('/api/systems/export.csv').flush(new Blob(['x']), { status: 500, statusText: 'Fejl' });
+    await settle(f);
+    expect(text((f.nativeElement as HTMLElement).querySelector('[role="alert"]'))).toBe('Uventet fejl (500).');
+    expect(clicked).toEqual(['systemer.csv']);
+  });
+
   it('viser kun "Nyt system", når serveren giver lov', async () => {
     const reader = await render([], 0, false);
     expect(text(reader.nativeElement as HTMLElement)).not.toContain('Nyt system');

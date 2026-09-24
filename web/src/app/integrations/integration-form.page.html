@@ -1,0 +1,139 @@
+<section class="page">
+  <a [routerLink]="['/systemer', id()]" class="back">← Tilbage til {{ system()?.name ?? 'systemet' }}</a>
+  <h1>{{ isEdit() ? 'Rediger integration' : 'Ny integration for ' + (system()?.name ?? '') }}</h1>
+
+  @if (loadError()) {
+    <p class="error-text" role="alert">{{ loadError() }}</p>
+  }
+
+  @if (!loaded()) {
+    @if (!loadError()) {
+      <p class="muted" data-testid="loading">Henter…</p>
+    }
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="save()" class="form" novalidate>
+      @if (existing(); as i) {
+        <p class="ends" data-testid="ends">
+          Data sendes fra <strong>{{ displayName(i.from) }}</strong> til <strong>{{ displayName(i.to) }}</strong>.
+        </p>
+        <p class="muted">Afsender og modtager kan ikke ændres. Er en af dem forkert, så slet integrationen og opret en ny.</p>
+      } @else {
+        <p class="muted">
+          Retning er <strong>dataflow</strong>: hvor ender data? Henter {{ system()?.name }} data fra et andet system via
+          et API, så <em>modtager</em> {{ system()?.name }} data.
+        </p>
+        <mat-radio-group formControlName="direction" class="row" aria-label="Retning">
+          <mat-radio-button value="sender" data-testid="dir-sender">{{ system()?.name }} sender data til …</mat-radio-button>
+          <mat-radio-button value="modtager" data-testid="dir-receiver">{{ system()?.name }} modtager data fra …</mat-radio-button>
+        </mat-radio-group>
+
+        <mat-form-field>
+          <mat-label>Det andet system</mat-label>
+          <input
+            matInput
+            formControlName="otherSearch"
+            [matAutocomplete]="other"
+            (input)="onSearch($any($event.target).value)"
+            data-testid="other"
+          />
+          <mat-autocomplete #other="matAutocomplete">
+            @for (s of candidates(); track s.id) {
+              <mat-option [value]="displayName(s)" (onSelectionChange)="$event.isUserInput && pickOther(s)">
+                {{ displayName(s) }}
+              </mat-option>
+            }
+          </mat-autocomplete>
+          <mat-hint>Findes listen eller regnearket ikke? Opret det først som system af typen "Lokal løsning/udtræk".</mat-hint>
+          @if (fieldError('toSystemId') || fieldError('fromSystemId'); as err) {
+            <mat-error>{{ err }}</mat-error>
+          }
+        </mat-form-field>
+      }
+
+      <div class="row">
+        <mat-form-field>
+          <mat-label>Type</mat-label>
+          <mat-select formControlName="type">
+            <mat-option value="">Ikke angivet</mat-option>
+            @for (t of typeOptions; track t) {
+              <mat-option [value]="t">{{ typeLabels[t] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Via platform</mat-label>
+          <mat-select formControlName="viaPlatformId" data-testid="via">
+            <mat-option value="">Ingen — direkte</mat-option>
+            @for (p of platforms(); track p.id) {
+              <mat-option [value]="p.id">{{ displayName(p) }}</mat-option>
+            }
+          </mat-select>
+          @if (fieldError('viaPlatformId'); as err) {
+            <mat-hint class="error-text">{{ err }}</mat-hint>
+          }
+        </mat-form-field>
+      </div>
+
+      <mat-form-field>
+        <mat-label>Navn (valgfrit)</mat-label>
+        <input matInput formControlName="name" />
+        <mat-hint>Kun nødvendigt, hvis der er flere flows mellem de samme to systemer, fx "Natlig brugerfil".</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Dataobjekter</mat-label>
+        <mat-select formControlName="dataObjectIds" multiple>
+          @for (o of dataObjects(); track o.id) {
+            <mat-option [value]="o.id">{{ o.name }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>Hvilke slags data flyttes, fx Medarbejder.</mat-hint>
+      </mat-form-field>
+      @if (canManageDataObjects()) {
+        @if (!addingDataObject()) {
+          <button mat-button type="button" (click)="addingDataObject.set(true)">Dataobjektet findes ikke på listen?</button>
+        } @else {
+          <div class="row new-data-object">
+            <mat-form-field>
+              <mat-label>Nyt dataobjekt</mat-label>
+              <input matInput [formControl]="newDataObject" />
+            </mat-form-field>
+            <button mat-stroked-button type="button" (click)="addDataObject()">Tilføj</button>
+            <button mat-button type="button" (click)="addingDataObject.set(false)">Annullér</button>
+          </div>
+        }
+      }
+
+      <mat-form-field>
+        <mat-label>Beskrivelse</mat-label>
+        <textarea matInput formControlName="description" rows="3"></textarea>
+        <mat-hint>Hvad, hvornår og hvorfor — også fx "Planlagt 2027" eller "Skal erstattes af API".</mat-hint>
+      </mat-form-field>
+
+      @if (problem(); as p) {
+        <div class="problem" role="alert" data-testid="problem">
+          <p class="error-text">{{ p.message }}</p>
+          @if (p.type === staleVersion && isEdit()) {
+            <button mat-stroked-button type="button" (click)="reload()">Hent nyeste version (dine ændringer kasseres)</button>
+          }
+        </div>
+      }
+
+      <div class="row actions">
+        <button mat-flat-button type="submit" [disabled]="saving()">{{ isEdit() ? 'Gem ændringer' : 'Opret integration' }}</button>
+        <a mat-button [routerLink]="['/systemer', id()]">Annullér</a>
+        @if (isEdit()) {
+          <span class="spacer"></span>
+          @if (!confirmingDelete()) {
+            <button mat-button type="button" (click)="confirmingDelete.set(true)" data-testid="delete">Slet integration</button>
+          } @else {
+            <span>Slette integrationen permanent?</span>
+            <button mat-flat-button type="button" class="delete-confirm" (click)="delete()" data-testid="delete-confirm">Slet</button>
+            <button mat-button type="button" (click)="confirmingDelete.set(false)">Annullér</button>
+          }
+        }
+      </div>
+    </form>
+  }
+</section>

@@ -1,0 +1,10 @@
+.back { display: inline-block; margin-bottom: 8px; }
+.form { display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+.form > mat-form-field { width: 100%; }
+.row mat-form-field { flex: 1 1 240px; }
+.ends { font: var(--mat-sys-title-small); }
+.new-data-object { padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
+.problem { padding: 8px 12px; border-left: 4px solid var(--mat-sys-error); }
+.actions { margin-top: 16px; }
+.spacer { flex: 1; }
+.delete-confirm { --mat-button-filled-container-color: var(--mat-sys-error); --mat-button-filled-label-text-color: var(--mat-sys-on-error); }

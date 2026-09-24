@@ -10,6 +10,7 @@ import type { LifecycleStatus, SystemListItem, SystemType, TeamDto } from '../ap
 import { AuthService } from '../core/auth.service';
 import { lifecycleLabels, lifecycleOptions, relativeAge, systemTypeLabels, systemTypeOptions } from '../core/labels';
 import { toProblem } from '../core/problem';
+import { IntegrationsApi } from '../integrations/integrations.api';
 import { SystemFilter, SystemsApi } from './systems.api';
 
 const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId'] as const;
@@ -22,6 +23,7 @@ const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId'] as cons
 })
 export class SystemListPage implements OnInit, OnDestroy {
   private readonly api = inject(SystemsApi);
+  private readonly integrationsApi = inject(IntegrationsApi);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -103,6 +105,15 @@ export class SystemListPage implements OnInit, OnDestroy {
       replaceUrl: true,
     });
     void this.load();
+  }
+
+  /** Referencelisten med fulde systemnavne — til den, der udfylder integrations-CSV'en. */
+  protected async downloadSystemList(): Promise<void> {
+    try {
+      await this.integrationsApi.downloadSystemList();
+    } catch (e) {
+      this.error.set(toProblem(e).message);
+    }
   }
 
   protected clearFilters(): void {

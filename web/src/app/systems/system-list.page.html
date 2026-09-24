@@ -2,6 +2,9 @@
   <div class="row header">
     <h1>Systemer</h1>
     <span class="spacer"></span>
+    <button mat-stroked-button type="button" (click)="downloadSystemList()" data-testid="download-systems">
+      Hent systemliste (CSV)
+    </button>
     @if (canCreate()) {
       <a mat-flat-button routerLink="/systemer/ny">Nyt system</a>
     }
