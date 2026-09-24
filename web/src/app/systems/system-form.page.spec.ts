@@ -149,5 +149,7 @@ describe('SystemFormPage', () => {
     await settle(f);
 
     expect(text(f.nativeElement as HTMLElement)).toContain('Et system kan kun have én forretningsejer.');
+    // En valideringsfejl er ikke en konflikt: ingen knap, der tilbyder at kassere brugerens ændringer.
+    expect((f.nativeElement as HTMLElement).querySelector('[data-testid="problem"] button')).toBeNull();
   });
 });

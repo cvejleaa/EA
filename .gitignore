@@ -33,3 +33,6 @@ web/coverage/
 
 # Midlertidige worktrees fra gennemgangsrollerne (fx Test Manager)
 .claude/worktrees/
+
+# Angular-cache, hvis ng køres fra repo-roden
+/.angular/
