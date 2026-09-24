@@ -149,7 +149,22 @@ describe('SystemFormPage', () => {
     await settle(f);
 
     expect(text(f.nativeElement as HTMLElement)).toContain('Et system kan kun have én forretningsejer.');
-    // En valideringsfejl er ikke en konflikt: ingen knap, der tilbyder at kassere brugerens ændringer.
-    expect((f.nativeElement as HTMLElement).querySelector('[data-testid="problem"] button')).toBeNull();
+  });
+
+  it('en valideringsfejl ved redigering tilbyder ikke at kassere ændringerne', async () => {
+    const f = await render(systemDetail());
+    await submit(f);
+    http
+      .expectOne('/api/systems/sys-1')
+      .flush(
+        { title: 'Der er fejl i oplysningerne.', errors: { roles: ['Et system kan kun have én forretningsejer.'] } },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    await settle(f);
+
+    const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
+    expect(text(problem)).toBe('Der er fejl i oplysningerne.');
+    // Kun en konflikt (409) må vise "Hent nyeste version (dine ændringer kasseres)".
+    expect(problem?.querySelector('button')).toBeNull();
   });
 });
