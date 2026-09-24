@@ -7,10 +7,13 @@ namespace Ea.Api.Tests.Infrastructure;
 /// <summary>
 /// Rigtig PostgreSQL pr. test: en skabelon-database migreres én gang pr. kørsel, og hver test får sin egen
 /// kopi (CREATE DATABASE … TEMPLATE). Forbindelsen styres af EA_TEST_CONNECTION (samme standard som CI).
+/// Skabelonen har et unikt navn pr. testproces, så to samtidige kørsler mod samme server (to udviklere,
+/// en worktree, parallelle jobs) ikke sletter hinandens skabelon. Den fjernes igen i <see cref="TestDatabaseLifetime"/>.
 /// </summary>
 public static class TestDatabase
 {
-    private const string TemplateName = "ea_test_template";
+    private const string Prefix = "ea_test_";
+    private static readonly string TemplateName = $"{Prefix}tpl_{Guid.NewGuid():N}";
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static bool _templateReady;
 
@@ -32,7 +35,7 @@ public static class TestDatabase
                 _templateReady = true;
             }
 
-            var name = "ea_test_" + Guid.NewGuid().ToString("N");
+            var name = Prefix + Guid.NewGuid().ToString("N");
             await ExecuteAsync($"CREATE DATABASE \"{name}\" TEMPLATE \"{TemplateName}\"");
             return name;
         }
@@ -44,9 +47,17 @@ public static class TestDatabase
 
     public static Task DropAsync(string name) => ExecuteAsync($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
 
+    /// <summary>Kaldes, når alle tests er kørt.</summary>
+    internal static async Task DropTemplateAsync()
+    {
+        if (_templateReady)
+        {
+            await DropAsync(TemplateName);
+        }
+    }
+
     private static async Task CreateTemplateAsync()
     {
-        await ExecuteAsync($"DROP DATABASE IF EXISTS \"{TemplateName}\" WITH (FORCE)");
         await ExecuteAsync($"CREATE DATABASE \"{TemplateName}\"");
 
         // Uden pooling: skabelonen må ikke have åbne forbindelser, når den kopieres.
@@ -63,4 +74,10 @@ public static class TestDatabase
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
+}
+
+/// <summary>Rydder denne kørsels skabelon-database op, når alle tests er færdige.</summary>
+public sealed class TestDatabaseLifetime : IAsyncDisposable
+{
+    public async ValueTask DisposeAsync() => await TestDatabase.DropTemplateAsync();
 }

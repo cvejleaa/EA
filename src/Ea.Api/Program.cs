@@ -11,6 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEaDatabase(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProblemDetails();
+// Ugyldig JSON/forkerte parametre giver 400 (ikke 500) i alle miljøer — også i Development, hvor
+// minimal APIs ellers kaster og undtagelsen ender som 500 i exception-handleren.
+builder.Services.Configure<RouteHandlerOptions>(o => o.ThrowOnBadRequest = false);
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<EaDbContext>();
 builder.Services.ConfigureHttpJsonOptions(o =>

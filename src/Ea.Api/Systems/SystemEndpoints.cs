@@ -216,7 +216,8 @@ public static class SystemEndpoints
         TimeProvider time,
         CancellationToken ct)
     {
-        var system = await LoadAggregate(db.Systems, id, ct);
+        // Billigt opslag og adgangstjek FØR de dyre operationer (roller, moduler, validering).
+        var system = await db.Systems.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (system is null)
         {
             return TypedResults.NotFound();
@@ -227,7 +228,10 @@ public static class SystemEndpoints
             return TypedResults.Forbid();
         }
 
-        var errors = await Apply(request, system, system.Modules.Count, requireVersion: true, db, ct);
+        await db.Entry(system).Collection(s => s.Roles).LoadAsync(ct);
+        var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
+
+        var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
         if (errors is not null)
         {
             return Problems.Validation(errors);
@@ -292,7 +296,7 @@ public static class SystemEndpoints
     private static async Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
         Guid id, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct)
     {
-        var system = await db.Systems.Include(s => s.Modules).FirstOrDefaultAsync(s => s.Id == id, ct);
+        var system = await db.Systems.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (system is null)
         {
             return TypedResults.NotFound();
@@ -303,7 +307,8 @@ public static class SystemEndpoints
             return TypedResults.Forbid();
         }
 
-        var blocked = SystemRules.DeleteBlockedReason(system.Name, system.Modules.Count);
+        var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
+        var blocked = SystemRules.DeleteBlockedReason(system.Name, moduleCount);
         if (blocked is not null)
         {
             return Problems.Conflict(blocked);
