@@ -429,6 +429,88 @@ public sealed class CouplingTests
         Assert.Fail("Koblingen nåede aldrig at vente på importens lås.");
     }
 
+    /// <summary>
+    /// Den omvendte vej: en kobling er ved at blive gemt, mens en import gennemføres. Importen skal vente på koblingen
+    /// og se, at kapabiliteten nu har en kobling — dvs. tør-kørslen passer ikke længere (409), i stedet for at slette den.
+    /// </summary>
+    [Fact]
+    public async Task En_import_venter_paa_en_samtidig_kobling_og_afvises_naar_toer_koerslen_ikke_passer_mere()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        var withoutK2 = File(("K1", "Uddannelse", null, null), ("K1.2", "Undervisning", "K1", null));
+        var fingerprint = (await admin.DryRunAsync(withoutK2)).Fingerprint; // K2 og K2.1 "slettes" (ingen koblinger).
+
+        await using var coupling = new NpgsqlConnection(app.ConnectionString);
+        await coupling.OpenAsync();
+        await using var transaction = await coupling.BeginTransactionAsync();
+        await Sql(coupling, transaction, "LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE");
+        await Sql(coupling, transaction,
+            $"INSERT INTO ea.system_capabilities (system_id, capability_id) VALUES ('{system.Id}', '{ids["K2.1"]}')");
+
+        var import = admin.PostImportAsync(withoutK2, dryRun: false, fingerprint);
+        await WaitForBlockedLockAsync(coupling, transaction);
+        await transaction.CommitAsync();
+
+        var response = await import;
+        await response.ExpectAsync(HttpStatusCode.Conflict);
+        Assert.Equal(Problems.StaleDryRunType, await response.ProblemTypeAsync());
+        Assert.Contains((await admin.CapabilitiesAsync()).Items, i => i.Code == "K2.1");
+        Assert.Equal([("K2.1", null)], Codes(await admin.GetSystemAsync(system.Id)));
+    }
+
+    [Fact]
+    public async Task Et_system_med_flere_koblinger_der_skal_flyttes_taeller_som_et_system()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        await (await admin.CoupleAsync(system, ids["K1.1.1"], ids["K2.1"])).ExpectAsync(HttpStatusCode.OK);
+
+        // Både K1.1.1 og K2.1 udgår: 2 koblinger, men kun ét system.
+        var preview = await admin.DryRunAsync(File(("K1", "Uddannelse", null, null), ("K1.2", "Undervisning", "K1", null)));
+
+        Assert.Equal((2, 2, 1), (preview.Summary.Retired, preview.Summary.CouplingsToMove, preview.Summary.SystemsToMove));
+    }
+
+    [Fact]
+    public async Task En_udgaaet_kapabilitet_med_koblinger_er_ikke_en_aendring_ved_naeste_import()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Laborant");
+        await (await admin.CoupleAsync(system, ids["K2.1"])).ExpectAsync(HttpStatusCode.OK);
+        var withoutK2 = File(("K1", "Uddannelse", null, null), ("K1.2", "Undervisning", "K1", null));
+        await admin.ImportAsync(withoutK2);
+
+        var again = await admin.DryRunAsync(withoutK2);
+
+        Assert.Empty(again.Changes);
+        Assert.Equal((0, 0, 0), (again.Summary.Retired, again.Summary.Removed, again.Summary.CouplingsToMove));
+    }
+
+    [Fact]
+    public async Task Et_blad_der_allerede_har_faaet_boern_meldes_ikke_igen_ved_naeste_import()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        await (await admin.CoupleAsync(system, ids["K1.2"])).ExpectAsync(HttpStatusCode.OK);
+        var withChild = File(
+            ("K1", "Uddannelse", null, null), ("K1.1", "Studieadministration", "K1", null), ("K1.1.1", "Optagelse", "K1.1", null),
+            ("K1.2", "Undervisning", "K1", null), ("K1.2.1", "Kursusindhold", "K1.2", null),
+            ("K2", "Forskning", null, null), ("K2.1", "Laboratorier", "K2", null));
+        await admin.ImportAsync(withChild);
+
+        var again = await admin.DryRunAsync(withChild);
+
+        // Tør-kørslen melder kun ændringen, da den skete; arbejdslisten på kortet husker den.
+        Assert.Empty(again.Changes);
+        Assert.Equal(0, again.Summary.CouplingsToMove);
+        Assert.Equal("K1.2", Assert.Single((await admin.CapabilitiesAsync()).ToMove).Code);
+    }
+
     [Fact]
     public async Task Hoejst_100_kapabiliteter_pr_system_og_graensen_tjekkes_foer_alt_andet()
     {
