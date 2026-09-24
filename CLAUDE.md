@@ -1,7 +1,12 @@
 # Arbejdsgang: hver ændring gennemgås af faste roller
 
-(Fra projekt-skabelonen. Gennemgå `[TILPAS ...]`-markeringerne her og i
-`.claude/agents/` som noget af det første i et nyt projekt — se README.md.)
+Projektet er **EA-register**: et letvægts enterprise-arkitektur-værktøj
+("LeanIX-light") for IT Forretningsløsninger på DTU. Se `README.md` og
+`docs/plan.md` for produkt, faser og beslutninger.
+
+**Prototype med FIKTIVE data.** Repoet ligger på en personlig GitHub-konto:
+rigtige DTU-data (systemer, personer, integrationer, sårbarheder, kontrakter)
+må ALDRIG committes — heller ikke i tests, seed-data eller skærmbilleder.
 
 Du arbejder efter en fast gennemgangs-model. Hver eneste ændring — også "bare
 en lille fejlrettelse" — skal igennem tre faste roller, før den landes. Kør dem
@@ -82,9 +87,10 @@ selv.
    UNDTAGELSER hvor der altid spørges først: alt der skriver i
    produktionsdata (migreringer, bagfyldninger, seed-scripts),
    tilbagerulninger, og udrulninger med et blokerende fund.
-   [TILPAS: har projektet endnu ikke CI, er trin 1's lokale kørsler gaten —
-   og opsætning af CI (lint + tests + build på hver PR) er en af de første
-   opgaver. Skriv jobbene her, når de findes.]
+   CI (`.github/workflows/ci.yml`) kører på hver PR: **api** (dotnet format,
+   build, alle tests mod PostgreSQL 16, migrationer i sync med modellen) og
+   **web** (lint, tests, build, genererede typer i sync med kontrakten).
+   Der er endnu intet deploy-mål — prototypen kører lokalt (se README).
 5. Verificér i produktion og fortæl brugeren, hvad der er live.
 
 Rapportér rollernes konklusioner til brugeren, før du merger. Er en rolle
@@ -128,16 +134,28 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
 
 ## Faste regler
 
-- **Dansk** i UI, kommentarer, commits og PR-tekster. [TILPAS hvis projektet
-  har et andet sprog.]
+- **Dansk** i UI, kommentarer, commits og PR-tekster. Kode-identifikatorer
+  er engelske; enum-værdier i API'et er danske koder (fx `IDrift`) og er en
+  ekstern kontrakt — de omdøbes aldrig.
 - **Skriv aldrig modelnavn** (AI-model) i commits, PR'er eller kode.
-- **Farlige kommandoer:** [TILPAS — skriv de kommandoer/scripts her, der kan
-  overskrive eller ødelægge produktionsdata, og hvad de i stedet kræver
-  (tør-kørsel, andet miljø, spørg først). En regel som "kør aldrig X mod
-  produktion" skal stå HER, ikke huskes.]
-- **Spejlede/delte filer følges ad:** [TILPAS — findes samme logik i to
-  eksemplarer (fx klient ⇄ server), så skriv parrene her. Den ene uden den
-  anden er en halv ændring.]
+- **Farlige kommandoer:** `dotnet ef database update`/`migrations bundle`
+  mod andet end den lokale `ea_dev` kræver, at brugeren spørges først.
+  `Database.Migrate()` ved opstart er kun tilladt i Development (DevSeed) —
+  aldrig i produktion. `UPDATE_CONTRACT=1` overskriver
+  `web/src/api/openapi.json` — kør kun, når en kontraktændring er tilsigtet.
+  Importer (kommer) skal have tør-kørsel med før/efter.
+- **Spejlede/delte filer følges ad:**
+  - API-DTO'er (`src/Ea.Api/**/…Dtos.cs`, endpoints) ⇄
+    `web/src/api/openapi.json` ⇄ `web/src/api/schema.d.ts`. Kæden: ændr DTO →
+    `UPDATE_CONTRACT=1 dotnet test --project tests/Ea.Api.Tests` →
+    `npm run gen:api` i `web/`. CI fejler, hvis et led mangler.
+  - Enum-værdier (`Systems/SystemEnums.cs`) ⇄ danske labels i
+    `web/src/app/core/labels.ts` (en `Record`, så en ny værdi giver
+    kompileringsfejl, indtil den har et navn).
+  - Forretningsregler (`Systems/SystemRules.cs`) bruges af BÅDE endpoints og
+    de `permissions`, klienten får — knapper afgøres aldrig i klienten.
+  - Claim-navne (`Auth/ClaimNames.cs`) er kontrakten mellem dev-login og
+    Entra ID.
 - **Serveren er eneste autoritet.** Validering i klienten kan omgås. Server-
   adgangstjek må aldrig være mere gavmilde end klientens regler — og de skal
   ligge FØR de dyre operationer, så en afvisning er billig.
@@ -166,6 +184,30 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
 
 ## Test-kommandoer
 
-[TILPAS: skriv projektets faktiske lint-, test- og build-kommandoer her, så
-de kun vedligeholdes ét sted. Nævn også, hvis test-runneren har eksplicitte
-include-lister, som nye testfiler skal tilføjes til.]
+Forudsætninger: .NET SDK 10, Node 24 (`.nvmrc`), PostgreSQL 16 lokalt
+(`./scripts/dev-db.sh` starter den og opretter rollen `ea` med CREATEDB).
+
+```bash
+# API (fra repo-roden)
+dotnet format EA.slnx --verify-no-changes
+dotnet build EA.slnx
+dotnet test --project tests/Ea.Api.Tests         # alle API-tests (rigtig PostgreSQL)
+ASPNETCORE_ENVIRONMENT=Development dotnet ef migrations has-pending-model-changes --project src/Ea.Api
+
+# Web (fra web/)
+npm run lint
+npm test                                          # Vitest, én kørsel
+npm run build
+npm run gen:api && git diff --exit-code -- src/api
+```
+
+- Testrunneren er Microsoft.Testing.Platform (xUnit v3, se `global.json`):
+  brug `dotnet test --project …`, ikke `dotnet test <mappe>`. Nye testklasser
+  opdages automatisk — der er ingen include-lister. MTP fejler, hvis nul
+  tests kører.
+- Hver API-test får sin egen database (kopi af en migreret skabelon, se
+  `tests/Ea.Api.Tests/Infrastructure/TestDatabase.cs`); `EA_TEST_CONNECTION`
+  styrer serveren. Testene kalder API'et over HTTP som en rigtig klient.
+- Vitest-specs findes via `src/**/*.spec.ts`. Komponenttests skal have samme
+  ramme som appen (`provideDanishLocale()`, router, HTTP) og vente med
+  `settle()` fra `src/app/testing/fixtures.ts`, før DOM'en læses.

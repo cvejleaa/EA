@@ -1,0 +1,38 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Node / Angular
+node_modules/
+web/dist/
+web/.angular/
+web/coverage/
+
+# Editor/OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Lokale hemmeligheder og miljøfiler
+*.local.json
+.env
+.env.*
+
+# RIGTIGE DTU-DATA MÅ ALDRIG COMMITTES (prototype i personligt repo).
+# Import-filer ligger uden for repoet eller i /import/, som ignoreres.
+/import/
+*.xlsx
+*.xls
+*.csv
+# Undtagelse: fiktive test-fixtures
+!tests/**/fixtures/**
+
+# Midlertidige worktrees fra gennemgangsrollerne (fx Test Manager)
+.claude/worktrees/
+
+# Angular-cache, hvis ng køres fra repo-roden
+/.angular/

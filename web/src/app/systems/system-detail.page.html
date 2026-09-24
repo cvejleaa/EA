@@ -1,0 +1,120 @@
+<section class="page">
+  <a routerLink="/systemer" class="back">← Alle systemer</a>
+
+  @if (error()) {
+    <p class="error-text" role="alert">{{ error() }}</p>
+  }
+
+  @if (system(); as s) {
+    <header class="row">
+      <h1>
+        @if (s.parent) {
+          <a [routerLink]="['/systemer', s.parent.id]" class="parent">{{ s.parent.name }}</a> ›
+        }
+        {{ s.name }}
+      </h1>
+      <span class="spacer"></span>
+      @if (s.permissions.canEdit) {
+        <a mat-flat-button [routerLink]="['/systemer', s.id, 'rediger']" data-testid="edit">Rediger</a>
+      }
+    </header>
+
+    @if (s.aliases.length) {
+      <p class="muted">Kendt som: {{ s.aliases.join(', ') }}</p>
+    }
+    @if (s.description) {
+      <p class="description">{{ s.description }}</p>
+    }
+
+    <dl class="facts">
+      <dt>Status</dt>
+      <dd>{{ statusLabel(s.lifecycleStatus) }}</dd>
+      <dt>Type</dt>
+      <dd>{{ typeLabel(s.type) }}</dd>
+      <dt>Forvaltende team</dt>
+      <dd [class.missing]="!s.managingTeam">{{ s.managingTeam?.name ?? 'Ikke angivet' }}</dd>
+
+      <dt>Forretningsejer</dt>
+      <dd [class.missing]="!businessOwner()" data-testid="business-owner">
+        @if (businessOwner(); as p) {
+          {{ p.displayName }}
+          @if (p.department) {
+            <span class="muted"> · {{ p.department }}</span>
+          }
+        } @else {
+          Ikke angivet
+        }
+      </dd>
+      <dt>Systemejer</dt>
+      <dd [class.missing]="!systemOwner()">{{ systemOwner()?.displayName ?? 'Ikke angivet' }}</dd>
+      <dt>Systemforvaltere</dt>
+      <dd [class.missing]="!stewards().length">
+        @for (p of stewards(); track p.id; let last = $last) {
+          {{ p.displayName }}{{ last ? '' : ', ' }}
+        } @empty {
+          Ikke angivet
+        }
+      </dd>
+    </dl>
+
+    @if (s.modules.length) {
+      <h2>Moduler</h2>
+      <ul class="modules">
+        @for (m of s.modules; track m.id) {
+          <li>
+            <a [routerLink]="['/systemer', m.id]">{{ m.name }}</a>
+            <span class="muted"> · {{ statusLabel(m.lifecycleStatus) }}</span>
+          </li>
+        }
+      </ul>
+    }
+
+    <section class="freshness" aria-label="Bekræftelse">
+      <p data-testid="confirmed">
+        Senest bekræftet {{ s.lastConfirmedAt | date: 'd. MMM y' }} af {{ s.lastConfirmedByName }}
+        <span class="muted">({{ age(s.lastConfirmedAt) }})</span>
+      </p>
+      <p class="muted">Sidst ændret {{ s.updatedAt | date: 'd. MMM y' }} · oprettet {{ s.createdAt | date: 'd. MMM y' }}</p>
+      @if (s.permissions.canEdit) {
+        <button mat-stroked-button type="button" (click)="confirmUnchanged()" [disabled]="busy()" data-testid="confirm">
+          Bekræft uændret
+        </button>
+        <span class="muted hint">Oplysningerne er stadig rigtige — ingen ændringer.</span>
+      }
+    </section>
+
+    @if (actionError()) {
+      <p class="error-text" role="alert">{{ actionError() }}</p>
+    }
+
+    @if (s.permissions.canEdit) {
+      <section class="danger">
+        @if (!confirmingDelete()) {
+          <button
+            mat-button
+            type="button"
+            (click)="confirmingDelete.set(true)"
+            [disabled]="!s.permissions.canDelete || busy()"
+            data-testid="delete"
+          >
+            Slet system
+          </button>
+          @if (s.permissions.deleteBlockedReason) {
+            <span class="muted" data-testid="delete-blocked">{{ s.permissions.deleteBlockedReason }}</span>
+          }
+        } @else {
+          <p>
+            Sletning er kun til fejloprettede systemer og kan ikke fortrydes. Er systemet taget ud af brug, så
+            sæt status til <strong>Nedlagt</strong> i stedet.
+          </p>
+          <div class="row">
+            <button mat-flat-button type="button" class="delete-confirm" (click)="delete()" [disabled]="busy()">
+              Slet {{ s.name }} permanent
+            </button>
+            <button mat-button type="button" (click)="confirmingDelete.set(false)">Annullér</button>
+          </div>
+        }
+      </section>
+    }
+  }
+</section>

@@ -54,13 +54,17 @@ Start med `git diff` mod base-branchen for at se, hvad der faktisk er ændret.
    Gendan filen mellem hver mutation (`git checkout -- <fil>`), så mutationerne
    ikke forurener hinanden. Slut-oprydningen klarer worktree'en selv.
 
-2. **Er den forretningskritiske del dækket?** [TILPAS: nævn projektets
-   dyre-når-de-fejler-områder — fx penge, point, adgang, deadlines, udsendte
-   mails.] En ændring dér uden en test er ikke færdig.
+2. **Er den forretningskritiske del dækket?** Her: adgang (hvem må skrive),
+   samtidighed (`Version`/409), modul- og navneregler, rolleregler (én
+   forretningsejer/systemejer), "Bekræft uændret" (må ikke ændre data), og
+   API-kontrakten. En ændring dér uden en test er ikke færdig.
 
-3. **Ligger testen i det rigtige lag?** [TILPAS: projektets lag — fx ren logik
-   → unit-test; adgang/regler → test mod emulator eller testmiljø;
-   klient-adfærd → komponenttest; flow på tværs → E2E.]
+3. **Ligger testen i det rigtige lag?** Ren regel (`SystemRules`) →
+   unit-test i `tests/Ea.Api.Tests/Systems/SystemRulesTests.cs`; adgang,
+   persistens og endpoints → HTTP-test mod rigtig PostgreSQL via `TestApp`;
+   kontrakt → `Contract/OpenApiContractTests.cs`; klient-adfærd (knapper,
+   tekster, formular) → Vitest-komponenttest i `web/src/**/*.spec.ts`. Ingen
+   E2E endnu (planlagt fra delopgave 4).
 
 4. **Kører testen overhovedet?** Tjek test-runnerens konfiguration: har den
    eksplicitte include-lister, mønstre eller mapper, en ny testfil skal passe

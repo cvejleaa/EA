@@ -1,0 +1,8 @@
+.back { display: inline-block; margin-bottom: 8px; }
+.form { display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+.form > mat-form-field { width: 100%; }
+.row mat-form-field { flex: 1 1 240px; }
+.new-person { padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
+.hint { flex-basis: 100%; margin: 0; }
+.problem { padding: 8px 12px; border-left: 4px solid var(--mat-sys-error); }
+.actions { margin-top: 16px; }
