@@ -138,6 +138,67 @@
         }
       }
 
+      <h2>Kapabiliteter</h2>
+      <p class="muted hint">
+        Hvad systemet bruges til. Kun de nederste niveauer i kortet kan vælges — søg på kode, navn eller gruppe.
+      </p>
+      <mat-form-field class="capability-field">
+        <mat-label>Kapabiliteter</mat-label>
+        <mat-chip-grid #capabilityChips aria-label="Valgte kapabiliteter" data-testid="capability-chips">
+          @for (c of ownCapabilities(); track c.id) {
+            <mat-chip-row (removed)="removeCapability(c.id)" [class.flagged]="c.moveReason">
+              <span class="code">{{ c.code }}</span>&ngsp;{{ c.name }}
+              @if (c.moveReason) {
+                <span class="flag" data-testid="chip-move-reason"> · {{ moveReasonShortLabels[c.moveReason] }}</span>
+              }
+              <button matChipRemove type="button" [attr.aria-label]="'Fjern ' + c.name" data-testid="remove-capability">
+                ×
+              </button>
+            </mat-chip-row>
+          }
+          <input
+            #capabilitySearchInput
+            placeholder="Søg på kode, navn eller gruppe"
+            (input)="capabilityQuery.set(capabilitySearchInput.value)"
+            [matChipInputFor]="capabilityChips"
+            [matAutocomplete]="capabilityAuto"
+            data-testid="capability-search"
+          />
+        </mat-chip-grid>
+        <mat-autocomplete
+          #capabilityAuto
+          [displayWith]="capabilityText"
+          (optionSelected)="addCapability($event.option.value, capabilitySearchInput); $event.option.deselect()"
+        >
+          @for (o of capabilityMatches(); track o.id) {
+            <mat-option [value]="o">
+              <span class="code">{{ o.code }}</span>&ngsp;{{ o.name }}
+              @if (o.path) {
+                <span class="muted"> · {{ o.path }}</span>
+              }
+            </mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+      @if (problem()?.fieldErrors?.['capabilityIds']; as capabilityErrors) {
+        @for (e of capabilityErrors; track $index) {
+          <p class="error-text" data-testid="capability-error">{{ e }}</p>
+        }
+      }
+      @if (familyCapabilities().length) {
+        <div class="muted family" data-testid="family-capabilities">
+          <p>Familiens kapabiliteter (redigeres på det andet system):</p>
+          <ul>
+            @for (c of familyCapabilities(); track c.capability.id + '/' + c.heldBy!.id) {
+              <li>
+                {{ capabilityText(c.capability) }} — via {{ c.heldBy!.id === existing()?.parent?.id ? 'forælderen' : 'modulet' }}
+                {{ c.heldBy!.name }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
       @if (problem(); as p) {
         <div class="problem" role="alert" data-testid="problem">
           <p class="error-text">{{ p.message }}</p>

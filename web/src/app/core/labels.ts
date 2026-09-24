@@ -4,6 +4,7 @@ import type {
   IntegrationRelation,
   IntegrationType,
   LifecycleStatus,
+  MoveReason,
   SystemRole,
   SystemType,
 } from '../api/types';
@@ -59,6 +60,18 @@ export const capabilityChangeKindLabels: Record<CapabilityChangeKind, string> = 
   Udgaar: 'Udgår',
   Genaktiveres: 'Genaktiveres',
   FaarUnderkapabiliteter: 'Får underkapabiliteter',
+};
+
+/** Hvorfor en kobling bør flyttes — vist ved systemet og på kortets arbejdsliste. */
+export const moveReasonLabels: Record<MoveReason, string> = {
+  Udgaaet: 'Udgået af kortet — flyt koblingen',
+  HarUnderkapabiliteter: 'Har fået underkapabiliteter — vælg den, der passer bedst',
+};
+
+/** Samme grund i kort form — på en valgt kapabilitet i systemformularen. */
+export const moveReasonShortLabels: Record<MoveReason, string> = {
+  Udgaaet: 'udgået',
+  HarUnderkapabiliteter: 'har underkapabiliteter',
 };
 
 export const lifecycleOptions = Object.keys(lifecycleLabels) as LifecycleStatus[];

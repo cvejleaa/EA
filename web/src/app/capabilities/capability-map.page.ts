@@ -1,8 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
-import type { CapabilityTreeResponse } from '../api/types';
-import { count } from '../core/labels';
+import type { CapabilityTreeResponse, MoveReason } from '../api/types';
+import { count, moveReasonLabels } from '../core/labels';
 import { toProblem } from '../core/problem';
 import { CapabilitiesApi } from './capabilities.api';
 
@@ -23,6 +23,9 @@ export class CapabilityMapPage {
   protected readonly error = signal<string | null>(null);
   protected readonly downloading = signal(false);
   protected readonly count = count;
+  protected reasonLabel(reason: MoveReason | null): string {
+    return reason ? moveReasonLabels[reason] : '';
+  }
 
   constructor() {
     void this.load();

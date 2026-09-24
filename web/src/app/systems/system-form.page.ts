@@ -1,14 +1,19 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Router, RouterLink } from '@angular/router';
 import type {
+  CapabilityNode,
+  CapabilityRef,
   LifecycleStatus,
   PersonDto,
   RoleAssignmentInput,
+  SystemCapabilityDto,
   SystemDetail,
   SystemRef,
   SystemType,
@@ -16,18 +21,35 @@ import type {
   TeamDto,
 } from '../api/types';
 import { AuthService } from '../core/auth.service';
-import { lifecycleLabels, lifecycleOptions, systemTypeLabels, systemTypeOptions } from '../core/labels';
+import {
+  lifecycleLabels,
+  lifecycleOptions,
+  moveReasonShortLabels,
+  systemTypeLabels,
+  systemTypeOptions,
+} from '../core/labels';
 import { ProblemInfo, STALE_VERSION, toProblem } from '../core/problem';
+import { CapabilitiesApi } from '../capabilities/capabilities.api';
 import { SystemsApi } from './systems.api';
 
 @Component({
   selector: 'ea-system-form-page',
-  imports: [ReactiveFormsModule, RouterLink, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
+    MatButtonModule,
+    MatChipsModule,
+    MatAutocompleteModule,
+  ],
   templateUrl: './system-form.page.html',
   styleUrl: './system-form.page.css',
 })
 export class SystemFormPage implements OnInit {
   private readonly api = inject(SystemsApi);
+  private readonly capabilitiesApi = inject(CapabilitiesApi);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
@@ -39,6 +61,7 @@ export class SystemFormPage implements OnInit {
   protected readonly typeLabels = systemTypeLabels;
   protected readonly typeOptions = systemTypeOptions;
   protected readonly staleVersion = STALE_VERSION;
+  protected readonly moveReasonShortLabels = moveReasonShortLabels;
 
   protected readonly form = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] }),
@@ -68,6 +91,25 @@ export class SystemFormPage implements OnInit {
   protected readonly saving = signal(false);
   protected readonly addingPerson = signal(false);
 
+  /** Kortet (til vælgeren). Kun knuder med `selectable` tilbydes — samme regel som serverens. */
+  protected readonly capabilityOptions = signal<CapabilityNode[]>([]);
+  /** Systemets EGNE koblinger — det eneste, formularen sender (hele listen, altid). */
+  protected readonly ownCapabilities = signal<CapabilityRef[]>([]);
+  /** Familiens koblinger (via modul/forælder) — vises, men redigeres på det andet system. */
+  protected readonly familyCapabilities = signal<SystemCapabilityDto[]>([]);
+  /** Søgeteksten. Et almindeligt felt (ikke en FormControl): feltet tømmes selv efter et valg — se addCapability. */
+  protected readonly capabilityQuery = signal('');
+
+  /** Søgning på kode, navn og sti (gruppens navn finder bladene under den). Allerede valgte skjules. */
+  protected readonly capabilityMatches = computed(() => {
+    const query = this.capabilityQuery().trim().toLowerCase();
+    const chosen = new Set(this.ownCapabilities().map((c) => c.id));
+    return this.capabilityOptions()
+      .filter((c) => c.selectable && !chosen.has(c.id))
+      .filter((c) => !query || `${c.code} ${c.name} ${c.path}`.toLowerCase().includes(query))
+      .slice(0, 50);
+  });
+
   protected readonly isEdit = computed(() => !!this.id());
   protected readonly canManagePersons = computed(() => this.auth.me()?.permissions.canManagePersons ?? false);
   protected readonly parentBlockedReason = computed(() => this.existing()?.permissions.parentBlockedReason ?? null);
@@ -75,15 +117,17 @@ export class SystemFormPage implements OnInit {
   async ngOnInit(): Promise<void> {
     try {
       const id = this.id();
-      const [teams, persons, candidates, existing] = await Promise.all([
+      const [teams, persons, candidates, capabilities, existing] = await Promise.all([
         this.api.teams(),
         this.api.persons(),
         this.api.parentCandidates(id),
+        this.capabilitiesApi.tree(),
         id ? this.api.get(id) : Promise.resolve(null),
       ]);
       this.teams.set(teams);
       this.persons.set(persons);
       this.parentCandidates.set(candidates);
+      this.capabilityOptions.set(capabilities.items);
       if (existing) {
         this.fill(existing);
       }
@@ -149,8 +193,28 @@ export class SystemFormPage implements OnInit {
     }
   }
 
+  protected addCapability(node: CapabilityNode, search: HTMLInputElement): void {
+    this.ownCapabilities.update((list) => [
+      ...list,
+      { id: node.id, code: node.code, name: node.name, path: node.path, moveReason: null },
+    ]);
+    // Autocomplete har lige skrevet det valgte i feltet; det står allerede som chip.
+    search.value = '';
+    this.capabilityQuery.set('');
+  }
+
+  protected removeCapability(id: string): void {
+    this.ownCapabilities.update((list) => list.filter((c) => c.id !== id));
+  }
+
+  protected capabilityText(c: { code: string; name: string } | null): string {
+    return c ? `${c.code} ${c.name}` : '';
+  }
+
   private fill(s: SystemDetail): void {
     this.existing.set(s);
+    this.ownCapabilities.set(s.capabilities.filter((c) => !c.heldBy).map((c) => c.capability));
+    this.familyCapabilities.set(s.capabilities.filter((c) => !!c.heldBy));
     const holder = (role: string) => s.roles.filter((r) => r.role === role).map((r) => r.person.id);
     this.form.setValue({
       name: s.name,
@@ -191,6 +255,8 @@ export class SystemFormPage implements OnInit {
       parentSystemId: v.parentSystemId || null,
       roles,
       version: this.existing()?.version ?? null,
+      // ALTID en liste (også tom): null betyder "uændret" på serveren.
+      capabilityIds: this.ownCapabilities().map((c) => c.id),
     };
   }
 }

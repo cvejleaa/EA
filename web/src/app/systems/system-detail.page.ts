@@ -3,7 +3,7 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { MatButtonModule } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
 import type { LifecycleStatus, PersonDto, SystemDetail, SystemRole, SystemType } from '../api/types';
-import { lifecycleLabels, relativeAge, roleLabels, systemTypeLabels } from '../core/labels';
+import { lifecycleLabels, moveReasonLabels, relativeAge, roleLabels, systemTypeLabels } from '../core/labels';
 import { toProblem } from '../core/problem';
 import { SystemIntegrationsComponent } from '../integrations/system-integrations.component';
 import { SystemsApi } from './systems.api';
@@ -29,6 +29,7 @@ export class SystemDetailPage {
   protected readonly now = signal(new Date());
 
   protected readonly roleLabels = roleLabels;
+  protected readonly moveReasonLabels = moveReasonLabels;
 
   protected readonly businessOwner = computed(() => this.holders('Forretningsejer')[0] ?? null);
   protected readonly systemOwner = computed(() => this.holders('Systemejer')[0] ?? null);

@@ -40,3 +40,9 @@ export type CapabilityChange = Schemas['CapabilityChange'];
 export type CapabilityChangeKind = Schemas['CapabilityChangeKind'];
 export type CapabilitySnapshot = Schemas['CapabilitySnapshot'];
 export type ImportRowError = Schemas['ImportRowError'];
+export type CapabilityRef = Schemas['CapabilityRef'];
+export type SystemCapabilityDto = Schemas['SystemCapabilityDto'];
+export type CapabilityToMove = Schemas['CapabilityToMove'];
+export type CoupledSystem = Schemas['CoupledSystem'];
+// Nullable i kontrakten ("ingen grund"); selve typen er uden null.
+export type MoveReason = NonNullable<Schemas['MoveReason']>;

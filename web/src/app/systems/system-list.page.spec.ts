@@ -2,10 +2,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideDanishLocale } from '../core/locale';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import type { SystemListItem } from '../api/types';
 import { AuthService } from '../core/auth.service';
-import { listItem, me, text, settle } from '../testing/fixtures';
+import { capabilityNode, capabilityTree, listItem, me, text, settle } from '../testing/fixtures';
 import { SystemListPage } from './system-list.page';
 
 describe('SystemListPage', () => {
@@ -111,5 +111,65 @@ describe('SystemListPage', () => {
     http = TestBed.inject(HttpTestingController);
     const admin = await render([], 0, true);
     expect(text(admin.nativeElement as HTMLElement)).toContain('Nyt system');
+  });
+
+  describe('filter på kapabilitet', () => {
+    /** Åbn listen med ?capabilityId=… (som et link fra kortet eller systemsiden) og besvar forespørgslerne. */
+    async function openWith(capabilityId: string, answerTree?: (r: TestRequest) => void) {
+      await TestBed.inject(Router).navigateByUrl(`/?capabilityId=${capabilityId}`);
+      TestBed.inject(AuthService).me.set(me(false));
+      const fixture = TestBed.createComponent(SystemListPage);
+      fixture.detectChanges();
+      http.expectOne('/api/teams').flush([]);
+      await settle(fixture);
+      const systems = systemsRequest();
+      if (answerTree) {
+        answerTree(http.expectOne('/api/capabilities'));
+      }
+      systems.flush({ items: [listItem()], total: 5 });
+      await settle(fixture);
+      return { fixture, systems };
+    }
+
+    const selected = (f: ComponentFixture<unknown>) =>
+      text((f.nativeElement as HTMLElement).querySelector('[data-testid="capability-filter"] .mat-mdc-select-value'));
+
+    it('filtrerer på kapabiliteten fra linket og viser dens navn', async () => {
+      const { fixture, systems } = await openWith('cap-K1.1', (r) =>
+        r.flush(capabilityTree([capabilityNode('K1', 0), capabilityNode('K1.1', 1, { name: 'Optagelse', selectable: true })])),
+      );
+
+      expect(systems.request.params.get('capabilityId')).toBe('cap-K1.1');
+      expect(selected(fixture)).toBe('K1.1 Optagelse');
+    });
+
+    it('en udgået kapabilitet findes på listen over koblinger, der bør flyttes', async () => {
+      const { fixture } = await openWith('cap-K9', (r) =>
+        r.flush({
+          ...capabilityTree([capabilityNode('K1', 0)]),
+          toMove: [{ id: 'cap-K9', code: 'K9', name: 'Gammel eksamen', path: '', reason: 'Udgaaet', systems: [] }],
+        }),
+      );
+
+      expect(selected(fixture)).toBe('K9 Gammel eksamen');
+    });
+
+    it('kan navnet ikke hentes, filtreres der alligevel', async () => {
+      const { fixture, systems } = await openWith('cap-K1', (r) =>
+        r.flush({ detail: 'Nej' }, { status: 500, statusText: 'Fejl' }),
+      );
+
+      expect(systems.request.params.get('capabilityId')).toBe('cap-K1');
+      expect(selected(fixture)).toBe('Valgt kapabilitet');
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('"Ikke angivet" sender none og henter ikke kortet', async () => {
+      const { fixture, systems } = await openWith('none');
+
+      expect(systems.request.params.get('capabilityId')).toBe('none');
+      expect(selected(fixture)).toBe('Ikke angivet');
+      // afterEach(http.verify) fejler, hvis kortet blev hentet.
+    });
   });
 });

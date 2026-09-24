@@ -54,6 +54,23 @@
         <mat-option value="none">Ikke angivet</mat-option>
       </mat-select>
     </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Kapabilitet</mat-label>
+      <mat-select
+        [value]="filter().capabilityId ?? ''"
+        (selectionChange)="setFilter('capabilityId', $event.value)"
+        data-testid="capability-filter"
+      >
+        <mat-option value="">Alle</mat-option>
+        <mat-option value="none">Ikke angivet</mat-option>
+        @if (filter().capabilityId && filter().capabilityId !== 'none') {
+          <mat-option [value]="filter().capabilityId">
+            {{ capability() ? capability()!.code + ' ' + capability()!.name : 'Valgt kapabilitet' }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
   </div>
 
   <p class="count muted" data-testid="count">

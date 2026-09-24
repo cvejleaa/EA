@@ -340,6 +340,50 @@ kendt, accepteret defense-in-depth (svært at teste deterministisk uden kunstig 
 "IsModified=true, ALTID"-mekanik fra delopgave 1/2 — ikke re-mutationstestet separat, da mekanismen er fælles og
 allerede dræbt tidligere), web-siden af 3b (labels, HTML-betingelser, `systemNames`) — alt dræbt præcist.
 
+## Fund 7e785e2 (delopgave 3b-web, EA-register): koblinger UI — alle 11 udpegede kernemutationer dræbt, kun små kosmetiske huller
+
+Baseline: `npx ng test --watch=false` (web/, `PATH=/opt/node24/bin:$PATH`, `npm install` først i worktree'en) 96/96 i
+11 filer. Kørte netop de 11 udpegede mutationer i `system-form.page.ts` (`capabilityMatches`s `selectable`-filter,
+"ikke allerede valgt"-filter, sti-delen af søgningen, `capabilityIds`→`null` i `toRequest`, familiens koblinger
+lækket ind i `ownCapabilities` via `fill()`, `addCapability`s `search.value = ''`-tømning),
+`system-list.page.ts` (`loadCapabilityName`s `tree.toMove`-fallback, `none`-guarden),
+`capability-map.page.html` (`n.selectable`-betingelsen for links) og `system-detail.page.html` (forælder/modul-
+skelnen `c.heldBy.id === s.parent?.id`, `move-reason`-betingelsen) — **ALLE 11 dræbt præcist**, ofte af netop ÉN
+linje i den relevante nye test (fx `capabilityMatches`-testen dør på præcis den forkerte gren, ikkeblot en generel
+optælling). Særligt stærkt: system-detail-testen bruger `items.map(li => ... !== null).toEqual([false, true, true,
+false])` — en positiv PR-linje-for-linje-vagt for `move-reason`, ikke en løs "findes et flag et sted"-optælling.
+
+**Fire yderligere eksplorative mutationer fundet (uden for den udpegede liste), alle overlevede — men alle
+kosmetiske/lav-risiko, ikke funktionelle:**
+1. `web/src/app/core/labels.ts:74` — `moveReasonShortLabels.HarUnderkapabiliteter`s VÆRDI ('har underkapabiliteter')
+   er aldrig renderet/assertet i en test. Ændrede den til en tydeligt forkert streng → 96/96 forblev grønt.
+   `system-form.page.spec.ts`s kapabilitets-tests bruger kun `Udgaaet` (`K1.9 Gammel eksamen · udgået`) på chippen;
+   ingen fixture har en egen kobling med `moveReason: 'HarUnderkapabiliteter'`. Mangler: en chip i "viser egne
+   koblinger..."-testen (eller ny) med `moveReason: 'HarUnderkapabiliteter'`, der bekræfter teksten
+   "· har underkapabiliteter" på chippen.
+2. `web/src/app/systems/system-form.page.html:149` — `[class.flagged]="c.moveReason"` på `mat-chip-row` er en ren
+   CSS-hook, ingen test læser `classList`. Ændrede til `[class.flagged]="false"` → 96/96 grønt.
+3. `web/src/app/systems/system-detail.page.html:77` — samme mønster: `[class.held]="c.heldBy"` på `<li>` er
+   utestet. Ændrede til `[class.held]="false"` → 96/96 grønt.
+4. `web/src/app/systems/system-form.page.ts:110` — `.slice(0, 50)`-grænsen på `capabilityMatches` er utestet (ingen
+   fixture har >50 matchende kapabiliteter). Ændrede til `.slice(0, 500000)` → 96/96 grønt. Opgavebeskrivelsen
+   nævner eksplicit "højst 50", så dette er tættest på et reelt hul blandt de fire — men lav praktisk risiko (et
+   kort med 50+ valgbare blade under samme søgeord er usandsynligt i en DTU-kontekst med få hundrede kapabiliteter
+   totalt).
+
+**Ingen funktionelle huller fundet i selve kernen** (adgang til request-payload, familie/egen-skel, sortering,
+forælder/modul-skelnen begge steder, tom-liste-visning, `none`-filter, `toMove`-opslag) — markant stærkere end
+gennemsnittet af tidligere fund i dette projekt, formentlig fordi opgavebeskrivelsen selv listede præcis de 11
+mutationer, der plejer at være hullerne (dvs. forfatteren har allerede kørt denne øvelse selv før commit).
+
+**Bekræftet igen**: parent/modul-skelnen (`c.heldBy!.id === existing()?.parent?.id`) på FORM-siden har kun
+fixture-data for "modulet"-grenen (ingen test sætter `existing().parent`-id lig et `heldBy.id`), men mutation af
+selve sammenligningsoperatoren (`===`→`!==`) blev alligevel dræbt, fordi den ændrer outputtet for den ENESTE
+testede sag også. **Lektie**: en binær betingelse med kun ÉN gren fixture-dækket er stadig dræbt af en
+operator-flip-mutation, fordi flippet nødvendigvis også ændrer den dækkede gren — kun en konstant-erstatning
+(`true`/`false` i stedet for selve sammenligningen) ville undslippe. Værd at kende, så man ikke fejlagtigt
+rapporterer den slags som et hul uden selv at prøve flippet.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden
