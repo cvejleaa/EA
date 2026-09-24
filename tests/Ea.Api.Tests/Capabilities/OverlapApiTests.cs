@@ -181,4 +181,44 @@ public sealed class OverlapApiTests
         Assert.Equal(["C › C2", "D"], missing.Select(s => s.Parent is null ? s.Name : $"{s.Parent.Name} › {s.Name}").Order());
         Assert.Equal(coverage.Total - coverage.Covered, missing.Count);
     }
+
+    /// <summary>
+    /// Et modul arver forælderens Udfases (vurderingen hentet fra databasen, ikke kun reglen), og på en forælders
+    /// side kommer "tæller ikke med" fra det modul, der HAR koblingen — ikke fra forælderen selv.
+    /// </summary>
+    [Fact]
+    public async Task Et_modul_arver_forælderens_status_og_holderen_afgoer_om_koblingen_taeller()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        await admin.ImportAsync(Model);
+        var leaf = await admin.CapabilityIdAsync("K1.2");
+        var arkiv = await admin.CreateSystemAsync(NewSystem("Arkiv", LifecycleStatus.Udfases));
+        var soeg = await admin.CreateSystemAsync("Søg", arkiv.Id); // Selv i drift, men forælderen udfases.
+        var nordlys = await admin.CreateSystemAsync("Nordlys");
+        var loen = await admin.CreateSystemAsync(NewSystem("Løn", parentId: nordlys.Id, type: SystemType.LokalLoesning));
+        var kompas = await admin.CreateSystemAsync("Kompas");
+        foreach (var system in new[] { soeg, loen, kompas })
+        {
+            await (await admin.CoupleAsync(system, leaf)).ExpectAsync(HttpStatusCode.OK);
+        }
+
+        var node = (await admin.CapabilitiesAsync()).Items.Single(i => i.Code == "K1.2").Overlap!;
+        var onKompas = (await admin.GetSystemAsync(kompas.Id)).Capabilities.Single();
+        var onNordlys = (await admin.GetSystemAsync(nordlys.Id)).Capabilities.Single();
+        var onArkiv = (await admin.GetSystemAsync(arkiv.Id)).Capabilities.Single();
+
+        Assert.Equal(
+            [("Arkiv › Søg", (OverlapExclusion?)OverlapExclusion.Udfases), ("Kompas", null), ("Nordlys › Løn", OverlapExclusion.LokalLoesning)],
+            node.Members.Select(m => (m.Name, m.Exclusion)));
+        Assert.Equal((1, false), (node.Counted, node.IsOverlap));
+        Assert.Equal(
+            [("Arkiv › Søg", (OverlapExclusion?)OverlapExclusion.Udfases), ("Nordlys › Løn", OverlapExclusion.LokalLoesning)],
+            onKompas.SharedWith.Select(m => (m.Name, m.Exclusion)));
+
+        // Nordlys (i drift) har ikke selv koblingen — modulet Løn har, og det er en lokal løsning.
+        Assert.Equal(("Løn", (OverlapExclusion?)OverlapExclusion.LokalLoesning), (onNordlys.HeldBy?.Name, onNordlys.OwnExclusion));
+        Assert.Equal(["Arkiv › Søg", "Kompas"], onNordlys.SharedWith.Select(m => m.Name));
+        Assert.Equal(("Søg", (OverlapExclusion?)OverlapExclusion.Udfases), (onArkiv.HeldBy?.Name, onArkiv.OwnExclusion));
+    }
 }
