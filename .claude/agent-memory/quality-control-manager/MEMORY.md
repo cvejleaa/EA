@@ -242,3 +242,42 @@ OK, `npm run gen:api` uden diff (kontrakt i sync).
 - Mønster at genbruge: "beskrivelse ændret"-annotationen er et godt mønster for "diff af et felt, der ikke selv
   vises i tabellen" — spørg om samme mønster er nødvendigt, når en fremtidig ændringstabel har et felt, der ikke
   indgår i den korte visningstekst (fx en fremtidig CSV-import med et lignende "usynligt" felt).
+
+## Kode-gennemgang delopg. 3b server (89d8011, PR #7, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: LAND MED FORBEHOLD. Én BLOKERENDE talfejl, to BØR. Verificeret ved kørsel: 109/109 API-tests i
+Capabilities-mappen grønne, has-pending-model-changes ren, openapi.json/schema.d.ts-diff matcher DTO 1:1, live
+dry-run-kald mod kørende dev-API (kun GET/tør-kørsel, intet gennemført/rettet i ea_dev).
+- BLOKERENDE, NYT MØNSTER: "to tal-definitioner af samme begreb i samme summary-DTO, hvor kun ÉN af dem
+  (booleanen) bruger den korrekte delmængde." CapabilityImportSummary.LargeRemoval bruger korrekt
+  `removedFromMap` (kun det, der faktisk var synligt på kortet FØR importen), men UI-teksten
+  ("Importen fjerner N af kortets M kapabiliteter", capability-import.page.html) bruger `removed + retired`,
+  som OGSÅ tæller en allerede-udgået-og-nu-koblingsløs kapabilitets sletning ("usynlig oprydning" — den var ikke
+  på kortet i forvejen). Bevist ved en midlertidig, ikke-committet test: 3 aktive + 1 allerede udgået (koblet);
+  fjern 1 fersk aktiv + ryd den udgåedes sidste kobling i samme omgang → Removed=2, men kun 1 forsvinder reelt
+  fra det synlige kort — teksten ville sige "fjerner 2 af 3" (100 % for højt). SPØRG FREMOVER, når en advarsel
+  og en boolean deles om samme sum: bruger de PRÆCIS samme underliggende tælling, eller har den ene en
+  "usynlig" komponent den anden ikke har? Ret: eksponér removedFromMap som sit eget summary-felt, brug det
+  begge steder.
+- BØR: "FaarUnderkapabiliteter" (blad→ikke-blad) har — modsat "Udgaar" — INGEN permanent hjemsted efter importen.
+  Udgåede kapabiliteter fik en rigtig løsning i denne PR (RetiredCapability i GET /api/capabilities, med
+  Systems+RetiredPath — B3 fra plan-gennemgangen er nu LUKKET). Men et blad, der får børn og stadig har egne
+  koblinger, er kun synligt i DEN ENE tør-kørsel, der udløste det (CapabilityChangeKind.FaarUnderkapabiliteter,
+  kun i det import-svar) — hverken CapabilityNode (kortet) eller SystemCapabilityDto (systemsiden) har et flag
+  for "denne kobling sidder nu på en ikke-blad". Går admin videre uden at handle med det samme, findes
+  koblingen ikke igen nogen steder. Samme "fejler tavst"-mønster som B6 advarede om, nu kun halvt løst
+  (udgået-grenen løst, blad→ikke-blad-grenen ikke). Tjek ved 3b-web/3c, om dette bliver løst der, eller om det
+  er en bevidst accepteret restrisiko, der bør stå i planen.
+- BØR (opfølgning, ikke blokerende): Retired-sektionen PÅ SELVE KORTET (beslutning H, "får deres egen sektion på
+  kortet") er endnu ikke bygget i web (capability-map.page.html refererer slet ikke `retired`-feltet), og
+  docs/plan.md's skæringsliste nævner kun "3b-web: systemside, formular og filter" — IKKE kortet selv. Risiko
+  for at falde mellem to stole i skæringen. Spørg Arkitekten/Release Manager, hvilken skive der bygger den.
+- Bekræftet GODT: familie-reglen for capabilityId=none (forælder dækket af moduler, modul af forælder, IKKE
+  søskende) implementeret præcis som planlagt og testet inkl. søskende-modeksempel — en god skabelon for
+  "familie, men ikke søskende"-regler fremover. FK Restrict på SystemCapability.CapabilityId er forsvar i
+  dybden ud over applikationslogikken (importen kan aldrig fysisk slette en kapabilitet med koblinger, selv hvis
+  Plan()-logikken skulle fejle). CapabilityRules.Ordered() filtrerer RetiredAt ét sted, genbrugt af BÅDE
+  GetTree og Export — ingen dobbelt-vagt, god model.
+- Uden for mit mandat, men vigtigt at nævne: en samtidig Security Reviewer-kørsel havde ukommitterede rettelser
+  i samme filer (SystemEndpoints.cs m.fl.) for et bekræftet TOCTOU-fund (ValidateCapabilities uden lås, race
+  mod import → 500 i stedet for 409). Skal committes og lande SAMMEN med denne PR. Tjek status ved næste
+  gennemgang af samme gren.

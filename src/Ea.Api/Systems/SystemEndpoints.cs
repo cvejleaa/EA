@@ -218,16 +218,24 @@ public static class SystemEndpoints
             CreatedAt = now,
         };
 
-        var errors = await Apply(request, system, moduleCount: 0, requireVersion: false, db, ct);
+        var (errors, failure) = await WithCouplingLock(db, request.CapabilityIds is not null, async () =>
+        {
+            var errors = await Apply(request, system, moduleCount: 0, requireVersion: false, db, ct);
+            if (errors is not null)
+            {
+                return (errors, null);
+            }
+
+            Touch(system, user, now);
+            db.Systems.Add(system);
+            return (null, await Save(db, system, ct));
+        }, ct);
+
         if (errors is not null)
         {
             return Problems.Validation(errors);
         }
 
-        Touch(system, user, now);
-        db.Systems.Add(system);
-
-        var failure = await Save(db, system, ct);
         if (failure is not null)
         {
             return failure;
@@ -262,19 +270,27 @@ public static class SystemEndpoints
         await db.Entry(system).Collection(s => s.CapabilityLinks).LoadAsync(ct);
         var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
 
-        var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
+        var (errors, failure) = await WithCouplingLock(db, request.CapabilityIds is not null, async () =>
+        {
+            var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
+            if (errors is not null)
+            {
+                return (errors, null);
+            }
+
+            // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
+            // (IsModified), så tjekket også sker, når kun rollerne eller koblingerne ændres, og uret ikke har flyttet sig.
+            db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
+            Touch(system, user, time.GetUtcNow());
+            db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
+            return (null, await Save(db, system, ct));
+        }, ct);
+
         if (errors is not null)
         {
             return Problems.Validation(errors);
         }
 
-        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
-        // (IsModified), så tjekket også sker, når kun rollerne ændres, og uret ikke har flyttet sig.
-        db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
-        Touch(system, user, time.GetUtcNow());
-        db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
-
-        var failure = await Save(db, system, ct);
         if (failure is not null)
         {
             return failure;
@@ -482,6 +498,33 @@ public static class SystemEndpoints
     }
 
     /// <summary>
+    /// Ændrer anmodningen koblinger, valideres og gemmes de under en lås, der udelukker en samtidig import af kortet
+    /// (importen tager SHARE ROW EXCLUSIVE på koblingerne). Ellers kunne importen slette en kapabilitet eller give et
+    /// blad børn mellem valideringen og gemningen: en 500 (fremmednøgle) eller en kobling til et ikke-blad.
+    /// Låsene tages i samme rækkefølge som importens (kun koblingerne her), så de ikke kan låse hinanden fast.
+    /// </summary>
+    private static async Task<(Dictionary<string, string[]>? Errors, ProblemHttpResult? Failure)> WithCouplingLock(
+        EaDbContext db,
+        bool changesCouplings,
+        Func<Task<(Dictionary<string, string[]>? Errors, ProblemHttpResult? Failure)>> work,
+        CancellationToken ct)
+    {
+        if (!changesCouplings)
+        {
+            return await work();
+        }
+
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE", ct);
+            var result = await work();
+            await transaction.CommitAsync(ct);
+            return result;
+        });
+    }
+
+    /// <summary>
     /// Nye koblinger skal pege på et blad, der ikke er udgået (CapabilityRules.CoupleBlockedReason). Eksisterende
     /// koblinger bevares, selv om kapabiliteten siden er udgået eller har fået børn.
     /// </summary>
@@ -493,11 +536,13 @@ public static class SystemEndpoints
             return null;
         }
 
-        var wanted = capabilityIds.Distinct().ToList();
-        if (wanted.Count > CapabilityRules.MaxCouplingsPerSystem)
+        // Grænsen tjekkes på den rå liste, før der arbejdes med den.
+        if (capabilityIds.Count > CapabilityRules.MaxCouplingsPerSystem)
         {
             return [$"Højst {CapabilityRules.MaxCouplingsPerSystem} kapabiliteter pr. system."];
         }
+
+        var wanted = capabilityIds.Distinct().ToList();
 
         var added = wanted.Where(id => system.CapabilityLinks.All(l => l.CapabilityId != id)).ToList();
         if (added.Count == 0)

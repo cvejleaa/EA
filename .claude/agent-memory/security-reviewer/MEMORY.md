@@ -96,6 +96,45 @@
 - Read(Write(x)) != x ved tomme/whitespace-linjer i citerede felter
   (TextFieldParser dropper dem). Integritet, ikke sikkerhed -> QC.
 
+## Delopgave 3b (89d8011, koblinger system<->kapabilitet) – kørt 2026-09-24
+- BEKRÆFTET lukket: læser PUT med kun capabilityIds, fuld PUT med [], POST
+  med capabilityIds, confirm med ekstra capabilityIds-felt -> 403, 0 koblinger
+  ændret; anonym 401. Ugyldigt indhold som læser -> 403 (auth før validering);
+  JSON-skrald ([null], "abc", [123]) -> 400 for alle (binding før handler,
+  som før). Ukendt system-id -> 404 (kendt orakel).
+- BEKRÆFTET familie-isolation: PUT rører KUN system.CapabilityLinks (egne).
+  Forælder [] lader modulets kobling stå; forælder kan tage samme kapabilitet
+  selv; modul [] lader forælderens stå. Flyttes et modul (ParentSystemId),
+  følger dets koblinger med og dukker op som HeldBy på den NYE forælder.
+  -> Delopgave 4: skift af ParentSystemId skal kræve ret over målforælderen.
+- FUND (BEKRÆFTET, robusthed): TOCTOU mellem ValidateCapabilities (uden lås,
+  uden for tx) og insert. Import sletter kapabiliteten i vinduet -> FK 23503
+  -> ukaldet DbUpdateException -> 500 (Save fanger kun unique). Rigtig race
+  import vs PUT: 4/40 og 13/40 x 500. 0 deadlocks (pg_stat_database).
+  Samme vindue: blad får børn -> kobling til ikke-blad gemmes (200).
+  Rettelse: fang 23503 -> 409, evt. tag ROW EXCLUSIVE på system_capabilities
+  i en tx FØR valideringen, så PUT serialiseres med importens LOCK.
+- Ressourcer: Distinct før 100-grænsen, O(n). 1M dubletter (admin) -> 200 på
+  ~950 ms; 500k distinkte -> 400 på 660 ms; læser 500k -> 403 på 340 ms
+  (krop parses før handler – gammelt, gælder alle PUT). Kestrel-loft 30 MB.
+- GET /api/systems/{id} med koblinger henter HELE kortet (ToDictionaryAsync):
+  5000 kapabiliteter -> 45 ms/kald mod 7 ms uden koblinger; 32 samtidige
+  læsere ~50 kald/s. Samme klasse som GET /api/capabilities (43 ms). Ikke nyt
+  DoS-niveau, men hent kun de koblede + forfædre, når det skal skaleres.
+- Retired[].Systems / AffectedSystems: læser ser de samme navne som via
+  ?capabilityId= -> ingen ny læk. Tør-kørsel som læser 403.
+- Fingeraftryk: commit genberegner planen under LOCK på begge tabeller og
+  sammenligner kun; AffectedSystems (id+navn) indgår -> systemomdøbning
+  mellem tør-kørsel og commit giver 409 (ufarligt). Ingen manipulation mulig.
+
+## PoC-mønstre (tilføjet 3b)
+- Deterministisk race: åbn Npgsql-forbindelse (cs fra
+  EaDbContext.Database.GetConnectionString()), BEGIN, tag importens LOCK,
+  start PUT (validering læser frit, insert blokerer), Delay 1,5 s, lav
+  DELETE/UPDATE i tx, COMMIT -> se PUT's svar. Deadlock-tjek:
+  pg_stat_database.deadlocks for current_database().
+- Log via File.AppendAllText i testen; worktree i scratchpad, fjern bagefter.
+
 ## PoC-mønstre (tilføjet 3a)
 - Angrebstests i egen worktree: `git worktree add --detach <scratch>/wt <sha>`,
   læg fil i tests/Ea.Api.Tests/Zattack/, byg med

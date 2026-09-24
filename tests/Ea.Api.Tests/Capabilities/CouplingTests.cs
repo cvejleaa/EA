@@ -4,6 +4,7 @@ using Ea.Api.Capabilities;
 using Ea.Api.Common;
 using Ea.Api.Systems;
 using Ea.Api.Tests.Infrastructure;
+using Npgsql;
 using static Ea.Api.Tests.Infrastructure.TestApiCapabilities;
 
 namespace Ea.Api.Tests.Capabilities;
@@ -337,6 +338,78 @@ public sealed class CouplingTests
         await response.ExpectAsync(HttpStatusCode.Conflict);
         Assert.Contains("koblingerne", await response.ProblemDetailAsync(), StringComparison.Ordinal);
         Assert.Contains((await admin.CapabilitiesAsync()).Items, i => i.Code == "K2.1");
+    }
+
+    /// <summary>
+    /// Efterligner en import, der holder sin lås og ændrer kortet, mens en kobling gemmes. Koblingen skal vente på
+    /// importen og valideres mod resultatet — ikke give 500 (kapabiliteten slettet) eller en kobling til et ikke-blad.
+    /// </summary>
+    [Theory]
+    [InlineData("slettes", "En eller flere af de valgte kapabiliteter findes ikke.")]
+    [InlineData("faar-boern", "\"K1.2 Undervisning\" har underkapabiliteter — vælg den, der passer bedst.")]
+    public async Task En_kobling_venter_paa_en_samtidig_import_og_valideres_mod_resultatet(string change, string message)
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        var target = ids[change == "slettes" ? "K2.1" : "K1.2"];
+
+        await using var import = new NpgsqlConnection(app.ConnectionString);
+        await import.OpenAsync();
+        await using var transaction = await import.BeginTransactionAsync();
+        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+
+        var put = admin.CoupleAsync(system, target);
+        await WaitForBlockedLockAsync(import, transaction);
+        await Sql(import, transaction, change == "slettes"
+            ? $"DELETE FROM ea.capabilities WHERE id = '{target}'"
+            : $"INSERT INTO ea.capabilities (id, code, code_normalized, name, parent_id) VALUES ('{Guid.NewGuid()}', 'K1.2.1', 'K1.2.1', 'Barn', '{target}')");
+        await transaction.CommitAsync();
+
+        var response = await put;
+        Assert.Equal([message], (await response.ValidationErrorsAsync())["capabilityIds"]);
+        Assert.Empty((await admin.GetSystemAsync(system.Id)).Capabilities);
+    }
+
+    private static async Task Sql(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Venter, til en anden forbindelse står i kø på en lås til koblingerne (så testen rammer vinduet).</summary>
+    private static async Task WaitForBlockedLockAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            await using var command = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND relation = 'ea.system_capabilities'::regclass",
+                connection, transaction);
+            if ((long)(await command.ExecuteScalarAsync())! > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail("Koblingen nåede aldrig at vente på importens lås.");
+    }
+
+    [Fact]
+    public async Task Hoejst_100_kapabiliteter_pr_system_og_graensen_tjekkes_foer_alt_andet()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, _) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+
+        // 100 (ukendte) id'er når forbi grænsen og fejler på, at de ikke findes. 101 afvises af grænsen — også når det
+        // er det samme id gentaget, for grænsen gælder den rå liste (ellers kunne en kæmpeliste slippe forbi).
+        var atLimit = await admin.CoupleAsync(system, Enumerable.Range(0, 100).Select(_ => Guid.NewGuid()).ToArray());
+        var overLimit = await admin.CoupleAsync(system, Enumerable.Repeat(Guid.NewGuid(), 101).ToArray());
+
+        Assert.Equal(["En eller flere af de valgte kapabiliteter findes ikke."], (await atLimit.ValidationErrorsAsync())["capabilityIds"]);
+        Assert.Equal(["Højst 100 kapabiliteter pr. system."], (await overLimit.ValidationErrorsAsync())["capabilityIds"]);
     }
 
     [Fact]
