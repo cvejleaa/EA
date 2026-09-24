@@ -246,9 +246,11 @@ public static class SystemEndpoints
             return Problems.Validation(errors);
         }
 
-        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så.
+        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
+        // (IsModified), så tjekket også sker, når kun rollerne ændres, og uret ikke har flyttet sig.
         db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
         Touch(system, user, time.GetUtcNow());
+        db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
 
         var failure = await Save(db, system, ct);
         if (failure is not null)
@@ -291,6 +293,8 @@ public static class SystemEndpoints
         system.LastConfirmedAt = time.GetUtcNow();
         system.LastConfirmedByOid = user.ObjectId();
         system.LastConfirmedByName = user.DisplayName();
+        // Skrives altid — også i samme øjeblik som sidste bekræftelse — så versionen altid tjekkes.
+        db.Entry(system).Property(s => s.LastConfirmedAt).IsModified = true;
 
         var failure = await Save(db, system, ct);
         if (failure is not null)

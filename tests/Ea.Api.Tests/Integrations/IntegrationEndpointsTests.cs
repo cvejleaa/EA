@@ -169,8 +169,13 @@ public sealed class IntegrationEndpointsTests
         await (await l.Admin.PutIntegrationAsync(seen.Id, seen.ToUpdate() with { Description = "Ændret af en anden" }))
             .ExpectAsync(HttpStatusCode.OK);
 
-        // Kun dataobjekterne (en anden tabel) ændres — versionen skal alligevel tjekkes.
-        var stale = await l.Admin.PutIntegrationAsync(seen.Id, seen.ToUpdate() with { DataObjectIds = [a.Id, b.Id] });
+        // Kun dataobjekterne (en anden tabel) ændres: samme felter som nu og samme klokkeslæt (uret står stille),
+        // så intet på selve integrationens række er anderledes — versionen skal ALLIGEVEL tjekkes.
+        var stale = await l.Admin.PutIntegrationAsync(seen.Id, seen.ToUpdate() with
+        {
+            Description = "Ændret af en anden",
+            DataObjectIds = [a.Id, b.Id],
+        });
 
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal(Problems.StaleVersionType, await stale.ProblemTypeAsync());

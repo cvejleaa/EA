@@ -123,6 +123,28 @@ public sealed class ImpactTests
     }
 
     [Fact]
+    public async Task En_platform_der_ogsaa_er_ende_viser_ud_via_ind_i_den_raekkefoelge_og_taeller_ikke_andres_db_adgang()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        var q = await admin.CreateSystemAsync(TestApi.NewSystem("Q", type: SystemType.Platform));
+        var a = await admin.CreateSystemAsync("A");
+        var b = await admin.CreateSystemAsync("B");
+        var c = await admin.CreateSystemAsync("C");
+        await admin.CreateIntegrationAsync(TestApiIntegrations.NewIntegration(c.Id, q.Id, IntegrationType.Api));        // Ind
+        await admin.CreateIntegrationAsync(TestApiIntegrations.NewIntegration(a.Id, b.Id, IntegrationType.DirekteDb, q.Id)); // Via
+        await admin.CreateIntegrationAsync(TestApiIntegrations.NewIntegration(q.Id, a.Id, IntegrationType.Fil));        // Ud
+
+        var result = await admin.SystemIntegrationsAsync(q.Id);
+
+        Assert.Equal(
+            [(IntegrationRelation.Ud, "Q", "A"), (IntegrationRelation.Via, "A", "B"), (IntegrationRelation.Ind, "C", "Q")],
+            Rows(result));
+        // Direkte DB-adgang MELLEM ANDRE systemer via platformen er ikke platformens egen DB-adgang.
+        Assert.Equal(new IntegrationSummary(Receivers: 1, Suppliers: 1, ViaPlatform: 1, LocalSolutions: 0, DirectDb: 0), result.Summary);
+    }
+
+    [Fact]
     public async Task System_uden_integrationer_giver_en_tom_liste()
     {
         await using var app = await TestApp.StartAsync();

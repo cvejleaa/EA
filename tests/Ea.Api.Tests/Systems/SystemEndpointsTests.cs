@@ -206,6 +206,42 @@ public sealed class SystemEndpointsTests
     }
 
     [Fact]
+    public async Task En_foraeldet_version_afvises_ogsaa_naar_kun_rollerne_aendres()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        var bo = await admin.CreatePersonAsync("Bo");
+        var seen = await admin.CreateSystemAsync("Kompas");
+        await (await admin.PutSystemAsync(seen.Id, seen.ToWrite() with { Description = "Ændret af en anden" }))
+            .ExpectAsync(HttpStatusCode.OK);
+
+        // Samme felter som nu og samme klokkeslæt (uret står stille) — kun rollerne (en anden tabel) er nye.
+        var stale = await admin.PutSystemAsync(seen.Id, seen.ToWrite() with
+        {
+            Description = "Ændret af en anden",
+            Roles = [new(SystemRole.Forretningsejer, bo.Id)],
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        Assert.Empty((await admin.GetSystemAsync(seen.Id)).Roles);
+    }
+
+    [Fact]
+    public async Task Bekraeftelse_af_en_foraeldet_version_afvises_ogsaa_i_samme_oejeblik()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        var seen = await admin.CreateSystemAsync("Kompas");
+        await (await admin.PostAsJsonAsync($"/api/systems/{seen.Id}/confirm", new ConfirmSystemRequest(seen.Version), TestApp.Json))
+            .ExpectAsync(HttpStatusCode.OK);
+
+        // Uret står stille: den forældede bekræftelse ville skrive præcis de samme værdier.
+        var stale = await admin.PostAsJsonAsync($"/api/systems/{seen.Id}/confirm", new ConfirmSystemRequest(seen.Version), TestApp.Json);
+
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+    }
+
+    [Fact]
     public async Task Redigering_uden_version_afvises()
     {
         await using var app = await TestApp.StartAsync();

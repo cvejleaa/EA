@@ -57,6 +57,7 @@ public sealed class CsvTests
     [InlineData("-2")]
     [InlineData("@SUM(A1)")]
     [InlineData("\tTAB")]
+    [InlineData("\rCR")]
     public void Formler_neutraliseres_med_apostrof(string value)
     {
         var field = ReadBack(Csv.Write(Header, [["1", value]]))[1][1];

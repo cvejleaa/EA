@@ -60,7 +60,7 @@ public static class IntegrationEndpoints
 
         // Det, der rammes, først: modtagere og det, der går via platformen; derefter leverandører og interne.
         var ordered = items
-            .OrderBy(i => i.Relation)
+            .OrderBy(i => RelationOrder(i.Relation))
             .ThenBy(i => DisplayName(i.Counterpart ?? i.Integration.From), StringComparer.CurrentCulture)
             .ThenBy(i => i.Integration.Type?.ToString() ?? "", StringComparer.Ordinal)
             .ToList();
@@ -83,6 +83,15 @@ public static class IntegrationEndpoints
             sending.Concat(receiving).Where(c => c.Type == SystemType.LokalLoesning).Select(c => c.Id).Distinct().Count(),
             items.Count(i => i.Relation != IntegrationRelation.Via && i.Integration.Type == IntegrationType.DirekteDb));
     }
+
+    /// <summary>Visningsrækkefølge — eksplicit, så den ikke afhænger af enum-værdiernes rækkefølge.</summary>
+    private static int RelationOrder(IntegrationRelation relation) => relation switch
+    {
+        IntegrationRelation.Ud => 0,
+        IntegrationRelation.Via => 1,
+        IntegrationRelation.Ind => 2,
+        _ => 3,
+    };
 
     private static string DisplayName(SystemLink s) => s.Parent is null ? s.Name : $"{s.Parent.Name} › {s.Name}";
 
@@ -205,9 +214,10 @@ public static class IntegrationEndpoints
             integration.DataObjects.Add(new IntegrationDataObject { IntegrationId = id, DataObjectId = dataObjectId });
         }
 
-        // UpdatedAt ændres ved HVER skrivning, så rækken altid opdateres og versionen altid tjekkes —
-        // også når kun dataobjekterne (en anden tabel) ændres.
+        // Rækken skrives ALTID (IsModified), så versionen altid tjekkes — også når kun dataobjekterne (en anden
+        // tabel) ændres, og uret ikke har flyttet sig siden sidste gem (samme værdi tæller ellers ikke som ændring).
         integration.UpdatedAt = time.GetUtcNow();
+        db.Entry(integration).Property(i => i.UpdatedAt).IsModified = true;
         db.Entry(integration).Property(i => i.Version).OriginalValue = request.Version!.Value;
 
         var failure = await Save(db, integration, infos, ct);
