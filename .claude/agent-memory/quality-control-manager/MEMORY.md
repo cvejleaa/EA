@@ -173,3 +173,37 @@ aggregerede tal på samme skærm.
 - "Koblinger der skal flyttes" (udgået eller blad→ikke-blad) har ingen skærm i planen → fejler tavst. Spørg hvor.
 - Ejerens "(Indfases + Udfases)" kan læses som "begge statusser udelukkes" — planen tæller Indfases med (fanger nyt
   overlap: "Konsolidering før nyt"). Den gaffel er ejerens, ikke kun "tæller Udfases?".
+
+## Kode-gennemgang delopg. 3a server (840d4c4, PR #5, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE. Ingen blokerende fund. Verificeret ved kørsel (ikke kun læsning): CsvReadTests (32
+tests, Read(Write(x))=x for hele "Tricky"-listen inkl. apostrof-foran-apostrof), alle Capabilities-tests (65,
+mod rigtig Postgres), `has-pending-model-changes` (ingen), `UPDATE_CONTRACT=1` for både CapabilityCsvTemplateTests
+og OpenApiContractTests (ingen diff → openapi.json/golden-CSV er i sync), `npm run gen:api` (ingen diff →
+schema.d.ts i sync).
+- B6 (tom fil, advarsel ved stor sletning, det der fjernes først) og B7 (egen 409-type `stale-dry-run`,
+  tekst "kør tør-kørsel igen" ikke "Genindlæs") begge LØST og testet med bånd der rammer den GAMLE værdi
+  (test bruger 6→5 mod 6→4 rundt om 20%-grænsen, ikke kun ét eksempel).
+- K5 (fiktive data): DevSeed's 19-punkts kapabilitetstræ er alle generiske ord ("Løn", "Bogføring",
+  "Servicedesk") + "(fiktiv)" på topniveau, IKKE ægte HERM/DTU-tekst. Golden-eksempelfilen bruger "(eksempel)".
+  Begge OK.
+- K7 (linjenummer + Excel-vejledning): BadFiles-tabellen dækker alle ni fejltyper fra docs/csv-kapabiliteter.md
+  1:1, inkl. komma-separeret fil (hint) og forkert tegnkodning (linjenummer på selve fejlen, ikke linje 1).
+- Csv.Field's nye "apostrof foran apostrof": generisk i Common/Csv.cs, bruges derfor også af integrations-CSV'en
+  og systemlisten — men INGEN eksisterende golden-fil indeholder et felt der starter med `'`, så ingen synlig
+  ændring dér (git diff på docs/csv/integrationer-eksempel.csv var tom); kun docs/csv-integrationer.md's TEKST er
+  opdateret til at nævne det. God model: en delt lav-niveau-fil ændret for én forbruger — tjek ALLE forbrugere,
+  ikke kun den nye, selv når det ender uden effekt.
+- Ny konflikttype stale-dry-run: Problems.cs ⇄ problem.ts begge opdateret i SAMME commit (klienten bruger den
+  endnu ikke, korrekt udskudt til 3a-web — ikke en løftebrist, for der er intet UI i 3a).
+- CLAUDE.md's spejl-liste opdateret korrekt (ny linje om CapabilityCsv-kontrakten, udvidet linje om Problems.cs).
+- Loggen ved gennemført import (LogImported: oid, new/changed/removed) findes — "hvordan startes det med vilje"
+  er policy-gated POST /api/capabilities/import (kun EA.Admin), "hvordan fejler det ikke tavst" er 409/400 til
+  klienten synkront (ingen baggrundsjob at miste en fejl i).
+### Mindre punkter (ikke blokerende, kan tages op siden)
+- Ingen test dækker MaxRows-grænsen (>5000 rækker) eller MaxFileBytes-grænsen som EKSAKT tal i en importtest
+  (kun i vejlednings-teksten via CapabilityRules-konstanten, og én "for stor fil"-test uden præcist antal
+  rækker). Lavt praktisk risiko (simpelt talsammenligning), men hvis grænsen nogensinde ændres uden test,
+  opdages det ikke af en mutation.
+- openapi.json dokumenterer ikke 409 for /api/capabilities/import (kun 400) — men det er IKKE en regression:
+  intet andet endpoint i kontrakten dokumenterer 409 heller (ProblemHttpResult er utypet for Swashbuckle
+  overalt). Konsistent med resten af API'et, ikke en fælde specifik for denne PR.
