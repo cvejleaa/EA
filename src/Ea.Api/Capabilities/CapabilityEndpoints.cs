@@ -107,7 +107,7 @@ public static partial class CapabilityEndpoints
             return Problems.Validation("fingerprint", "Kør tør-kørslen først, og gennemfør derefter med dens fingeraftryk.");
         }
 
-        var bytes = await CapabilityImport.ReadBodyAsync(request.Body, request.ContentLength, CapabilityRules.MaxFileBytes, ct);
+        var bytes = await CsvImport.ReadBodyAsync(request.Body, request.ContentLength, CapabilityRules.MaxFileBytes, ct);
         if (bytes is null)
         {
             return Problems.Validation("file", $"Filen er større end {CapabilityRules.MaxFileBytes / (1024 * 1024)} MB.");
@@ -130,31 +130,28 @@ public static partial class CapabilityEndpoints
         }
 
         // Lås kortet, så beregning, sammenligning og skrivning sker på samme tilstand — også ved to samtidige imports.
-        // Transaktionen kører i EF's retry-strategi og starter forfra (med ny beregning) ved et forbindelsesbrud.
-        var plan = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            // Koblingerne låses med: de afgør "slettes" eller "udgår", og en ny kobling må ikke ramme noget, der slettes.
-            await db.Database.ExecuteSqlRawAsync(
-                "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE", ct);
-
-            var existing = await db.Capabilities.ToListAsync(ct);
-            var current = CapabilityImport.Plan(rows, existing, await CapabilityQueries.CoupledSystemsAsync(db, ct));
-            if (!string.Equals(CapabilityImport.Fingerprint(current), fingerprint, StringComparison.Ordinal))
+        // Koblingerne låses med: de afgør "slettes" eller "udgår", og en ny kobling må ikke ramme noget, der slettes.
+        List<Capability> existing = [];
+        var plan = await CsvImport.CommitIfUnchangedAsync(
+            db,
+            "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE",
+            fingerprint!,
+            async () =>
             {
-                return null;
-            }
-
-            CapabilityImport.Apply(current, existing, db, time.GetUtcNow());
-            await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return current;
-        });
+                existing = await db.Capabilities.ToListAsync(ct);
+                var current = CapabilityImport.Plan(rows, existing, await CapabilityQueries.CoupledSystemsAsync(db, ct));
+                return (current, CapabilityImport.Fingerprint(current));
+            },
+            current =>
+            {
+                CapabilityImport.Apply(current, existing, db, time.GetUtcNow());
+                return Task.CompletedTask;
+            },
+            ct);
 
         if (plan is null)
         {
-            return Problems.StaleDryRun();
+            return Problems.StaleDryRun("Kortet eller koblingerne til det");
         }
 
         var logger = loggers.CreateLogger(typeof(CapabilityEndpoints));

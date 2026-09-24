@@ -311,9 +311,9 @@ public sealed class CapabilityImportTests
         watch.Stop();
 
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"Træ-tjekket tog {watch.Elapsed}.");
-        Assert.Equal(CapabilityImport.MaxErrors, chainErrors.Count);
+        Assert.Equal(CsvImport.MaxErrors, chainErrors.Count);
         Assert.Equal("Kapabiliteten ligger på niveau 5, men kortet må højst have 4 niveauer.", chainErrors[0].Message);
-        Assert.Equal(CapabilityImport.MaxErrors, ringErrors.Count);
+        Assert.Equal(CsvImport.MaxErrors, ringErrors.Count);
         Assert.All(ringErrors, e => Assert.True(e.Message.Length < 300, e.Message));
         Assert.EndsWith("→ …", ringErrors[0].Message.TrimEnd('.'), StringComparison.Ordinal);
     }
