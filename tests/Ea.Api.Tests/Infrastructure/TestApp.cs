@@ -45,6 +45,9 @@ public sealed class TestApp : IAsyncDisposable
 
     public FakeTimeProvider Time { get; }
 
+    /// <summary>Forbindelsen til testens egen database — til tests, der skal efterligne en samtidig transaktion.</summary>
+    public string ConnectionString => TestDatabase.ConnectionStringFor(_database, pooling: false);
+
     public IServiceProvider Services => _factory.Services;
 
     public static async Task<TestApp> StartAsync(string environment = "Testing", string authMode = AuthSetup.DevMode)

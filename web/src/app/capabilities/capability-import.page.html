@@ -55,10 +55,17 @@
     } @else {
       <h2>Tør-kørsel</h2>
       <p data-testid="summary">{{ summaryText(r.summary, false) }}</p>
+      @if (r.summary.couplingsToMove > 0) {
+        <p class="warning-soft" data-testid="to-move">
+          {{ count(r.summary.couplingsToMove, 'kobling', 'koblinger') }} på
+          {{ count(r.summary.systemsToMove, 'system', 'systemer') }} bør flyttes bagefter: de peger på en kapabilitet, der
+          udgår eller får underkapabiliteter. Koblingerne bevares, indtil de er flyttet.
+        </p>
+      }
       @if (r.summary.largeRemoval) {
         <p class="warning" role="alert" data-testid="large-removal">
-          Importen sletter {{ r.summary.removed }} af kortets {{ r.summary.currentTotal }} kapabiliteter. Filen skal
-          være hele kortet — er det en delvis fil?
+          Importen fjerner {{ r.summary.removedFromMap }} af kortets {{ r.summary.currentTotal }} kapabiliteter.
+          Filen skal være hele kortet — er det en delvis fil?
         </p>
       }
       @if (r.changes.length === 0) {
@@ -70,7 +77,7 @@
           </thead>
           <tbody>
             @for (c of r.changes; track c.code) {
-              <tr [class.removed]="c.kind === 'Slettes'">
+              <tr [class.removed]="c.kind === 'Slettes' || c.kind === 'Udgaar'">
                 <td>{{ kindLabels[c.kind] }}</td>
                 <td class="code">{{ c.code }}</td>
                 <td>{{ describe(c.before) }}</td>
@@ -78,6 +85,11 @@
                   {{ describe(c.after) }}
                   @if (descriptionChanged(c.before, c.after)) {
                     <span class="muted"> · beskrivelse ændret</span>
+                  }
+                  @if (c.affectedSystems.length) {
+                    <span class="affected" data-testid="affected">
+                      Koblinger bør flyttes: {{ systemNames(c) }}
+                    </span>
                   }
                 </td>
               </tr>

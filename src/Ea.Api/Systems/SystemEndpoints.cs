@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Ea.Api.Auth;
 using Ea.Api.Authorization;
+using Ea.Api.Capabilities;
 using Ea.Api.Common;
 using Ea.Api.Data;
 using Ea.Api.Integrations;
@@ -37,6 +38,7 @@ public static class SystemEndpoints
         SystemType? type,
         string? teamId,
         string? businessOwnerId,
+        string? capabilityId,
         EaDbContext db,
         CancellationToken ct)
     {
@@ -76,6 +78,25 @@ public static class SystemEndpoints
         else if (businessOwnerId is not null)
         {
             return Problems.Validation("businessOwnerId", $"businessOwnerId skal være et id eller '{None}'.");
+        }
+
+        if (capabilityId == None)
+        {
+            // Hverken systemet eller familien dækker noget: en forælder er dækket af sine modulers koblinger, et modul af
+            // forælderens ("hele systemet gør X") — men ikke af et søskendemoduls.
+            query = query.Where(s =>
+                s.CapabilityLinks.Count == 0 &&
+                (s.ParentSystemId == null
+                    ? s.Modules.All(m => m.CapabilityLinks.Count == 0)
+                    : s.ParentSystem!.CapabilityLinks.Count == 0));
+        }
+        else if (Guid.TryParse(capabilityId, out var capability))
+        {
+            query = query.Where(s => s.CapabilityLinks.Any(l => l.CapabilityId == capability));
+        }
+        else if (capabilityId is not null)
+        {
+            return Problems.Validation("capabilityId", $"capabilityId skal være et id eller '{None}'.");
         }
 
         var search = q?.Trim();
@@ -197,16 +218,24 @@ public static class SystemEndpoints
             CreatedAt = now,
         };
 
-        var errors = await Apply(request, system, moduleCount: 0, requireVersion: false, db, ct);
+        var (errors, failure) = await WithCouplingLock(db, request.CapabilityIds is not null, async () =>
+        {
+            var errors = await Apply(request, system, moduleCount: 0, requireVersion: false, db, ct);
+            if (errors is not null)
+            {
+                return (errors, null);
+            }
+
+            Touch(system, user, now);
+            db.Systems.Add(system);
+            return (null, await Save(db, system, ct));
+        }, ct);
+
         if (errors is not null)
         {
             return Problems.Validation(errors);
         }
 
-        Touch(system, user, now);
-        db.Systems.Add(system);
-
-        var failure = await Save(db, system, ct);
         if (failure is not null)
         {
             return failure;
@@ -238,21 +267,30 @@ public static class SystemEndpoints
         }
 
         await db.Entry(system).Collection(s => s.Roles).LoadAsync(ct);
+        await db.Entry(system).Collection(s => s.CapabilityLinks).LoadAsync(ct);
         var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
 
-        var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
+        var (errors, failure) = await WithCouplingLock(db, request.CapabilityIds is not null, async () =>
+        {
+            var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
+            if (errors is not null)
+            {
+                return (errors, null);
+            }
+
+            // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
+            // (IsModified), så tjekket også sker, når kun rollerne eller koblingerne ændres, og uret ikke har flyttet sig.
+            db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
+            Touch(system, user, time.GetUtcNow());
+            db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
+            return (null, await Save(db, system, ct));
+        }, ct);
+
         if (errors is not null)
         {
             return Problems.Validation(errors);
         }
 
-        // Samtidighedstjek: gem kun, hvis databasens version stadig er den, brugeren så. Rækken skrives ALTID
-        // (IsModified), så tjekket også sker, når kun rollerne ændres, og uret ikke har flyttet sig.
-        db.Entry(system).Property(s => s.Version).OriginalValue = request.Version!.Value;
-        Touch(system, user, time.GetUtcNow());
-        db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
-
-        var failure = await Save(db, system, ct);
         if (failure is not null)
         {
             return failure;
@@ -415,6 +453,12 @@ public static class SystemEndpoints
             errors["roles"] = [roleError];
         }
 
+        var capabilityErrors = await ValidateCapabilities(request.CapabilityIds, system, db, ct);
+        if (capabilityErrors is not null)
+        {
+            errors["capabilityIds"] = capabilityErrors;
+        }
+
         if (errors.Count > 0)
         {
             return errors;
@@ -439,7 +483,90 @@ public static class SystemEndpoints
             }
         }
 
+        // null = uændret (se SystemWriteRequest.CapabilityIds). Diff, ikke Clear+Add.
+        if (request.CapabilityIds is { } capabilityIds)
+        {
+            var wantedCapabilities = capabilityIds.ToHashSet();
+            system.CapabilityLinks.RemoveAll(l => !wantedCapabilities.Contains(l.CapabilityId));
+            foreach (var capabilityId in wantedCapabilities.Where(id => system.CapabilityLinks.All(l => l.CapabilityId != id)))
+            {
+                system.CapabilityLinks.Add(new SystemCapability { SystemId = system.Id, CapabilityId = capabilityId });
+            }
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// Ændrer anmodningen koblinger, valideres og gemmes de under en lås, der udelukker en samtidig import af kortet
+    /// (importen tager SHARE ROW EXCLUSIVE på koblingerne). Ellers kunne importen slette en kapabilitet eller give et
+    /// blad børn mellem valideringen og gemningen: en 500 (fremmednøgle) eller en kobling til et ikke-blad.
+    /// Låsene tages i samme rækkefølge som importens (kun koblingerne her), så de ikke kan låse hinanden fast.
+    /// </summary>
+    private static async Task<(Dictionary<string, string[]>? Errors, ProblemHttpResult? Failure)> WithCouplingLock(
+        EaDbContext db,
+        bool changesCouplings,
+        Func<Task<(Dictionary<string, string[]>? Errors, ProblemHttpResult? Failure)>> work,
+        CancellationToken ct)
+    {
+        if (!changesCouplings)
+        {
+            return await work();
+        }
+
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE", ct);
+            var result = await work();
+            await transaction.CommitAsync(ct);
+            return result;
+        });
+    }
+
+    /// <summary>
+    /// Nye koblinger skal pege på et blad, der ikke er udgået (CapabilityRules.CoupleBlockedReason). Eksisterende
+    /// koblinger bevares, selv om kapabiliteten siden er udgået eller har fået børn.
+    /// </summary>
+    private static async Task<string[]?> ValidateCapabilities(
+        IReadOnlyList<Guid>? capabilityIds, SystemEntity system, EaDbContext db, CancellationToken ct)
+    {
+        if (capabilityIds is null)
+        {
+            return null;
+        }
+
+        // Grænsen tjekkes på den rå liste, før der arbejdes med den.
+        if (capabilityIds.Count > CapabilityRules.MaxCouplingsPerSystem)
+        {
+            return [$"Højst {CapabilityRules.MaxCouplingsPerSystem} kapabiliteter pr. system."];
+        }
+
+        var wanted = capabilityIds.Distinct().ToList();
+
+        var added = wanted.Where(id => system.CapabilityLinks.All(l => l.CapabilityId != id)).ToList();
+        if (added.Count == 0)
+        {
+            return null;
+        }
+
+        var found = await db.Capabilities.AsNoTracking().Where(c => added.Contains(c.Id)).ToListAsync(ct);
+        if (found.Count != added.Count)
+        {
+            return ["En eller flere af de valgte kapabiliteter findes ikke."];
+        }
+
+        var withChildren = await db.Capabilities.AsNoTracking()
+            .Where(c => c.RetiredAt == null && c.ParentId != null && added.Contains(c.ParentId.Value))
+            .Select(c => c.ParentId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+        var reasons = found
+            .OrderBy(c => c.Code, CapabilityRules.CodeOrder)
+            .Select(c => CapabilityRules.CoupleBlockedReason(c, withChildren.Contains(c.Id)))
+            .OfType<string>()
+            .ToArray();
+        return reasons.Length > 0 ? reasons : null;
     }
 
     /// <summary>En gemt ændring er også en bekræftelse af, at oplysningerne er rigtige.</summary>
@@ -477,6 +604,52 @@ public static class SystemEndpoints
         }
     }
 
+    /// <summary>
+    /// Systemets egne koblinger plus familiens: på en forælder modulernes ("via modul"), på et modul forælderens.
+    /// Egne først, derefter i kortets rækkefølge (udgåede sidst).
+    /// </summary>
+    private static async Task<List<SystemCapabilityDto>> CapabilitiesOf(SystemEntity s, EaDbContext db, CancellationToken ct)
+    {
+        var family = new Dictionary<Guid, string> { [s.Id] = s.Name };
+        if (s.ParentSystem is { } parent)
+        {
+            family[parent.Id] = parent.Name;
+        }
+
+        foreach (var module in s.Modules)
+        {
+            family[module.Id] = module.Name;
+        }
+
+        var ids = family.Keys.ToList();
+        var links = await db.SystemCapabilities.AsNoTracking().Where(l => ids.Contains(l.SystemId)).ToListAsync(ct);
+        if (links.Count == 0)
+        {
+            return [];
+        }
+
+        var byId = await db.Capabilities.AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
+        var parents = byId.Values.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
+        var treeOrder = CapabilityRules.Ordered(byId.Values)
+            .Select((n, index) => (n.Capability.Id, index))
+            .ToDictionary(x => x.Id, x => x.index);
+        return links
+            .Select(l => (Link: l, Capability: byId[l.CapabilityId]))
+            .Select(x => new SystemCapabilityDto(
+                new CapabilityRef(
+                    x.Capability.Id,
+                    x.Capability.Code,
+                    x.Capability.Name,
+                    CapabilityRules.DisplayPath(x.Capability, byId),
+                    CapabilityRules.MoveReasonOf(x.Capability, parents.Contains(x.Capability.Id))),
+                x.Link.SystemId == s.Id ? null : new SystemRef(x.Link.SystemId, family[x.Link.SystemId])))
+            .OrderBy(c => c.HeldBy is not null)
+            .ThenBy(c => treeOrder.GetValueOrDefault(c.Capability.Id, int.MaxValue)) // Kortets rækkefølge; udgåede sidst.
+            .ThenBy(c => c.Capability.Code, CapabilityRules.CodeOrder)
+            .ThenBy(c => c.HeldBy?.Name, StringComparer.CurrentCulture)
+            .ToList();
+    }
+
     /// <summary>Hvad afhænger af systemet — bruges af både sletning og permissions (én kilde).</summary>
     internal static async Task<SystemUsage> CountUsage(EaDbContext db, Guid id, CancellationToken ct) => new(
         await db.Systems.CountAsync(s => s.ParentSystemId == id, ct),
@@ -502,6 +675,7 @@ public static class SystemEndpoints
                 .Select(m => new ModuleDto(m.Id, m.Name, m.LifecycleStatus)).ToList(),
             s.Roles.OrderBy(r => r.Role).ThenBy(r => r.Person.DisplayName, StringComparer.CurrentCulture)
                 .Select(r => new RoleAssignmentDto(r.Role, PersonDto.From(r.Person))).ToList(),
+            await CapabilitiesOf(s, db, ct),
             s.CreatedAt,
             s.UpdatedAt,
             s.LastConfirmedAt,

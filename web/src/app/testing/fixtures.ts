@@ -26,6 +26,7 @@ export function systemDetail(overrides: Partial<SystemDetail> = {}): SystemDetai
     parent: null,
     modules: [],
     roles: [],
+    capabilities: [],
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-08-01T10:00:00Z',
     lastConfirmedAt: '2026-08-01T10:00:00Z',
@@ -114,15 +115,38 @@ export function integrations(
 }
 
 export function capabilityNode(code: string, depth: number, overrides: Partial<CapabilityNode> = {}): CapabilityNode {
-  return { id: `cap-${code}`, code, name: `Navn ${code}`, description: null, parentId: null, depth, ...overrides };
+  return {
+    id: `cap-${code}`,
+    code,
+    name: `Navn ${code}`,
+    description: null,
+    parentId: null,
+    depth,
+    path: '',
+    selectable: false,
+    ...overrides,
+  };
 }
 
 export function capabilityTree(items: CapabilityNode[], canImport = true): CapabilityTreeResponse {
-  return { items, canImport };
+  return { items, toMove: [], canImport };
 }
 
 export function importSummary(overrides: Partial<CapabilityImportSummary> = {}): CapabilityImportSummary {
-  return { new: 0, changed: 0, removed: 0, unchanged: 0, currentTotal: 0, largeRemoval: false, ...overrides };
+  return {
+    new: 0,
+    changed: 0,
+    removed: 0,
+    retired: 0,
+    reactivated: 0,
+    unchanged: 0,
+    currentTotal: 0,
+    removedFromMap: 0,
+    largeRemoval: false,
+    couplingsToMove: 0,
+    systemsToMove: 0,
+    ...overrides,
+  };
 }
 
 export function importResult(overrides: Partial<CapabilityImportResult> = {}): CapabilityImportResult {

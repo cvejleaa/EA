@@ -8,3 +8,5 @@
 .success { color: var(--mat-sys-primary); }
 .actions { align-items: center; gap: 12px; }
 .problem { border-left: 4px solid var(--mat-sys-error); padding: 4px 12px; margin: 12px 0; }
+.warning-soft { border-left: 4px solid var(--mat-sys-tertiary); padding: 4px 12px; }
+.affected { display: block; font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }

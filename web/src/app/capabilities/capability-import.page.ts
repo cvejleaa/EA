@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
-import type { CapabilityImportResult, CapabilitySnapshot } from '../api/types';
+import type { CapabilityChange, CapabilityImportResult, CapabilitySnapshot } from '../api/types';
 import { capabilityChangeKindLabels, count, importSummaryText } from '../core/labels';
 import { STALE_DRY_RUN, toProblem, type ProblemInfo } from '../core/problem';
 import { CapabilitiesApi } from './capabilities.api';
@@ -99,6 +99,10 @@ export class CapabilityImportPage {
       return '—';
     }
     return `${s.name} (${s.parentCode ? `under ${s.parentCode}` : 'øverste niveau'})`;
+  }
+
+  protected systemNames(c: CapabilityChange): string {
+    return c.affectedSystems.map((s) => s.name).join(', ');
   }
 
   protected descriptionChanged(before?: CapabilitySnapshot | null, after?: CapabilitySnapshot | null): boolean {

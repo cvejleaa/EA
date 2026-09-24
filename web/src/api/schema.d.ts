@@ -311,6 +311,7 @@ export interface paths {
                     type?: components["schemas"]["SystemType"];
                     teamId?: string;
                     businessOwnerId?: string;
+                    capabilityId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1017,9 +1018,10 @@ export interface components {
             code: string;
             before: null | components["schemas"]["CapabilitySnapshot"];
             after: null | components["schemas"]["CapabilitySnapshot"];
+            affectedSystems: components["schemas"]["CoupledSystem"][];
         };
         /** @enum {unknown} */
-        CapabilityChangeKind: "Ny" | "Aendret" | "Slettes";
+        CapabilityChangeKind: "Ny" | "Aendret" | "Slettes" | "Udgaar" | "Genaktiveres" | "FaarUnderkapabiliteter";
         CapabilityImportResult: {
             committed: boolean;
             errors: components["schemas"]["ImportRowError"][];
@@ -1035,10 +1037,20 @@ export interface components {
             /** Format: int32 */
             removed: number;
             /** Format: int32 */
+            retired: number;
+            /** Format: int32 */
+            reactivated: number;
+            /** Format: int32 */
             unchanged: number;
             /** Format: int32 */
             currentTotal: number;
+            /** Format: int32 */
+            removedFromMap: number;
             largeRemoval: boolean;
+            /** Format: int32 */
+            couplingsToMove: number;
+            /** Format: int32 */
+            systemsToMove: number;
         };
         CapabilityNode: {
             /** Format: uuid */
@@ -1050,6 +1062,16 @@ export interface components {
             parentId: null | string;
             /** Format: int32 */
             depth: number;
+            path: string;
+            selectable: boolean;
+        };
+        CapabilityRef: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            path: string;
+            moveReason: null | components["schemas"]["MoveReason"];
         };
         CapabilitySnapshot: {
             code: string;
@@ -1057,13 +1079,28 @@ export interface components {
             parentCode: null | string;
             description: null | string;
         };
+        CapabilityToMove: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            path: string;
+            reason: components["schemas"]["MoveReason"];
+            systems: components["schemas"]["CoupledSystem"][];
+        };
         CapabilityTreeResponse: {
             items: components["schemas"]["CapabilityNode"][];
+            toMove: components["schemas"]["CapabilityToMove"][];
             canImport: boolean;
         };
         ConfirmSystemRequest: {
             /** Format: uint32 */
             version: null | number;
+        };
+        CoupledSystem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         CreateDataObjectRequest: {
             name: null | string;
@@ -1184,6 +1221,8 @@ export interface components {
             name: string;
             lifecycleStatus: components["schemas"]["LifecycleStatus"];
         };
+        /** @enum {unknown} */
+        MoveReason: "Udgaaet" | "HarUnderkapabiliteter" | null;
         PersonDto: {
             /** Format: uuid */
             id: string;
@@ -1200,6 +1239,10 @@ export interface components {
             /** Format: uuid */
             personId: string;
         };
+        SystemCapabilityDto: {
+            capability: components["schemas"]["CapabilityRef"];
+            heldBy: null | components["schemas"]["SystemRef"];
+        };
         SystemDetail: {
             /** Format: uuid */
             id: string;
@@ -1212,6 +1255,7 @@ export interface components {
             parent: null | components["schemas"]["SystemRef"];
             modules: components["schemas"]["ModuleDto"][];
             roles: components["schemas"]["RoleAssignmentDto"][];
+            capabilities: components["schemas"]["SystemCapabilityDto"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1290,6 +1334,7 @@ export interface components {
             roles: null | components["schemas"]["RoleAssignmentInput"][];
             /** Format: uint32 */
             version: null | number;
+            capabilityIds?: null | string[];
         };
         TeamDto: {
             /** Format: uuid */

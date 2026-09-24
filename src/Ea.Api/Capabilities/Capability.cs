@@ -28,4 +28,26 @@ public sealed class Capability
     public string? Description { get; set; }
 
     public Guid? ParentId { get; set; }
+
+    /// <summary>
+    /// Sat, når kapabiliteten ikke længere står i kortet, men stadig har koblinger (docs/csv-kapabiliteter.md).
+    /// En udgået kapabilitet er løsrevet fra træet og kan ikke få nye koblinger.
+    /// </summary>
+    public DateTimeOffset? RetiredAt { get; set; }
+
+    /// <summary>Hvor kapabiliteten sad, da den udgik (fx "Uddannelse › Studieadministration") — så koblingerne kan flyttes.</summary>
+    public string? RetiredPath { get; set; }
+}
+
+/// <summary>
+/// Et system understøtter en kapabilitet. Ingen felter på koblingen (ingen visning bruger dem). Et modul kan kobles
+/// selv; en forælder kan også kobles direkte ("hele systemet gør X").
+/// </summary>
+public sealed class SystemCapability
+{
+    public Guid SystemId { get; set; }
+
+    public Guid CapabilityId { get; set; }
+
+    public Capability Capability { get; set; } = null!;
 }

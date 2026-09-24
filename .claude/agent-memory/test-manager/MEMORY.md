@@ -267,6 +267,79 @@ gav 76/76 grønt. Samme mangel findes allerede i `system-list.page.spec.ts` for 
 er konsistent med `/systemer`-ruterne, der heller aldrig testes direkte (ingen E2E endnu, jf. CLAUDE.md). Ikke
 et PR-specifikt hul.
 
+## Fund 89d8011 (delopgave 3b, server, EA-register): koblinger mellem systemer og kapabiliteter — meget stærk kerne, fire kategorier huller
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests` 237/237 (16/16 i `Capabilities.CouplingTests`), web `npx ng test
+--watch=false` 84/84. Kørte ca. 25 målrettede mutationer i `SystemEndpoints.cs` (Apply/ValidateCapabilities/
+CapabilitiesOf/ListSystems-filter), `CapabilityRules.CoupleBlockedReason`, `CapabilityImport.Plan/Apply`,
+`CapabilityEndpoints.cs`, `CapabilityQueries.cs`, samt web (`labels.ts`, `capability-import.page.html/.ts`) —
+FLERTALLET dræbt præcist, pr.-gren, inkl. begge grene af `CoupleBlockedReason` (RetiredAt/hasChildren) hver for
+sig, "eksisterende bevares" (mutation: valider ALLE `wanted` i stedet for kun `added` → dræbt af netop den test,
+der skal bevise det), null-vs-tom-liste, RemoveAll/Add-diffen, familien i `CapabilitiesOf` (moduler ekskluderet,
+HeldBy altid null, rækkefølge egne/familie), `ListSystems`s `none`-filter (`All`→`Any` på modul-siden, fjernet
+tjek på forælder-siden), ugyldig `capabilityId`, manglende `CapabilityLinks`-load (4 tests dør), `Genaktiveres`-
+grenen, `KindOrder`, `active`-beregningen (CurrentTotal uden udgåede), `Selectable`/`Path`/`Retired.Systems` i
+`/api/capabilities`, `CoupledSystemsAsync`s "Forælder › Modul", og web-siden (Udgår-label, retired/reactivated-
+grene i `importSummaryText`, `[class.removed]` for Udgaar, `to-move`-betingelsen, fravær-vagten for `affected`,
+`systemNames`-join).
+
+**Overraskende IKKE et hul (verificeret empirisk, ikke kun teoretisk):** `Apply`s eksplicitte
+`capability.ParentId = null;` i retiring-loopet ser ud til at være load-bearing (kommentaren siger stien
+beregnes FØR træet ændres, og en forælder kan slettes mens et barn udgår i SAMME transaktion — ellers ville FK
+RESTRICT på `capabilities.parent_id` fejle). Mutation (fjern linjen) gav 237/237 GRØNT — men i stedet for at
+rapportere det som et hul, byggede jeg et midlertidigt diagnose-`[Fact]` (IKKE committet) der læste raw DB via
+`app.Services.CreateScope().GetRequiredService<EaDbContext>()` efter scenariet "K2 slettes, K2.1 (barn, koblet)
+udgår i samme import": resultatet var `K2 exists=False; K2.1 ParentId=` (tomt). **EF Core nuller selv FK'en
+client-side ved SaveChanges, når en tracked entity, der er markeret Deleted, stadig er refereret af en anden
+tracked entitets valgfri (nullable) FK — også med `DeleteBehavior.Restrict`.** Den eksplicitte linje er dermed en
+defensiv no-op, ikke en risiko i sig selv — så det er IKKE en reel mangel, blot en implementeringsdetalje EF
+klarer alligevel. **Lektie til næste gang**: når en "grøn efter mutation"-observation virker overraskende (fx en
+FK-integritetsregel, der burde fejle), byg en billig, midlertidig raw-DB-diagnostik FØR den rapporteres som hul —
+ellers risikerer man en falsk positiv i rapporten.
+
+**Overlevede — fem reelle huller:**
+1. **`CapabilityRules.MaxCouplingsPerSystem` (100) er helt utestet.** Fjernede grænsetjekket i
+   `SystemEndpoints.ValidateCapabilities` (`wanted.Count > MaxCouplingsPerSystem`) → 237/237 forblev grønt.
+   Samme mønster som `MaxRows`/feltlængderne i 840d4c4 (delopgave 3a). Mangler: en test der sender >100
+   `CapabilityIds` og forventer valideringsfejlen "Højst 100 kapabiliteter pr. system."
+2. **`CapabilityImportSummary.SystemsToMove`s `Distinct()` er ubevist.** Ændrede
+   `toMove.Select(s => s.Id).Distinct().Count()` til `toMove.Count` → 237/237 forblev grønt, fordi intet fixture
+   har ét system koblet til FLERE kapabiliteter, der samtidig udgår/får underkapabiliteter (alle eksisterende
+   scenarier har præcis 1:1 mellem koblinger og systemer, der skal flyttes). Mangler: et system koblet til to
+   kapabiliteter, der begge udgår i samme import — `SystemsToMove` skal være 1, `CouplingsToMove` 2.
+3. **"Allerede udgået + koblinger → ingen ændring" har kun tyndt sikkerhedsnet.** Fjernede
+   `gone.RetiredAt is null`-betingelsen i `Plan` (så en allerede udgået kapabilitet med koblinger udgår IGEN ved
+   hver import) → fanget af netop ÉN linje i `Import_lader_en_koblet_kapabilitet_udgaa_i_stedet_for_at_slette_den`
+   (eksport→reimport skal give 0 ændringer, linje 260). Ikke et hul i streng forstand (dræbt), men skrøbeligt:
+   ingen test navngivet efter selve dette udsagn — en fremtidig refaktorering af eksport-testen kunne utilsigtet
+   fjerne dækningen. Overvej en dedikeret test: reimportér SAMME fil to gange efter en Udgaar, forvent 0 changes
+   anden gang.
+4. **`FaarUnderkapabiliteter`s "kun når bladet havde INGEN børn FØR" (`hadChildren`-gaten) er reelt utestet.**
+   Fjernede `!hadChildren.Contains(current.Id) &&` → 237/237 forblev grønt. Ingen test genimporterer SAMME fil
+   to gange efter et blad har fået børn — så ingen test fanger, at kapabiliteten ellers ville blive meldt
+   "FaarUnderkapabiliteter" (med samme koblinger) ved HVER efterfølgende import, selvom intet nyt er sket.
+   Mangler: efter `Et_koblet_blad_der_faar_boern_meldes_saa_koblingerne_kan_flyttes`-scenariet, importér SAMME
+   fil igen og forvent at K1.2 nu er `Unchanged` (ikke `FaarUnderkapabiliteter` igen).
+5. **`removedFromMap`s skelnen mellem "var allerede udgået" og "var aktiv" ved Slettes er utestet.**
+   Ændrede `gone.RetiredAt is null ? 1 : 0` til altid `1` i Slettes-grenen (LargeRemoval-tælleren) → 237/237
+   forblev grønt. Ingen test kombinerer "en allerede udgået kapabilitet uden koblinger slettes" MED nok andre
+   fjernelser til at afgøre, om den fejlagtigt tæller dobbelt mod `LargeRemoval`/`CurrentTotal`-procenten (som jo
+   udelukkende bør handle om det SYNLIGE kort). Mangler: en test hvor en allerede-udgået, koblingsløs
+   kapabilitet slettes SAMTIDIG med at resten af filen er uændret, og som bekræfter `LargeRemoval: false` (fordi
+   den udgåede aldrig var en del af `CurrentTotal`).
+
+**LOCK på `system_capabilities` (samtidighed) er, som forventet (samme mønster som 840d4c4), IKKE racetestet.**
+Fjernede `ea.system_capabilities` fra `LOCK TABLE`-sætningen → 237/237 forblev grønt. Der FINDES en ægte
+parallel-race-test i repoet (`CapabilityImportTests.Samtidige_gennemfoerelser_af_samme_toer_koersel_giver_praecis_en_import`,
+8 samtidige klienter, `Task.WhenAll`), men den øver kun ren kapabilitets-kollision, ikke en race mod en
+SAMTIDIG kobling/frakobling på et system. Ikke nyt, men bør nævnes til Quality Control/Release Manager som
+kendt, accepteret defense-in-depth (svært at teste deterministisk uden kunstig forsinkelse i produktionskoden).
+
+**Solidt dækket uden overraskelser:** `SystemDetail.Capabilities`-loading (fjernet `LoadAsync` af `CapabilityLinks`
+→ 4 tests dør), stale-version ved ren kapabilitetsændring (genbruger den allerede grundigt testede
+"IsModified=true, ALTID"-mekanik fra delopgave 1/2 — ikke re-mutationstestet separat, da mekanismen er fælles og
+allerede dræbt tidligere), web-siden af 3b (labels, HTML-betingelser, `systemNames`) — alt dræbt præcist.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

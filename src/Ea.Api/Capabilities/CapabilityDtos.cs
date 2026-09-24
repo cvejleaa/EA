@@ -2,10 +2,47 @@ using Ea.Api.Common;
 
 namespace Ea.Api.Capabilities;
 
-/// <summary>En knude i kortet, i visningsrækkefølge. <c>Depth</c> 0 er øverste niveau.</summary>
-public sealed record CapabilityNode(Guid Id, string Code, string Name, string? Description, Guid? ParentId, int Depth);
+/// <summary>
+/// En knude i kortet, i visningsrækkefølge. <c>Depth</c> 0 er øverste niveau. <c>Path</c> er navnene ovenover
+/// (til vælgeren). <c>Selectable</c>: et system kan få en ny kobling hertil (et blad — samme regel som ved gem).
+/// </summary>
+public sealed record CapabilityNode(
+    Guid Id, string Code, string Name, string? Description, Guid? ParentId, int Depth, string Path, bool Selectable);
 
-public sealed record CapabilityTreeResponse(IReadOnlyList<CapabilityNode> Items, bool CanImport);
+/// <summary>Et system, vist med fuldt navn ("Forælder › Modul" for et modul).</summary>
+public sealed record CoupledSystem(Guid Id, string Name);
+
+/// <summary>Hvorfor koblinger til en kapabilitet bør flyttes. Danske koder (ekstern kontrakt).</summary>
+public enum MoveReason
+{
+    /// <summary>Kapabiliteten står ikke længere i kortet (se docs/csv-kapabiliteter.md).</summary>
+    Udgaaet,
+
+    /// <summary>Kapabiliteten har fået underkapabiliteter; kun blade kan vælges.</summary>
+    HarUnderkapabiliteter,
+}
+
+/// <summary>
+/// Arbejdslisten efter en ny udgave af kortet: kapabiliteter med koblinger, der bør flyttes — med de systemer, det
+/// gælder. <c>Path</c> er, hvor kapabiliteten sidder (for en udgået: hvor den sad).
+/// </summary>
+public sealed record CapabilityToMove(
+    Guid Id, string Code, string Name, string Path, MoveReason Reason, IReadOnlyList<CoupledSystem> Systems);
+
+public sealed record CapabilityTreeResponse(
+    IReadOnlyList<CapabilityNode> Items, IReadOnlyList<CapabilityToMove> ToMove, bool CanImport);
+
+/// <summary>
+/// Kapabiliteten, som den vises ved et system. <c>Path</c> er navnene ovenover (for en udgået: hvor den sad).
+/// <c>MoveReason</c> er sat, når koblingen bør flyttes (samme regel som kortets arbejdsliste).
+/// </summary>
+public sealed record CapabilityRef(Guid Id, string Code, string Name, string Path, MoveReason? MoveReason);
+
+/// <summary>
+/// En kobling på systemsiden. <c>HeldBy</c> er null for systemets egne koblinger; ellers det familiemedlem, der har
+/// koblingen (et modul på forælderens side, forælderen på et moduls side). Kun egne koblinger redigeres her.
+/// </summary>
+public sealed record SystemCapabilityDto(CapabilityRef Capability, Ea.Api.Systems.SystemRef? HeldBy);
 
 /// <summary>Hvad en import gør ved én kapabilitet. Danske koder, som resten af API'et (ekstern kontrakt).</summary>
 public enum CapabilityChangeKind
@@ -13,18 +50,49 @@ public enum CapabilityChangeKind
     Ny,
     Aendret,
     Slettes,
+
+    /// <summary>Står ikke i filen, men har koblinger: markeres udgået og bevarer koblingerne.</summary>
+    Udgaar,
+
+    /// <summary>En udgået kapabilitet står i filen igen.</summary>
+    Genaktiveres,
+
+    /// <summary>Et koblet blad får underkapabiliteter: koblingerne bør flyttes ned på det rigtige blad.</summary>
+    FaarUnderkapabiliteter,
 }
 
 public sealed record CapabilitySnapshot(string Code, string Name, string? ParentCode, string? Description);
 
-/// <summary>Én ændring med før og efter (Before er null for Ny, After er null for Slettes).</summary>
-public sealed record CapabilityChange(CapabilityChangeKind Kind, string Code, CapabilitySnapshot? Before, CapabilitySnapshot? After);
+/// <summary>
+/// Én ændring med før og efter (Before er null for Ny, After er null for Slettes og Udgaar). <c>AffectedSystems</c>
+/// er de systemer, hvis koblinger bør flyttes (ved Udgaar og FaarUnderkapabiliteter — ellers tom).
+/// </summary>
+public sealed record CapabilityChange(
+    CapabilityChangeKind Kind,
+    string Code,
+    CapabilitySnapshot? Before,
+    CapabilitySnapshot? After,
+    IReadOnlyList<CoupledSystem> AffectedSystems);
 
 /// <summary>
-/// Tallene øverst i tør-kørslen. <c>LargeRemoval</c>: importen fjerner en stor del af kortet — typisk en delvis
-/// fil, for filen er HELE kortet.
+/// Tallene øverst i tør-kørslen (alle i kapabiliteter, undtagen de to sidste). <c>Removed</c> tæller alt, der
+/// slettes — også oprydning af allerede udgåede. <c>CurrentTotal</c> er kortet nu (uden udgåede), og
+/// <c>RemovedFromMap</c> er, hvor mange af DEM der forsvinder (slettes eller udgår) — tallet bag "fjerner N af M" og
+/// <c>LargeRemoval</c> (en stor del af kortet: typisk en delvis fil, for filen er HELE kortet).
+/// <c>CouplingsToMove</c>/<c>SystemsToMove</c>: koblinger (og antal forskellige systemer), der bør flyttes bagefter.
 /// </summary>
-public sealed record CapabilityImportSummary(int New, int Changed, int Removed, int Unchanged, int CurrentTotal, bool LargeRemoval);
+public sealed record CapabilityImportSummary(
+    int New,
+    int Changed,
+    int Removed,
+    int Retired,
+    int Reactivated,
+    int Unchanged,
+    int CurrentTotal,
+    int RemovedFromMap,
+    bool LargeRemoval,
+    int CouplingsToMove,
+    int SystemsToMove);
 
 /// <summary>
 /// Svaret fra en tør-kørsel eller en gennemført import. Har filen fejl, er <c>Errors</c> udfyldt, og intet andet

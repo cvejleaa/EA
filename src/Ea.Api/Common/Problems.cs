@@ -29,7 +29,7 @@ public static class Problems
         StaleVersionType);
 
     public static ProblemHttpResult StaleDryRun() => Conflict(
-        "Kortet er ændret, siden du lavede tør-kørslen. Kør tør-kørslen igen for at se, hvad importen nu vil gøre.",
+        "Kortet eller koblingerne til det er ændret, siden du lavede tør-kørslen. Kør tør-kørslen igen for at se, hvad importen nu vil gøre.",
         StaleDryRunType);
 
     public static ProblemHttpResult Duplicate(string detail) => Conflict(detail, DuplicateType);

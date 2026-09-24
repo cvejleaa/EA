@@ -1,3 +1,4 @@
+using Ea.Api.Capabilities;
 using Ea.Api.Persons;
 using Ea.Api.Teams;
 
@@ -26,6 +27,7 @@ public sealed record SystemDetail(
     SystemRef? Parent,
     IReadOnlyList<ModuleDto> Modules,
     IReadOnlyList<RoleAssignmentDto> Roles,
+    IReadOnlyList<SystemCapabilityDto> Capabilities,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset LastConfirmedAt,
@@ -51,6 +53,11 @@ public sealed record SystemListResponse(IReadOnlyList<SystemListItem> Items, int
 public sealed record RoleAssignmentInput(SystemRole Role, Guid PersonId);
 
 /// <summary>Oprettelse og redigering. <see cref="Version"/> kræves ved redigering (samtidighedstjek).</summary>
+/// <param name="Roles">Den fulde liste af roller; null og tom betyder begge "ingen roller".</param>
+/// <param name="CapabilityIds">
+/// Systemets egne koblinger til kapabiliteter (hele listen). <b>null betyder uændret</b> — modsat <c>Roles</c> — så en
+/// klient, der ikke kender feltet, aldrig sletter koblingerne tavst. En tom liste fjerner alle.
+/// </param>
 public sealed record SystemWriteRequest(
     string? Name,
     IReadOnlyList<string>? Aliases,
@@ -60,6 +67,7 @@ public sealed record SystemWriteRequest(
     Guid? ManagingTeamId,
     Guid? ParentSystemId,
     IReadOnlyList<RoleAssignmentInput>? Roles,
-    uint? Version);
+    uint? Version,
+    IReadOnlyList<Guid>? CapabilityIds = null);
 
 public sealed record ConfirmSystemRequest(uint? Version);
