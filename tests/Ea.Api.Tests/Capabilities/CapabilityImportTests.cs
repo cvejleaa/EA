@@ -243,6 +243,9 @@ public sealed class CapabilityImportTests
         { "Kode;Navn;ForælderKode;Beskrivelse\r\nA;1;;\r\nB;2;A;\r\nC;3;B;\r\nD;4;C;\r\nE;5;D;\r\n", 6,
             "Kapabiliteten ligger på niveau 5, men kortet må højst have 4 niveauer." },
         { "Kode;Navn;ForælderKode;Beskrivelse\r\n;Uden kode;;\r\n", 2, "Koden mangler." },
+        { $"Kode;Navn;ForælderKode;Beskrivelse\r\n{new string('K', 41)};En;;\r\n", 2, "Koden er længere end 40 tegn." },
+        { $"Kode;Navn;ForælderKode;Beskrivelse\r\nK1;{new string('n', 201)};;\r\n", 2, "Navnet er længere end 200 tegn." },
+        { $"Kode;Navn;ForælderKode;Beskrivelse\r\nK1;En;;{new string('b', 4001)}\r\n", 2, "Beskrivelsen er længere end 4000 tegn." },
         { "Kode;Navn;ForælderKode;Beskrivelse\r\nK1;;;\r\n", 2, "Navnet mangler." },
         { "Kode;Navn;ForælderKode;Beskrivelse\r\nK1;En;;;ekstra\r\n", 2,
             "Linjen har 5 felter, men skal have 4. Står der et semikolon i en tekst uden citationstegn?" },
@@ -273,11 +276,12 @@ public sealed class CapabilityImportTests
         await using var app = await TestApp.StartAsync();
         var admin = await app.ClientFor(TestUsers.Admin);
 
+        // K0 og K3 fører ind i ringen K1 ↔ K2 — K0 står FØR ringen, så ringen findes via den.
         var preview = await admin.DryRunAsync(Text(
-            "Kode;Navn;ForælderKode;Beskrivelse\r\nK1;En;K2;\r\nK2;To;K1;\r\nK3;Tre;K1;\r\n"));
+            "Kode;Navn;ForælderKode;Beskrivelse\r\nK0;Nul;K1;\r\nK1;En;K2;\r\nK2;To;K1;\r\nK3;Tre;K1;\r\n"));
 
         Assert.Equal(
-            [(2, "Forælder-kæden går i ring: K1 → K2 → K1."), (3, "Forælder-kæden går i ring: K2 → K1 → K2.")],
+            [(3, "Forælder-kæden går i ring: K1 → K2 → K1."), (4, "Forælder-kæden går i ring: K2 → K1 → K2.")],
             preview.Errors.Select(e => (e.Line, e.Message)));
     }
 
@@ -307,6 +311,38 @@ public sealed class CapabilityImportTests
         Assert.Equal(CapabilityImport.MaxErrors, ringErrors.Count);
         Assert.All(ringErrors, e => Assert.True(e.Message.Length < 300, e.Message));
         Assert.EndsWith("→ …", ringErrors[0].Message.TrimEnd('.'), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Felter_paa_praecis_graensen_accepteres()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+
+        // 40/200/4000 tegn er lovligt; 41/201/4001 er fejl (BadFiles). Tallene er skrevet ud med vilje.
+        var preview = await admin.DryRunAsync(File((new string('K', 40), new string('n', 200), null, new string('b', 4000))));
+
+        Assert.Empty(preview.Errors);
+        Assert.Equal(1, preview.Summary.New);
+    }
+
+    /// <summary>
+    /// Kapabiliteter har ingen versionskolonne; låsen i gennemførelsen er det eneste, der forhindrer to samtidige
+    /// imports i at skrive oven i hinanden. Uden den: dublet-fejl (500) eller to "vellykkede" imports.
+    /// </summary>
+    [Fact]
+    public async Task Samtidige_gennemfoerelser_af_samme_toer_koersel_giver_praecis_en_import()
+    {
+        await using var app = await TestApp.StartAsync();
+        var clients = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => app.ClientFor(TestUsers.Admin)));
+        var fingerprint = (await clients[0].DryRunAsync(Model)).Fingerprint;
+
+        var responses = await Task.WhenAll(clients.Select(c => c.PostImportAsync(Model, dryRun: false, fingerprint)));
+
+        Assert.Equal(
+            [(HttpStatusCode.OK, 1), (HttpStatusCode.Conflict, 7)],
+            responses.GroupBy(r => r.StatusCode).Select(g => (g.Key, g.Count())).OrderBy(g => g.Key));
+        Assert.Equal(6, (await clients[0].CapabilitiesAsync()).Items.Count);
     }
 
     [Fact]
