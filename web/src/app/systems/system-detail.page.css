@@ -12,3 +12,8 @@
 .hint { margin-left: 8px; }
 .danger { margin-top: 32px; border-top: 1px solid var(--mat-sys-outline-variant); padding-top: 16px; }
 .delete-confirm { --mat-button-filled-container-color: var(--mat-sys-error); --mat-button-filled-label-text-color: var(--mat-sys-on-error); }
+.capabilities ul { padding-left: 20px; margin: 8px 0; }
+.capabilities li { margin: 4px 0; }
+.capabilities .held .name { color: var(--mat-sys-on-surface-variant); }
+.code { font-family: ui-monospace, monospace; color: var(--mat-sys-on-surface-variant); }
+.flag { margin-left: 4px; padding: 0 6px; border-radius: 4px; font: var(--mat-sys-label-medium); background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }

@@ -73,6 +73,58 @@ describe('CapabilityMapPage', () => {
     expect(text(q(f, '[data-testid="count"]'))).toBe(
       '4 kapabiliteter · kortet ændres kun ved import',
     );
+    expect(q(f, '[data-testid="to-move"]')).toBeNull();
+  });
+
+  it('kun kapabiliteter, der kan kobles til, linker til systemlisten', async () => {
+    const f = await render(
+      capabilityTree([
+        capabilityNode('K1', 0, { name: 'Uddannelse' }),
+        capabilityNode('K1.1', 1, { name: 'Optagelse', selectable: true }),
+      ]),
+    );
+
+    // En familie eller gruppe har ingen koblinger — et link dertil ville altid vise nul systemer.
+    const items = Array.from(el(f).querySelectorAll('[data-testid="tree"] li'));
+    expect(items.map((li) => li.querySelector('a.name')?.getAttribute('href') ?? null)).toEqual([
+      null,
+      '/systemer?capabilityId=cap-K1.1',
+    ]);
+    expect(text(q(f, '[data-testid="hint"]'))).toBe(
+      'Systemer kobles til kapabiliteterne på nederste niveau. Klik på én for at se de systemer, der er koblet til den.',
+    );
+  });
+
+  it('arbejdslisten viser koblinger, der bør flyttes, med grund og systemer', async () => {
+    const f = await render({
+      ...capabilityTree([capabilityNode('K1', 0, { name: 'Uddannelse' })]),
+      toMove: [
+        {
+          id: 'cap-K9',
+          code: 'K9',
+          name: 'Gammel eksamen',
+          path: 'Uddannelse',
+          reason: 'Udgaaet',
+          systems: [
+            { id: 'sys-a', name: 'Kompas' },
+            { id: 'sys-b', name: 'Nordlys › HR' },
+          ],
+        },
+        { id: 'cap-K1', code: 'K1', name: 'Uddannelse', path: '', reason: 'HarUnderkapabiliteter', systems: [{ id: 'sys-c', name: 'Laborant' }] },
+      ],
+    });
+
+    const section = q(f, '[data-testid="to-move"]')!;
+    expect(text(section.querySelector('h2'))).toBe('Koblinger, der bør flyttes (2)');
+    expect(Array.from(section.querySelectorAll('li')).map((li) => text(li))).toEqual([
+      'K9 Gammel eksamen · Uddannelse — Udgået af kortet — flyt koblingen Systemer: Kompas, Nordlys › HR',
+      'K1 Uddannelse — Har fået underkapabiliteter — vælg den, der passer bedst Systemer: Laborant',
+    ]);
+    expect(Array.from(section.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/systemer/sys-a',
+      '/systemer/sys-b',
+      '/systemer/sys-c',
+    ]);
   });
 
   it('import-knappen vises kun, når serveren giver lov', async () => {

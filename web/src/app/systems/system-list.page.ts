@@ -6,14 +6,15 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import type { LifecycleStatus, SystemListItem, SystemType, TeamDto } from '../api/types';
+import type { CapabilityNode, LifecycleStatus, SystemListItem, SystemType, TeamDto } from '../api/types';
 import { AuthService } from '../core/auth.service';
 import { lifecycleLabels, lifecycleOptions, relativeAge, systemTypeLabels, systemTypeOptions } from '../core/labels';
 import { toProblem } from '../core/problem';
+import { CapabilitiesApi } from '../capabilities/capabilities.api';
 import { IntegrationsApi } from '../integrations/integrations.api';
 import { SystemFilter, SystemsApi } from './systems.api';
 
-const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId'] as const;
+const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId', 'capabilityId'] as const;
 
 @Component({
   selector: 'ea-system-list-page',
@@ -24,6 +25,7 @@ const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId'] as cons
 export class SystemListPage implements OnInit, OnDestroy {
   private readonly api = inject(SystemsApi);
   private readonly integrationsApi = inject(IntegrationsApi);
+  private readonly capabilitiesApi = inject(CapabilitiesApi);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -40,6 +42,8 @@ export class SystemListPage implements OnInit, OnDestroy {
   protected readonly items = signal<SystemListItem[]>([]);
   protected readonly total = signal(0);
   protected readonly teams = signal<TeamDto[]>([]);
+  /** Kapabiliteten, listen er filtreret på (når filteret er et id — fx fra kortet). */
+  protected readonly capability = signal<Pick<CapabilityNode, 'code' | 'name'> | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly sort = signal<Sort>({ active: '', direction: '' });
@@ -76,11 +80,29 @@ export class SystemListPage implements OnInit, OnDestroy {
     } catch (e) {
       this.error.set(toProblem(e).message);
     }
-    await this.load();
+    await Promise.all([this.load(), this.loadCapabilityName(initial.capabilityId)]);
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.searchTimer);
+  }
+
+  /**
+   * Navnet på kapabiliteten i filteret (fx fra kortet eller systemsiden). En udgået kapabilitet står ikke i
+   * træet, men på listen over koblinger, der bør flyttes. Kan navnet ikke hentes, filtreres der alligevel.
+   */
+  private async loadCapabilityName(capabilityId: string | undefined): Promise<void> {
+    if (!capabilityId || capabilityId === 'none') {
+      return;
+    }
+    try {
+      const tree = await this.capabilitiesApi.tree();
+      this.capability.set(
+        tree.items.find((c) => c.id === capabilityId) ?? tree.toMove.find((c) => c.id === capabilityId) ?? null,
+      );
+    } catch {
+      this.capability.set(null);
+    }
   }
 
   protected displayName(item: SystemListItem): string {

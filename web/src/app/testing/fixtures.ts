@@ -2,11 +2,13 @@ import type {
   CapabilityImportResult,
   CapabilityImportSummary,
   CapabilityNode,
+  CapabilityRef,
   CapabilityTreeResponse,
   IntegrationDto,
   MeResponse,
   SystemDetail,
   SystemIntegrationItem,
+  SystemCapabilityDto,
   SystemIntegrationsResponse,
   SystemLink,
   SystemListItem,
@@ -151,4 +153,17 @@ export function importSummary(overrides: Partial<CapabilityImportSummary> = {}):
 
 export function importResult(overrides: Partial<CapabilityImportResult> = {}): CapabilityImportResult {
   return { committed: false, errors: [], summary: importSummary(), changes: [], fingerprint: null, ...overrides };
+}
+
+export function capabilityRef(code: string, overrides: Partial<CapabilityRef> = {}): CapabilityRef {
+  return { id: `cap-${code}`, code, name: `Navn ${code}`, path: '', moveReason: null, ...overrides };
+}
+
+/** En kobling på systemsiden. `heldBy` = systemet i familien, der har koblingen (null = systemets egen). */
+export function systemCapability(
+  code: string,
+  heldBy: { id: string; name: string } | null = null,
+  overrides: Partial<CapabilityRef> = {},
+): SystemCapabilityDto {
+  return { capability: capabilityRef(code, overrides), heldBy };
 }

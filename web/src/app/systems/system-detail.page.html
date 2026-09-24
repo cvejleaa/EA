@@ -69,6 +69,34 @@
       </ul>
     }
 
+    <section class="capabilities" aria-labelledby="capabilities-heading">
+      <h2 id="capabilities-heading">Kapabiliteter</h2>
+      @if (s.capabilities.length) {
+        <ul data-testid="capabilities">
+          @for (c of s.capabilities; track c.capability.id + '/' + (c.heldBy?.id ?? '')) {
+            <li [class.held]="c.heldBy">
+              <a [routerLink]="['/systemer']" [queryParams]="{ capabilityId: c.capability.id }" class="name">
+                <span class="code">{{ c.capability.code }}</span>&ngsp;{{ c.capability.name }}
+              </a>
+              @if (c.capability.path) {
+                <span class="muted"> · {{ c.capability.path }}</span>
+              }
+              @if (c.heldBy) {
+                <span class="muted via">
+                  · via {{ c.heldBy.id === s.parent?.id ? 'forælderen' : 'modulet' }} {{ c.heldBy.name }}</span
+                >
+              }
+              @if (c.capability.moveReason) {
+                &ngsp;<span class="flag" data-testid="move-reason">{{ moveReasonLabels[c.capability.moveReason] }}</span>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="missing" data-testid="capabilities-none">Ikke angivet</p>
+      }
+    </section>
+
     <section class="freshness" aria-label="Bekræftelse">
       <p data-testid="confirmed">
         Senest bekræftet {{ s.lastConfirmedAt | date: 'd. MMM y' }} af {{ s.lastConfirmedByName }}
@@ -79,7 +107,9 @@
         <button mat-stroked-button type="button" (click)="confirmUnchanged()" [disabled]="busy()" data-testid="confirm">
           Bekræft uændret
         </button>
-        <span class="muted hint">Systemets oplysninger ovenfor er stadig rigtige. Integrationerne bekræftes ikke her.</span>
+        <span class="muted hint"
+          >Systemets oplysninger og egne kapabiliteter ovenfor er stadig rigtige. Integrationerne bekræftes ikke her.</span
+        >
       }
     </section>
 

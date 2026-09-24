@@ -3,9 +3,17 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { provideDanishLocale } from '../core/locale';
-import type { SystemDetail, SystemWriteRequest } from '../api/types';
+import type { CapabilityTreeResponse, SystemDetail, SystemWriteRequest } from '../api/types';
 import { AuthService } from '../core/auth.service';
-import { me, systemDetail, text, settle } from '../testing/fixtures';
+import {
+  capabilityNode,
+  capabilityTree,
+  me,
+  settle,
+  systemCapability,
+  systemDetail,
+  text,
+} from '../testing/fixtures';
 import { SystemFormPage } from './system-form.page';
 
 describe('SystemFormPage', () => {
@@ -22,7 +30,10 @@ describe('SystemFormPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(existing?: SystemDetail): Promise<ComponentFixture<SystemFormPage>> {
+  async function render(
+    existing?: SystemDetail,
+    tree: CapabilityTreeResponse = capabilityTree([]),
+  ): Promise<ComponentFixture<SystemFormPage>> {
     const fixture = TestBed.createComponent(SystemFormPage);
     if (existing) {
       fixture.componentRef.setInput('id', existing.id);
@@ -34,6 +45,7 @@ describe('SystemFormPage', () => {
       { id: 'p-fr', displayName: 'Frida', email: null, department: null },
     ]);
     http.expectOne((r) => r.url === '/api/systems/parent-candidates').flush([{ id: 'parent-1', name: 'Nordlys' }]);
+    http.expectOne('/api/capabilities').flush(tree);
     if (existing) {
       http.expectOne(`/api/systems/${existing.id}`).flush(existing);
     }
@@ -54,6 +66,7 @@ describe('SystemFormPage', () => {
     http.expectOne('/api/teams').flush([]);
     http.expectOne('/api/persons').flush([]);
     http.expectOne((r) => r.url === '/api/systems/parent-candidates').flush([]);
+    http.expectOne('/api/capabilities').flush(capabilityTree([]));
     const pending = http.expectOne('/api/systems/sys-1');
     await settle(fixture);
 
@@ -105,6 +118,8 @@ describe('SystemFormPage', () => {
         { role: 'Systemforvalter', personId: 'p-fr' },
       ],
       version: null,
+      // En tom liste, ikke null: null betyder "uændret" på serveren.
+      capabilityIds: [],
     });
     request.flush(systemDetail({ id: 'ny' }));
     await settle(f);
@@ -185,5 +200,97 @@ describe('SystemFormPage', () => {
     const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
     expect(text(problem)).toBe('Der findes allerede et system med navnet "Kompas".');
     expect(problem?.querySelector('button')).toBeNull();
+  });
+
+  describe('kapabiliteter', () => {
+    const tree = capabilityTree([
+      capabilityNode('K1', 0, { name: 'Uddannelse' }),
+      capabilityNode('K1.1', 1, { name: 'Studieadministration', path: 'Uddannelse' }),
+      capabilityNode('K1.1.1', 2, { name: 'Optagelse', path: 'Uddannelse › Studieadministration', selectable: true }),
+      capabilityNode('K1.1.2', 2, { name: 'Eksamen', path: 'Uddannelse › Studieadministration', selectable: true }),
+      capabilityNode('K1.2', 1, { name: 'Studievejledning', path: 'Uddannelse', selectable: true }),
+      capabilityNode('K2', 0, { name: 'Forskning' }),
+      capabilityNode('K2.1', 1, { name: 'Bevillinger', path: 'Forskning', selectable: true }),
+    ]);
+    const existing = () =>
+      systemDetail({
+        capabilities: [
+          systemCapability('K1.1.1', null, { name: 'Optagelse', path: 'Uddannelse › Studieadministration' }),
+          systemCapability('K1.9', null, { name: 'Gammel eksamen', path: 'Uddannelse', moveReason: 'Udgaaet' }),
+          systemCapability('K2.1', { id: 'sys-mod', name: 'Laboratorie' }, { name: 'Bevillinger', path: 'Forskning' }),
+        ],
+      });
+
+    const el = (f: ComponentFixture<SystemFormPage>) => f.nativeElement as HTMLElement;
+    const chips = (f: ComponentFixture<SystemFormPage>) =>
+      Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row')).map((c) => text(c));
+
+    /** Skriv i søgefeltet og returnér de tilbudte valgmuligheder (autocomplete ligger i et overlay). */
+    async function search(f: ComponentFixture<SystemFormPage>, query: string): Promise<HTMLElement[]> {
+      const input = el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement;
+      input.dispatchEvent(new Event('focusin'));
+      input.value = query;
+      input.dispatchEvent(new Event('input'));
+      await settle(f);
+      return Array.from(document.querySelectorAll<HTMLElement>('mat-option'));
+    }
+
+    it('viser egne koblinger som valgte — med markering — og familiens for sig', async () => {
+      const f = await render(existing(), tree);
+
+      expect(chips(f)).toEqual(['K1.1.1 Optagelse ×', 'K1.9 Gammel eksamen · udgået ×']);
+      expect(text(el(f).querySelector('[data-testid="family-capabilities"]'))).toBe(
+        'Familiens kapabiliteter (redigeres på det andet system): K2.1 Bevillinger — via modulet Laboratorie',
+      );
+    });
+
+    it('søger på kode, navn og gruppe, men tilbyder kun blade, der ikke allerede er valgt', async () => {
+      const f = await render(existing(), tree);
+
+      // Gruppens navn finder bladene under den; K1.1.1 er valgt, og gruppen K1.1 selv kan ikke vælges.
+      expect((await search(f, 'studieadm')).map((o) => text(o))).toEqual([
+        'K1.1.2 Eksamen · Uddannelse › Studieadministration',
+      ]);
+      expect((await search(f, 'k1.2')).map((o) => text(o))).toEqual(['K1.2 Studievejledning · Uddannelse']);
+      expect((await search(f, 'uddannelse')).map((o) => text(o))).toEqual([
+        'K1.1.2 Eksamen · Uddannelse › Studieadministration',
+        'K1.2 Studievejledning · Uddannelse',
+      ]);
+    });
+
+    it('sender HELE listen af egne koblinger — tilføjet og fjernet — men aldrig familiens', async () => {
+      const f = await render(existing(), tree);
+
+      const [eksamen] = await search(f, 'eksamen');
+      eksamen.click();
+      await settle(f);
+      expect((el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement).value).toBe('');
+      (el(f).querySelector('[data-testid="remove-capability"]') as HTMLButtonElement).click(); // K1.1.1
+      await settle(f);
+      expect(chips(f)).toEqual(['K1.9 Gammel eksamen · udgået ×', 'K1.1.2 Eksamen ×']);
+
+      await submit(f);
+      const put = http.expectOne('/api/systems/sys-1');
+      // Den udgåede kobling sendes med: den bevares, indtil nogen flytter den.
+      expect((put.request.body as SystemWriteRequest).capabilityIds).toEqual(['cap-K1.9', 'cap-K1.1.2']);
+      put.flush(systemDetail());
+      await settle(f);
+    });
+
+    it('viser serverens fejl ved kapabiliteterne ved feltet', async () => {
+      const f = await render(existing(), tree);
+      await submit(f);
+      http
+        .expectOne('/api/systems/sys-1')
+        .flush(
+          { title: 'Der er fejl i oplysningerne.', errors: { capabilityIds: ['K1.1 har underkapabiliteter og kan ikke vælges.'] } },
+          { status: 400, statusText: 'Bad Request' },
+        );
+      await settle(f);
+
+      expect(Array.from(el(f).querySelectorAll('[data-testid="capability-error"]')).map((e) => text(e))).toEqual([
+        'K1.1 har underkapabiliteter og kan ikke vælges.',
+      ]);
+    });
   });
 });

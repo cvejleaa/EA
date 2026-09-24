@@ -21,6 +21,8 @@ export interface SystemFilter {
   teamId?: string;
   /** Person-id eller 'none' (uden forretningsejer). */
   businessOwnerId?: string;
+  /** Kapabilitets-id eller 'none' (hverken systemet eller dets familie har en kapabilitet). */
+  capabilityId?: string;
 }
 
 @Injectable({ providedIn: 'root' })

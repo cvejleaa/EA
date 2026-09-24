@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideDanishLocale } from '../core/locale';
 import { provideRouter } from '@angular/router';
 import type { SystemDetail } from '../api/types';
-import { integrations, systemDetail, text, settle } from '../testing/fixtures';
+import { integrations, systemCapability, systemDetail, text, settle } from '../testing/fixtures';
 import { SystemDetailPage } from './system-detail.page';
 
 describe('SystemDetailPage', () => {
@@ -33,6 +33,39 @@ describe('SystemDetailPage', () => {
 
   const q = (f: ComponentFixture<unknown>, selector: string) =>
     (f.nativeElement as HTMLElement).querySelector(selector);
+
+  it('viser egne kapabiliteter først, familiens med "via", og markerer koblinger, der bør flyttes', async () => {
+    const nordlys = { id: 'sys-par', name: 'Nordlys' };
+    const f = await render(
+      systemDetail({
+        parent: nordlys,
+        capabilities: [
+          systemCapability('K1.1.1', null, { name: 'Optagelse', path: 'Uddannelse › Studieadministration' }),
+          systemCapability('K1.9', null, { name: 'Gammel eksamen', path: 'Uddannelse', moveReason: 'Udgaaet' }),
+          systemCapability('K2', nordlys, { name: 'Forskning', moveReason: 'HarUnderkapabiliteter' }),
+          systemCapability('K3.1', { id: 'sys-mod', name: 'Laboratorie' }, { name: 'Prøver', path: 'Laboratorier' }),
+        ],
+      }),
+    );
+
+    const items = Array.from(q(f, '[data-testid="capabilities"]')!.querySelectorAll('li'));
+    expect(items.map((li) => text(li))).toEqual([
+      'K1.1.1 Optagelse · Uddannelse › Studieadministration',
+      'K1.9 Gammel eksamen · Uddannelse Udgået af kortet — flyt koblingen',
+      'K2 Forskning · via forælderen Nordlys Har fået underkapabiliteter — vælg den, der passer bedst',
+      'K3.1 Prøver · Laboratorier · via modulet Laboratorie',
+    ]);
+    expect(items.map((li) => li.querySelector('[data-testid="move-reason"]') !== null)).toEqual([false, true, true, false]);
+    // Hver kobling fører til systemlisten filtreret på kapabiliteten.
+    expect(items[0].querySelector('a')?.getAttribute('href')).toBe('/systemer?capabilityId=cap-K1.1.1');
+    expect(q(f, '[data-testid="capabilities-none"]')).toBeNull();
+  });
+
+  it('siger "Ikke angivet", når hverken systemet eller familien har kapabiliteter', async () => {
+    const f = await render(systemDetail({ capabilities: [] }));
+    expect(text(q(f, '[data-testid="capabilities-none"]'))).toBe('Ikke angivet');
+    expect(q(f, '[data-testid="capabilities"]')).toBeNull();
+  });
 
   it('viser forretningsejer med afdeling', async () => {
     const f = await render(

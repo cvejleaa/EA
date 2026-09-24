@@ -6,3 +6,9 @@
 .hint { flex-basis: 100%; margin: 0; }
 .problem { padding: 8px 12px; border-left: 4px solid var(--mat-sys-error); }
 .actions { margin-top: 16px; }
+.capability-field { width: 100%; }
+.code { font-family: ui-monospace, monospace; }
+.flagged { --mat-chip-elevated-container-color: var(--mat-sys-error-container); }
+.flag { font: var(--mat-sys-label-small); }
+.family ul { margin: 4px 0 8px; padding-left: 20px; }
+.family p { margin: 0; }
