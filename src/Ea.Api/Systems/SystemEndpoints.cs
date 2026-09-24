@@ -261,11 +261,13 @@ public static class SystemEndpoints
         }
 
         await db.Entry(system).Collection(s => s.Roles).LoadAsync(ct);
-        await db.Entry(system).Collection(s => s.CapabilityLinks).LoadAsync(ct);
         var moduleCount = await db.Systems.CountAsync(s => s.ParentSystemId == id, ct);
 
         var (errors, failure) = await WithCouplingLock(db, request.CapabilityIds is not null, async () =>
         {
+            // Koblingerne læses EFTER låsen: en import, der lige er gennemført, skal ses — ellers tilføjer formularen
+            // en kobling, importen allerede har lavet (500), eller validerer mod en forældet liste.
+            await db.Entry(system).Collection(s => s.CapabilityLinks).LoadAsync(ct);
             var errors = await Apply(request, system, moduleCount, requireVersion: true, db, ct);
             if (errors is not null)
             {
@@ -339,12 +341,25 @@ public static class SystemEndpoints
     }
 
     /// <summary>
-    /// Sletning fjerner systemets koblinger (cascade). Koblingslåsen tages FØR systemrækken — samme rækkefølge som
+    /// Sletning fjerner systemets koblinger (cascade). Opslag og adgangstjek sker FØR låsen, så en afvisning er billig
+    /// og en læser ikke kan stå i kø ved den. Koblingslåsen tages derefter FØR systemrækken — samme rækkefølge som
     /// formularen og importerne — så en samtidig koblingsimport ikke kan ende i en deadlock.
     /// </summary>
-    private static Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
-        Guid id, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct) =>
-        db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+    private static async Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
+        Guid id, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct)
+    {
+        var found = await db.Systems.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (found is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        if (!(await auth.AuthorizeAsync(user, found, Policies.EditSystem)).Succeeded)
+        {
+            return TypedResults.Forbid();
+        }
+
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -356,11 +371,6 @@ public static class SystemEndpoints
                 return (Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>)TypedResults.NotFound();
             }
 
-            if (!(await auth.AuthorizeAsync(user, system, Policies.EditSystem)).Succeeded)
-            {
-                return TypedResults.Forbid();
-            }
-
             var blocked = SystemRules.DeleteBlockedReason(system.Name, await CountUsage(db, id, ct));
             if (blocked is not null)
             {
@@ -368,10 +378,20 @@ public static class SystemEndpoints
             }
 
             db.Systems.Remove(system);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Ændret af en anden (fx gemt i formularen) mens sletningen ventede: slet ikke noget, brugeren ikke så.
+                return Problems.StaleVersion("Systemet");
+            }
+
             await transaction.CommitAsync(ct);
             return TypedResults.NoContent();
         });
+    }
 
     private static Task<SystemEntity?> LoadAggregate(IQueryable<SystemEntity> source, Guid id, CancellationToken ct) =>
         source

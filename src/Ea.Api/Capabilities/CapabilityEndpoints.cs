@@ -191,7 +191,7 @@ public static partial class CapabilityEndpoints
             return Problems.Validation("file", $"Filen er større end {CouplingImport.MaxFileBytes / (1024 * 1024)} MB.");
         }
 
-        var (rows, errors) = CouplingImport.Parse(Csv.Read(bytes));
+        var (rows, errors) = CouplingImport.Parse(Csv.Read(bytes, maxRecords: CouplingImport.MaxRows + 2));
         if (errors.Count > 0)
         {
             return commit

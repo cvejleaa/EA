@@ -447,4 +447,95 @@ public sealed class CouplingImportTests
 
         await (await delete).ExpectAsync(HttpStatusCode.NoContent);
     }
+
+    /// <summary>
+    /// En læser, der prøver at slette, mens en import holder låsen, afvises straks — adgangstjekket ligger før låsen,
+    /// så en afvist bruger ikke kan stå i kø ved den og binde forbindelser (Security Reviewer, 3d).
+    /// </summary>
+    [Fact]
+    public async Task En_laeser_afvises_straks_ogsaa_mens_en_import_holder_laasen()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, _) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Tomrum");
+        var reader = await app.ClientFor(TestUsers.Reader);
+
+        await using var import = new NpgsqlConnection(app.ConnectionString);
+        await import.OpenAsync();
+        await using var transaction = await import.BeginTransactionAsync();
+        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+
+        var delete = reader.DeleteAsync($"/api/systems/{system.Id}");
+        var first = await Task.WhenAny(delete, Task.Delay(TimeSpan.FromSeconds(10)));
+        await transaction.CommitAsync();
+
+        Assert.Same(delete, first);
+        await (await delete).ExpectAsync(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// En formular, der gemmer samme kobling, som en samtidig import lige har lavet, skal få "ændret af en anden"
+    /// (409) — ikke en 500 fra et dobbelt INSERT. Koblingerne læses derfor efter låsen (Security Reviewer, 3d).
+    /// </summary>
+    [Fact]
+    public async Task En_formular_gemt_under_en_import_faar_konflikt_ikke_en_serverfejl()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var opened = await CoupledAsync(admin, await admin.CreateSystemAsync("Kompas"), ids["K1.1"]);
+
+        await using var import = new NpgsqlConnection(app.ConnectionString);
+        await import.OpenAsync();
+        await using var transaction = await import.BeginTransactionAsync();
+        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+        await Sql(import, transaction,
+            $"INSERT INTO ea.system_capabilities (system_id, capability_id) VALUES ('{opened.Id}', '{ids["K1.2"]}')");
+        await Sql(import, transaction, $"UPDATE ea.systems SET updated_at = now() WHERE id = '{opened.Id}'");
+
+        var put = admin.PutSystemAsync(opened.Id, opened.ToWrite() with { CapabilityIds = [ids["K1.1"], ids["K1.2"]] });
+        await WaitForBlockedLockAsync(import, transaction);
+        await transaction.CommitAsync();
+
+        var response = await put;
+        await response.ExpectAsync(HttpStatusCode.Conflict);
+        Assert.Equal(Problems.StaleVersionType, await response.ProblemTypeAsync());
+        Assert.Equal(["K1.1", "K1.2"], Codes(await admin.GetSystemAsync(opened.Id)));
+    }
+
+    /// <summary>En sletning, der ventede, mens nogen gemte systemet, sletter ikke det, brugeren ikke så (409, ikke 500).</summary>
+    [Fact]
+    public async Task En_sletning_af_et_system_der_aendres_imens_giver_konflikt()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, _) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Tomrum");
+
+        await using var form = new NpgsqlConnection(app.ConnectionString);
+        await form.OpenAsync();
+        await using var transaction = await form.BeginTransactionAsync();
+        await Sql(form, transaction, $"UPDATE ea.systems SET description = 'Gemt imens' WHERE id = '{system.Id}'");
+
+        var delete = admin.DeleteAsync($"/api/systems/{system.Id}");
+        await WaitForBlockedBackendAsync(form, transaction);
+        await transaction.CommitAsync();
+
+        var response = await delete;
+        await response.ExpectAsync(HttpStatusCode.Conflict);
+        Assert.Equal(Problems.StaleVersionType, await response.ProblemTypeAsync());
+        Assert.Equal("Gemt imens", (await admin.GetSystemAsync(system.Id)).Description);
+    }
+
+    [Fact]
+    public void En_fil_med_flere_end_MaxRows_raekker_afvises()
+    {
+        var id = Guid.NewGuid();
+        var file = CouplingFile(Enumerable.Range(0, CouplingImport.MaxRows + 1).Select(_ => (id, (string?)null, (string?)null)).ToArray());
+
+        var (rows, errors) = CouplingImport.Parse(Csv.Read(file, maxRecords: CouplingImport.MaxRows + 2));
+
+        Assert.Empty(rows);
+        Assert.Equal(
+            [new ImportRowError(1, null, "Filen har flere end 20000 rækker; højst 20000 kan indlæses ad gangen. Del den op efter system.")],
+            errors);
+    }
 }

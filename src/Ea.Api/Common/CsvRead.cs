@@ -18,13 +18,20 @@ public static partial class Csv
         "Gem filen i Excel som \"CSV UTF-8 (kommasepareret) (*.csv)\" — ikke \"CSV (semikolonsepareret)\", " +
         "som bruger en ældre tegnkodning, hvor æøå går tabt.";
 
+    /// <summary>Ingen af registrets filer har mere end en håndfuld kolonner; flere er en forkert fil.</summary>
+    public const int MaxFieldsPerRecord = 1000;
+
     /// <summary>
     /// Læser en fil i registrets CSV-format (<see cref="Write"/>): strikt UTF-8 (BOM valgfri), semikolon,
     /// citering efter RFC 4180, linjeskift som CRLF, LF eller CR. Apostroffer fra formel-neutraliseringen fjernes
     /// igen (<see cref="Unguard"/>), så Read(Write(x)) giver x — også tomme linjer inde i et felt.
     /// Rækker med kun tomme felter springes over (Excel efterlader dem gerne).
     /// </summary>
-    public static CsvReadResult Read(byte[] bytes)
+    /// <param name="maxRecords">
+    /// Læs højst så mange poster (overskrifterne medregnet), så en fil med millioner af korte linjer ikke parses
+    /// helt, før kalderens grænse på rækker tjekkes. Kalderen giver én mere end sin grænse og ser, at den er overskredet.
+    /// </param>
+    public static CsvReadResult Read(byte[] bytes, int maxRecords = int.MaxValue)
     {
         var start = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble) ? Encoding.UTF8.Preamble.Length : 0;
         var content = bytes.AsSpan(start);
@@ -105,6 +112,11 @@ public static partial class Csv
 
             fields.Add(field.ToString());
             field.Clear();
+            if (fields.Count > MaxFieldsPerRecord)
+            {
+                return Failed(new ImportRowError(recordLine, null,
+                    $"Linjen har over {MaxFieldsPerRecord} felter. Er det den rigtige fil?"));
+            }
 
             if (i < text.Length && text[i] == Separator)
             {
@@ -116,6 +128,10 @@ public static partial class Csv
             if (fields.Any(f => f.Length > 0))
             {
                 records.Add(new CsvRow(recordLine, fields.Select(Unguard).ToList()));
+                if (records.Count >= maxRecords)
+                {
+                    break;
+                }
             }
 
             fields = [];

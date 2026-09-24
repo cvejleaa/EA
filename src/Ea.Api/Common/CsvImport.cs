@@ -24,15 +24,23 @@ public static class CsvImport
 
         using var buffer = new MemoryStream();
         var chunk = new byte[81920];
-        int read;
-        while ((read = await body.ReadAsync(chunk, ct)) > 0)
+        try
         {
-            if (buffer.Length + read > maxBytes)
+            int read;
+            while ((read = await body.ReadAsync(chunk, ct)) > 0)
             {
-                return null;
-            }
+                if (buffer.Length + read > maxBytes)
+                {
+                    return null;
+                }
 
-            buffer.Write(chunk, 0, read);
+                buffer.Write(chunk, 0, read);
+            }
+        }
+        catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            // Kestrels egen grænse (fx en chunked upload uden Content-Length): samme svar som vores.
+            return null;
         }
 
         return buffer.ToArray();

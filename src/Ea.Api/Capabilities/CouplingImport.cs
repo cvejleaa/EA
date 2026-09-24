@@ -62,7 +62,7 @@ public static class CouplingImport
         if (csv.Rows.Count > MaxRows)
         {
             return ([], [new ImportRowError(1, null,
-                $"Filen har {csv.Rows.Count} rækker; højst {MaxRows} kan indlæses ad gangen. Del den op efter system.")]);
+                $"Filen har flere end {MaxRows} rækker; højst {MaxRows} kan indlæses ad gangen. Del den op efter system.")]);
         }
 
         var index = CouplingCsv.Header.Select((column, i) => (column, i)).ToDictionary(x => x.column, x => x.i);

@@ -222,4 +222,26 @@ public sealed class CsvReadTests
         Assert.Empty(result.Header);
         Assert.Empty(result.Rows);
     }
+
+    [Fact]
+    public void Laesningen_stopper_ved_maxRecords_saa_en_kaempefil_ikke_parses_helt()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(string.Concat(Enumerable.Range(0, 10).Select(i => $"a{i};b\n")));
+
+        var read = Csv.Read(bytes, maxRecords: 3);
+
+        Assert.Null(read.Error);
+        Assert.Equal(["a0", "b"], read.Header);
+        Assert.Equal([2, 3], read.Rows.Select(r => r.Line));
+    }
+
+    [Fact]
+    public void En_linje_med_over_1000_felter_afvises()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("a;b\n" + new string(';', Csv.MaxFieldsPerRecord) + "\n");
+
+        var read = Csv.Read(bytes);
+
+        Assert.Equal(new ImportRowError(2, null, "Linjen har over 1000 felter. Er det den rigtige fil?"), read.Error);
+    }
 }
