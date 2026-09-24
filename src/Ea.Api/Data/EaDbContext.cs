@@ -1,3 +1,4 @@
+using Ea.Api.Capabilities;
 using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
@@ -16,6 +17,9 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
 
     public const string DataObjectNameIndex = "ux_data_objects_name";
 
+    /// <summary>Kapabilitetens kode er unik uden hensyn til store/små bogstaver (importens nøgle).</summary>
+    public const string CapabilityCodeIndex = "ux_capabilities_code";
+
     public DbSet<SystemEntity> Systems => Set<SystemEntity>();
 
     public DbSet<SystemRoleAssignment> SystemRoles => Set<SystemRoleAssignment>();
@@ -27,6 +31,8 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
     public DbSet<Integration> Integrations => Set<Integration>();
 
     public DbSet<DataObject> DataObjects => Set<DataObject>();
+
+    public DbSet<Capability> Capabilities => Set<Capability>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -140,6 +146,22 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
             e.HasKey(d => new { d.IntegrationId, d.DataObjectId });
             e.HasOne(d => d.DataObject).WithMany().HasForeignKey(d => d.DataObjectId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(d => d.DataObjectId);
+        });
+
+        modelBuilder.Entity<Capability>(e =>
+        {
+            e.ToTable("capabilities");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).ValueGeneratedNever();
+            e.Property(c => c.Code).HasMaxLength(CapabilityRules.CodeMaxLength).IsRequired();
+            e.Property(c => c.CodeNormalized).HasMaxLength(CapabilityRules.CodeMaxLength).IsRequired();
+            e.Property(c => c.Name).HasMaxLength(CapabilityRules.NameMaxLength).IsRequired();
+            e.Property(c => c.Description).HasMaxLength(CapabilityRules.DescriptionMaxLength);
+            e.HasIndex(c => c.CodeNormalized).IsUnique().HasDatabaseName(CapabilityCodeIndex);
+
+            // Restrict: importen sletter børn før forældre; databasen afviser et hul i træet.
+            e.HasOne<Capability>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(c => c.ParentId);
         });
 
         modelBuilder.Entity<Team>(e =>

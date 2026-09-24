@@ -1,3 +1,4 @@
+using Ea.Api.Capabilities;
 using Ea.Api.Integrations;
 using Ea.Api.Persons;
 using Ea.Api.Systems;
@@ -37,6 +38,47 @@ public static partial class DevSeed
         {
             await SeedIntegrationsAsync(db, now, logger);
         }
+
+        if (!await db.Capabilities.AnyAsync())
+        {
+            await SeedCapabilitiesAsync(db, now, logger);
+        }
+    }
+
+    /// <summary>
+    /// Et lille FIKTIVT kapabilitetskort — ikke HERM (licens) og ikke DTU's. Lægges ind via selve importen, så
+    /// eksempeldata og import følger samme regler.
+    /// </summary>
+    private static async Task SeedCapabilitiesAsync(EaDbContext db, DateTimeOffset now, ILogger logger)
+    {
+        (string Code, string Name, string? Parent)[] model =
+        [
+            ("K1", "Uddannelse (fiktiv)", null),
+            ("K1.1", "Studieadministration", "K1"),
+            ("K1.1.1", "Optagelse", "K1.1"),
+            ("K1.1.2", "Eksamensadministration", "K1.1"),
+            ("K1.2", "Undervisningsplatforme", "K1"),
+            ("K1.2.1", "Kursusindhold", "K1.2"),
+            ("K2", "Forskning (fiktiv)", null),
+            ("K2.1", "Laboratoriedrift", "K2"),
+            ("K2.1.1", "Prøvehåndtering", "K2.1"),
+            ("K3", "Understøttende funktioner (fiktiv)", null),
+            ("K3.1", "Økonomi", "K3"),
+            ("K3.1.1", "Bogføring", "K3.1"),
+            ("K3.1.2", "Projektøkonomi", "K3.1"),
+            ("K3.2", "Personale", "K3"),
+            ("K3.2.1", "Løn", "K3.2"),
+            ("K3.2.2", "Rekruttering", "K3.2"),
+            ("K3.3", "IT-drift", "K3"),
+            ("K3.3.1", "Identitet og adgang", "K3.3"),
+            ("K3.3.2", "Servicedesk", "K3.3"),
+        ];
+
+        var rows = model.Select((m, i) => new CapabilityImportRow(i + 2, m.Code, m.Name, m.Parent, null)).ToList();
+        var plan = CapabilityImport.Plan(rows, []);
+        CapabilityImport.Apply(plan, [], db, now);
+        await db.SaveChangesAsync();
+        LogCapabilitiesSeeded(logger, rows.Count);
     }
 
     private static async Task SeedSystemsAsync(EaDbContext db, DateTimeOffset now)
@@ -202,4 +244,7 @@ public static partial class DevSeed
 
     [LoggerMessage(Level = LogLevel.Information, Message = "DevSeed: {Count} fiktive integrationer oprettet.")]
     private static partial void LogSeeded(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "DevSeed: {Count} fiktive kapabiliteter oprettet.")]
+    private static partial void LogCapabilitiesSeeded(ILogger logger, int count);
 }

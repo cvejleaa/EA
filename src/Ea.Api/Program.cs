@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Ea.Api.Auth;
+using Ea.Api.Capabilities;
 using Ea.Api.CurrentUser;
 using Ea.Api.Data;
 using Ea.Api.Integrations;
@@ -47,6 +48,7 @@ app.MapPersonEndpoints();
 app.MapSystemEndpoints();
 app.MapIntegrationEndpoints();
 app.MapDataObjectEndpoints();
+app.MapCapabilityEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

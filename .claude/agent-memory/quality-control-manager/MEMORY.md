@@ -155,3 +155,21 @@ tabellen, hvis to integrationer går til samme system med forskellige navne (til
 beslutning C i plan.md). Vurderet OK — feltet er korrekt defineret og dokumenteret, og tabellen gør årsagen
 synlig (samme systemnavn optræder to gange) — men hold øje med dette mønster, hvis der tilføjes flere
 aggregerede tal på samme skærm.
+
+## Plan-gennemgang delopg. 3 (2026-09-24) — kapabiliteter + overlap. Tjek ved kode-gennemgangen:
+- ORDKOLLISION: plan tæller "løsninger" (system+moduler = én), men typen LokalLoesning hedder "Lokal løsning/udtræk"
+  og er UDELUKKET fra overlap → "Overlap: 2 løsninger" ved siden af en nedtonet "Lokal løsning" modsiger sig selv.
+  Også "familie" = både system+moduler (FamilyOf/familyId) og HERM-kapabilitetsfamilie. Spørg: hvilket ord står i UI?
+- Enheder på kortet: blad-badge tæller familier, grupperækker "systemCount" — skal være samme enhed og navngivet.
+  "Kun uden systemer" skal bruge SAMME definition af "aktiv" som overlap (et blad med kun Nedlagt er et hul).
+- Roll-up-fælde: SystemDetail.Capabilities inkl. modulers koblinger ("via modul") → formularen må KUN sende egne,
+  ellers kopieres modulets koblinger til forælderen ved næste gem. Test: gem forælder uændret → ingen nye koblinger.
+- SystemWriteRequest: Roles null = tøm (Apply: `request.Roles ?? []`), CapabilityIds null = uændret — modsat semantik
+  i samme DTO. Kræv web-test af at formularen altid sender et array.
+- Import "filen er hele modellen": beskyttelsen er REVERSIBILITET (udgået bevarer koblinger, genaktiveres ved samme
+  kode) + tom fil afvist + advarsel ved stor fjernelse. Eksport må ikke indeholde udgåede (ellers genaktiverer
+  eksport→import dem). Problems.StaleVersion-teksten siger "Genindlæs" — forkert handling for import (skal være
+  "kør tør-kørsel igen").
+- "Koblinger der skal flyttes" (udgået eller blad→ikke-blad) har ingen skærm i planen → fejler tavst. Spørg hvor.
+- Ejerens "(Indfases + Udfases)" kan læses som "begge statusser udelukkes" — planen tæller Indfases med (fanger nyt
+  overlap: "Konsolidering før nyt"). Den gaffel er ejerens, ikke kun "tæller Udfases?".

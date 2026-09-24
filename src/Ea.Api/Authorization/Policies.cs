@@ -11,4 +11,7 @@ public static class Policies
     public const string ManagePersons = nameof(ManagePersons);
     public const string EditIntegration = nameof(EditIntegration);
     public const string ManageDataObjects = nameof(ManageDataObjects);
+
+    /// <summary>Importere kapabilitetskortet (HELE kortet erstattes) — kun enterprise arkitekten.</summary>
+    public const string ManageCapabilities = nameof(ManageCapabilities);
 }

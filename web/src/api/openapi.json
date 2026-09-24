@@ -764,6 +764,92 @@
           }
         }
       }
+    },
+    "/api/capabilities": {
+      "get": {
+        "tags": [
+          "Kapabiliteter"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/capabilities/export.csv": {
+      "get": {
+        "tags": [
+          "Kapabiliteter"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/capabilities/import": {
+      "post": {
+        "tags": [
+          "Kapabiliteter"
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fingerprint",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -776,6 +862,209 @@
         "properties": {
           "mode": {
             "type": "string"
+          }
+        }
+      },
+      "CapabilityChange": {
+        "required": [
+          "kind",
+          "code",
+          "before",
+          "after"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CapabilityChangeKind"
+          },
+          "code": {
+            "type": "string"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CapabilitySnapshot"
+              }
+            ]
+          },
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CapabilitySnapshot"
+              }
+            ]
+          }
+        }
+      },
+      "CapabilityChangeKind": {
+        "enum": [
+          "Ny",
+          "Aendret",
+          "Slettes"
+        ]
+      },
+      "CapabilityImportResult": {
+        "required": [
+          "committed",
+          "errors",
+          "summary",
+          "changes",
+          "fingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "committed": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowError"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CapabilityImportSummary"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityChange"
+            }
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CapabilityImportSummary": {
+        "required": [
+          "new",
+          "changed",
+          "removed",
+          "unchanged",
+          "currentTotal",
+          "largeRemoval"
+        ],
+        "type": "object",
+        "properties": {
+          "new": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "changed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unchanged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currentTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "largeRemoval": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CapabilityNode": {
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "parentId",
+          "depth"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "depth": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CapabilitySnapshot": {
+        "required": [
+          "code",
+          "name",
+          "parentCode",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CapabilityTreeResponse": {
+        "required": [
+          "items",
+          "canImport"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityNode"
+            }
+          },
+          "canImport": {
+            "type": "boolean"
           }
         }
       },
@@ -938,6 +1227,29 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "ImportRowError": {
+        "required": [
+          "line",
+          "column",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "column": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": "string"
           }
         }
       },
@@ -1841,6 +2153,9 @@
     },
     {
       "name": "Dataobjekter"
+    },
+    {
+      "name": "Kapabiliteter"
     }
   ]
 }

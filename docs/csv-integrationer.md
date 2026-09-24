@@ -90,7 +90,8 @@ Eksempelfilen viser præcis det mønster (`Månedligt lønudtræk`).
   integrationer, og det er fint at sende en delmængde tilbage.
 - **Apostroffer mod formler.** Registret sætter `'` foran `=`, `+`, `-` og `@` (også fuldbredde-varianterne
   `＝ ＋ － ＠`), når tegnet står først i et felt eller lige efter et komma eller en tabulator. Det sker
-  også, når feltet starter med en tabulator eller et linjeskift. Formålet er, at et regneark aldrig
+  også, når feltet starter med en tabulator eller et linjeskift, og foran en apostrof, der allerede står
+  dér, så importen kan skelne registrets apostroffer fra dine egne. Formålet er, at et regneark aldrig
   tolker tekst fra registret som en formel, heller ikke hvis filen åbnes med komma som skilletegn. En
   bindestreg alene eller foran et mellemrum, fx `100,- kr.`, får ikke apostrof. Importen fjerner
   apostrofferne igen.
