@@ -30,3 +30,6 @@ web/coverage/
 *.csv
 # Undtagelse: fiktive test-fixtures
 !tests/**/fixtures/**
+
+# Midlertidige worktrees fra gennemgangsrollerne (fx Test Manager)
+.claude/worktrees/
