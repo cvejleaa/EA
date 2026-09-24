@@ -45,7 +45,27 @@ public static class TestDatabase
         }
     }
 
-    public static Task DropAsync(string name) => ExecuteAsync($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
+    /// <summary>
+    /// Sletter testens database. WITH (FORCE) afslutter forbindelserne til den — men lokalt er rollen ikke superuser
+    /// (scripts/dev-db.sh), og er PostgreSQL's autovacuum i gang på databasen, afviser serveren at afslutte den
+    /// (42501). Det varer millisekunder, så der prøves igen i stedet for at gøre en grøn test rød ved oprydningen.
+    /// I CI er rollen superuser, og fejlen opstår ikke.
+    /// </summary>
+    public static async Task DropAsync(string name)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await ExecuteAsync($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
+                return;
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InsufficientPrivilege && attempt < 50)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
 
     /// <summary>Kaldes, når alle tests er kørt.</summary>
     internal static async Task DropTemplateAsync()
