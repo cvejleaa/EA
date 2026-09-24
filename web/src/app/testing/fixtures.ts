@@ -128,12 +128,13 @@ export function capabilityNode(code: string, depth: number, overrides: Partial<C
     depth,
     path: '',
     selectable: false,
+    overlap: null,
     ...overrides,
   };
 }
 
 export function capabilityTree(items: CapabilityNode[], canImport = true): CapabilityTreeResponse {
-  return { items, toMove: [], canImport };
+  return { items, toMove: [], canImport, coverage: { covered: 0, total: 0 } };
 }
 
 export function importSummary(overrides: Partial<CapabilityImportSummary> = {}): CapabilityImportSummary {
@@ -167,7 +168,7 @@ export function systemCapability(
   heldBy: { id: string; name: string } | null = null,
   overrides: Partial<CapabilityRef> = {},
 ): SystemCapabilityDto {
-  return { capability: capabilityRef(code, overrides), heldBy };
+  return { capability: capabilityRef(code, overrides), heldBy, overlap: null, ownExclusion: null, sharedWith: [] };
 }
 
 export function couplingSummary(overrides: Partial<CouplingImportSummary> = {}): CouplingImportSummary {

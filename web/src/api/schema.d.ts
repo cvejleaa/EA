@@ -1148,6 +1148,16 @@ export interface components {
             depth: number;
             path: string;
             selectable: boolean;
+            overlap: null | components["schemas"]["CapabilityOverlap"];
+        };
+        CapabilityOverlap: {
+            /** Format: int32 */
+            counted: number;
+            /** Format: int32 */
+            planned: number;
+            isOverlap: boolean;
+            plannedOnTopOfActive: boolean;
+            members: components["schemas"]["OverlapMember"][];
         };
         CapabilityRef: {
             /** Format: uuid */
@@ -1176,6 +1186,7 @@ export interface components {
             items: components["schemas"]["CapabilityNode"][];
             toMove: components["schemas"]["CapabilityToMove"][];
             canImport: boolean;
+            coverage: components["schemas"]["CouplingCoverage"];
         };
         ConfirmSystemRequest: {
             /** Format: uint32 */
@@ -1196,6 +1207,12 @@ export interface components {
         };
         /** @enum {unknown} */
         CouplingChangeKind: "Fjernes" | "Tilfoejes";
+        CouplingCoverage: {
+            /** Format: int32 */
+            covered: number;
+            /** Format: int32 */
+            total: number;
+        };
         CouplingImportResult: {
             committed: boolean;
             errors: components["schemas"]["ImportRowError"][];
@@ -1347,6 +1364,14 @@ export interface components {
         };
         /** @enum {unknown} */
         MoveReason: "Udgaaet" | "HarUnderkapabiliteter" | null;
+        /** @enum {unknown} */
+        OverlapExclusion: "Planlagt" | "Nedlagt" | "Udfases" | "LokalLoesning" | null;
+        OverlapMember: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            exclusion: null | components["schemas"]["OverlapExclusion"];
+        };
         PersonDto: {
             /** Format: uuid */
             id: string;
@@ -1366,6 +1391,9 @@ export interface components {
         SystemCapabilityDto: {
             capability: components["schemas"]["CapabilityRef"];
             heldBy: null | components["schemas"]["SystemRef"];
+            overlap: null | components["schemas"]["CapabilityOverlap"];
+            ownExclusion: null | components["schemas"]["OverlapExclusion"];
+            sharedWith: components["schemas"]["OverlapMember"][];
         };
         SystemDetail: {
             /** Format: uuid */

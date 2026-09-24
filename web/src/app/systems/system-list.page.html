@@ -63,7 +63,7 @@
         data-testid="capability-filter"
       >
         <mat-option value="">Alle</mat-option>
-        <mat-option value="none">Ikke angivet</mat-option>
+        <mat-option value="none">Ikke angivet (nedlagte undtaget)</mat-option>
         @if (filter().capabilityId && filter().capabilityId !== 'none') {
           <mat-option [value]="filter().capabilityId">
             {{ capability() ? capability()!.code + ' ' + capability()!.name : 'Valgt kapabilitet' }}

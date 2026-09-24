@@ -7,6 +7,7 @@ import type {
   IntegrationType,
   LifecycleStatus,
   MoveReason,
+  OverlapExclusion,
   SystemRole,
   SystemType,
 } from '../api/types';
@@ -68,6 +69,17 @@ export const capabilityChangeKindLabels: Record<CapabilityChangeKind, string> = 
 export const moveReasonLabels: Record<MoveReason, string> = {
   Udgaaet: 'Udgået af kortet — flyt koblingen',
   HarUnderkapabiliteter: 'Har fået underkapabiliteter — vælg den, der passer bedst',
+};
+
+/**
+ * Hvorfor et system ikke tæller med i overlap (docs/plan.md, beslutning I) — kort form, fx "Ugle (udfases)".
+ * Ordet "løsning" står i ental: "lokale løsninger" må ikke stå på skærmen (beslutning F).
+ */
+export const overlapExclusionLabels: Record<OverlapExclusion, string> = {
+  Planlagt: 'planlagt',
+  Nedlagt: 'nedlagt',
+  Udfases: 'udfases',
+  LokalLoesning: 'lokal løsning/udtræk',
 };
 
 /** Samme grund i kort form — på en valgt kapabilitet i systemformularen. */

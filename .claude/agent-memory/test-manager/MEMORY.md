@@ -534,6 +534,66 @@ mutationsliste allerede dækker præcis de svage punkter, og alle er lukket. Ene
 allerede-dokumenterede, ikke-nye mønstre ovenfor (strukturelt udækkelig `errors.length`-gren, og den endnu-ikke-
 isolerede `done`/`problem`-reset i den delte `ImportFlow`).
 
+## Fund f18dd09 (delopgave 3c-2, server, EA-register): overlap på kortet, dækningstal og "deles med" på systemsiden — to reelle huller, begge i wiring/skelnen, ikke i selve reglen
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests --filter-namespace Ea.Api.Tests.Capabilities` 185/185 (5 nye i
+`OverlapApiTests.cs`, op fra 180 i b8d6ff5). Web `npx ng test --watch=false` (via `/opt/node24/bin/node
+./node_modules/.bin/ng test --watch=false`, `npm install` med `/opt/node24/bin/npm` først i worktree'en) 106/106 —
+uændret optælling, kun én eksisterende teksts forventning opdateret ("Ikke angivet (nedlagte undtaget)"). Kørte 14
+udpegede mutationer i `CapabilityQueries.cs` (`Missing`/`InUse`, `OverlapHoldersAsync`s tre felter), `CapabilityEndpoints.cs`
+(`Coverage`-beregningen, `GetTree`s hasChildren-argument til `OverlapOf`), `SystemEndpoints.cs`s `CapabilitiesOf` (fire
+varianter) og `ToDto` — **11 af 14 dræbt**, ofte præcist af netop den nye `Daekningen_er_praecis_...`-test (dræber
+BÅDE `Missing` uden Nedlagt-filter, `InUse` med nedlagte OG `Coverage.Covered=Missing` byttet — samme test, tre
+uafhængige linjer/tal) og `Systemsiden_viser_...`-testen (dræber SharedWith-mutationerne).
+
+**Overraskende IKKE et hul, men en fragil kilde til falsk tryghed**: `SystemEndpoints.cs:677`s
+`overlap?.Members.First(m => m.Holder.SystemId == x.Link.SystemId).Exclusion` (skal bruge LINKETS holder, ikke det
+VISTE system) — byttet `x.Link.SystemId` til `s.Id` gav **185/185 grønt for selve `OverlapApiTests`-klassen isoleret**
+(`--filter-class Ea.Api.Tests.Capabilities.OverlapApiTests`, 5/5), men **hele `Capabilities`-namespacet fik 3 fejl**
+(`CouplingExportTests.Et_system_og_dets_moduler_deler_ikke_med_hinanden`,
+`CouplingTests.Familien_vises_egne_koblinger_foerst_og_via_modul_eller_forælder_bagefter`,
+`CouplingImportTests.En_eksport_indlaest_igen_giver_nul_aendringer`) — som **500-fejl**
+(`System.InvalidOperationException: Sequence contains no matching element`), ikke en ren assertion. Årsag: `.First()`
+kaster, når det VISTE system slet ikke selv er holder af kapabiliteten (kun familien er) — hvilket kun sker i ÆLDRE
+koblings-tests, ikke i den nye `OverlapApiTests`-seed, hvor HR (testens eneste familie-scenarie) ALTID selv er direkte
+koblet til K1.1 OG har samme (null) exclusion som Nordlys. **Mønster at genkende næste gang**: en dedikeret test for en
+ny skelnen (holder vs. viste-system) kan være strukturelt ude af stand til at bevise skellet, hvis fixturet lader de to
+værdier falde sammen — suiten fanger mutationen alligevel, men kun som bifangst fra UBESLÆGTEDE, ældre tests, og kun
+fordi den forkerte kode tilfældigvis kaster en undtagelse (ikke fordi den regner forkert og stille). Havde ALLE
+systemer i alle tests tilfældigvis selv været direkte koblet til det, de arver, ville mutationen være usynlig. Mangler:
+en test i `OverlapApiTests.cs` med et modul, der KUN ser en kapabilitet via familien (ingen egen kobling til den) —
+eller hvor modulets egen status ville give en ANDEN exclusion end holderens (fx et Udfases-modul, der viser en
+kobling holdt af sin aktive forælder) — der beviser `OwnExclusion` kommer fra `link.SystemId`, ikke fra det viste
+system.
+
+**Ét reelt, tavst hul**: `CapabilityQueries.cs:61`+`:66` — `OverlapHoldersAsync`s `ParentStatus`-projektion
+(`system.ParentSystem == null ? null : system.ParentSystem.LifecycleStatus`, wired ind i `OverlapHolder`s sidste felt)
+er UBEVIST over HTTP. Satte den til konstant `null` ("arv tabt") → **185/185 forblev grønt**, ingen eneste fejl,
+hverken i `OverlapApiTests` eller resten af namespacet. Årsag: `OverlapRulesTests.cs` (den rene enhedstest af selve
+arve-reglen, `CapabilityRules.OverlapExclusionOf`) konstruerer `OverlapHolder`-objekter DIREKTE med et manuelt
+`parentStatus`-argument (`M("...", status, parentStatus: Udfases)` i `Exclusions`-theory'en) — den tester ALDRIG
+databasen-wiring'en, kun selve beslutningstabellen. Og `OverlapApiTests`' eneste familie-scenarie (HR/Nordlys) har
+BEGGE parter `IDrift`, så en Nedlagt/Udfases-forælder optræder aldrig i en ægte DB-seedet test. To lag, hver for sig
+grundigt testet, men KOBLINGEN mellem dem (den EF-projektion, der rent faktisk henter forælderens status fra databasen
+og lægger den i DTO'en) er udækket. Mangler: en test i `OverlapApiTests.cs` med et modul, hvis FORÆLDER er Udfases
+eller Nedlagt (modulet selv `IDrift`), koblet til en vurderet kapabilitet, der bekræfter modulets `Exclusion`
+(`Udfases`/`Nedlagt`) på et ANDET systems `SharedWith`-liste (eller egen `OwnExclusion`) — ikke kun `null`, som al
+eksisterende data giver.
+
+**Bekræftet: `overlapExclusionLabels` (web/src/app/core/labels.ts:78) er endnu helt UBRUGT** — `grep` efter
+navnet i hele `web/src` finder kun selve definitionen. Byttemutation (fire værdier roteret) gav 106/106 grønt, som
+ventet — ingen komponent importerer den endnu. Ikke en mangel i DENNE PR (opgavebeskrivelsen forudså det selv: "bruges
+først i 3c-web"), men skal have en test, DEN dag en komponent renderer den.
+
+**Solidt dræbt derudover** (11/14): `Missing()`s Nedlagt-filter, `InUse()`s Nedlagt-filter, `Coverage.Covered`s
+subtraktions-retning (alle tre af netop `Daekningen_er_praecis_...`-testens ÉN metode, tre uafhængige linjer/tal —
+Covered:6/Total:8 i kommentaren, IKKE et interval), `none`-filtrets brug af `Missing()` frem for rå `Uncovered` (skal
+gøre `Uncovered` midlertidigt `public` for at mutere — husk at rulle SYNLIGHEDEN tilbage sammen med selve mutationen),
+`OverlapHoldersAsync`s `GroupKey`(→id) og `Name`(uden forælder)-felter, `GetTree`s hasChildren-argument til
+`OverlapOf` (grupper må ikke vurderes — "Grupper vurderes ikke"-assertionen), `CapabilitiesOf`s `SharedWith` med egen
+gruppe inkluderet, `SharedWith` sammenlignet på `SystemId` i stedet for `GroupKey`, `SharedWith` ikke tømt når
+overlap er null (`En_kobling_der_boer_flyttes_vurderes_ikke`-testen), og `ToDto`s `Members` tømt.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden
