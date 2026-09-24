@@ -45,3 +45,27 @@ Første plan lagt 2026-09-24: 1 fundament+systemregister, 2 integrationer+"hvad 
 - Naturlig nøgle (fra, til, type, via) NULLS NOT DISTINCT fanger "registreret fra begge ender".
 - Ingen status på integration (afledes af endernes livscyklus); hård sletning, historik via audit i delopg. 4.
 - CSV: ;-separeret, UTF-8 m. BOM, CRLF, Id + ExternalKey-kolonne reserveret (tom), golden-fil i docs.
+
+## Genbrugskatalog — kode efter delopgave 2 (main 1434f77)
+- Common/Csv.cs: KUN skrivning (Write l.21, Field l.38, formelvagt FormulaStart l.18 + AfterOtherSeparator l.72-74, Slug l.77).
+  Ingen læser i prod-kode. Import skal fjerne formel-apostroffen igen (lovet i docs/csv-integrationer.md "Import: hvad sker der").
+- Common/Problems.cs: StaleVersion/Duplicate/Blocked (typede 409, l.14-28), Validation(dict) l.30, DbErrors.IsUniqueViolation l.43.
+- Systems/SystemEndpoints.cs: None="none"-filterkonvention l.17-18/55-79; parent-candidates l.153-171 (kandidater via SAMME regel som gem);
+  Update tvinger rækkeskrivning (Touch + IsModified, l.249-253) → xmin dækker også rene relationsændringer; rolle-diff l.431-440;
+  ToDetail→permissions l.486-515. Roller er cascade (EaDbContext l.67-70).
+- IntegrationQueries.FamilyOf (l.22) = system + moduler; IntegrationRules.Validate "tjek kun ved ændring" (viaChanged, l.56-58/95-108).
+- IntegrationCsv.FullName ("Forælder > Modul", l.23), SystemCsv (l.62); golden+docs-test: CsvTemplateTests.cs l.78-103.
+- Resource-niveau permission i response: SystemIntegrationsResponse.CanAdd (IntegrationEndpoints l.68-71). MePermissions i CurrentUserEndpoints l.8.
+- SystemLink DTO (IntegrationDtos l.6) = id,name,parent,type,status — genbrug når systemer listes under noget andet.
+- Web: core/download.ts downloadFile (l.8), labels.ts count()/systemDisplayName, system-integrations.component.ts flags() l.81-94
+  (klient-afledte markeringer — OK til visning, IKKE til regler). Ingen fil-upload findes i web endnu. Toolbar (app.ts l.11-18) har ingen nav.
+- AuthorizationTests: allow-liste l.17-24, anonym-401-løkke kræver >= 20 endpoints (l.58).
+- Minimal API + IFormFile kræver .DisableAntiforgery() (ellers fejl uden UseAntiforgery) — bearer-only, ingen cookies.
+
+## Delopgave 3-plan (2026-09-24) — mine beslutninger
+- Kapabilitet: Kode (naturlig nøgle, case-insens. unik), Navn, Beskrivelse, ParentId (adjacency), RetiredAt. Import = HELE modellen
+  (modsat integrations-CSV). Mangler i fil: uden koblinger → slettes; med koblinger → udgået (løsrives fra træet), genopstår ved samme kode.
+- Kobling på SystemWriteRequest.CapabilityIds (null = uændret!) → genbruger EditSystem, Touch/xmin, "Bekræft uændret". Kun blade, ikke udgåede
+  (tjekkes kun for NYE koblinger). Ingen felter på koblingen.
+- Overlap: CapabilityRules.Overlap, familienøgle ParentSystemId ?? Id; default: tæller Indfases+IDrift, ikke Udfases/Planlagt/Nedlagt/LokalLoesning.
+- Import: ét endpoint dryRun + fingerprint (409 stale ved afvigelse). Csv.Read i Common (TextFieldParser + strikt UTF-8 + formelvagt-invers).
