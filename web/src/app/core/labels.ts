@@ -66,7 +66,6 @@ export function count(n: number, singular: string, plural: string): string {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
-/** "Forælder › Modul" for et modul, ellers bare navnet. */
 /** Tør-kørslens (eller importens) tal i ét udsagn, fx "3 nye · 1 ændret · 2 slettes · 10 uændrede". */
 export function importSummaryText(s: CapabilityImportSummary, committed: boolean): string {
   return [
@@ -77,6 +76,7 @@ export function importSummaryText(s: CapabilityImportSummary, committed: boolean
   ].join(' · ');
 }
 
+/** "Forælder › Modul" for et modul, ellers bare navnet. */
 export function systemDisplayName(system: { name: string; parent: { name: string } | null }): string {
   return system.parent ? `${system.parent.name} › ${system.name}` : system.name;
 }

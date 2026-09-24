@@ -207,3 +207,38 @@ schema.d.ts i sync).
 - openapi.json dokumenterer ikke 409 for /api/capabilities/import (kun 400) — men det er IKKE en regression:
   intet andet endpoint i kontrakten dokumenterer 409 heller (ProblemHttpResult er utypet for Swashbuckle
   overalt). Konsistent med resten af API'et, ikke en fælde specifik for denne PR.
+
+## Kode-gennemgang delopg. 3a-web (3494afa, PR #6, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE. Ingen blokerende eller BØR-fund. Verificeret ved kørsel (node24, jf. .nvmrc — node22
+i shell'en giver falske lint/test-fejl, ikke et kodeproblem): `ng lint` ren, 76/76 web-tests grønne, `ng build`
+OK, `npm run gen:api` uden diff (kontrakt i sync).
+- Menuplacering "Systemer | Kapabiliteter" i hovedmenuen (app.ts), synlig for ALLE roller (kun authGuard på
+  ruten, ikke rolle-gated) — korrekt, da visning/hent af kortet er for alle, kun import er EA.Admin. Testet
+  eksplicit: "Alle kan hente kortet" (capability-map.page.spec.ts).
+- Kortet er udfoldet træliste (ingen fold/collapse) — bevidst, "så browserens søgning (Ctrl+F) virker" (kommentar
+  i capability-map.page.ts). God, dokumenteret begrundelse til en fremtidig "hvorfor ikke et rigtigt træ?"-spørgsmål.
+- Alle tal og tekster fra planens beslutninger A/B/C/F er implementeret ORDRET: "1 ny · 1 ændret · 1 slettes ·
+  17 uændrede" (importSummaryText, ental/flertal testet med bånd), Slettes-rækker først og i rødt (server-sorteret,
+  klienten sorterer IKKE selv — én kilde), "(under K1)"/"(øverste niveau)" (describe()), "· beskrivelse ændret"
+  KUN når navn+forælder er uændrede men beskrivelsen ikke er (den eneste situation hvor Før/Efter ellers ville se
+  identiske ud på skærmen — testet eksplicit), stor-sletning-advarslen, fejltabel m. linjenummer, "Filen er
+  identisk med kortet", "Gennemfør import" kun efter fejlfri tør-kørsel MED mindst én ændring OG fingeraftryk
+  (canCommit), 409 stale-dry-run → "Kør tør-kørsel igen" (adskilt fra stale-version, som IKKE viser knappen —
+  testet med it.each på begge typer). "Se kortet"-linket findes efter gennemført import (done-blokken).
+- Server-permissions styrer knapper: canImport kommer fra CapabilityTreeResponse.CanImport (server, Policies.
+  ManageCapabilities), ikke en rollestreng i klienten. Route har ikke ekstra rolle-guard — en læser der navigerer
+  direkte til /kapabiliteter/import ser "Kun enterprise arkitekten kan importere kortet." (testet), og POST'en er
+  selvstændigt policy-gated server-side (bekræftet i 3a-server-gennemgangen) — korrekt forsvar i dybden.
+- G (dækning "X af Y systemer") og H (udgåede kapabiliteter med koblinger, egen sektion) er IKKE i denne skive —
+  korrekt, de hører til 3c hhv. 3b pr. planens skæring, og ingen tekst i 3a-web foregiver at de findes.
+- To KAN-fund (ikke blokerende, ingen handling krævet nu):
+  1. labels.ts: JSDoc-kommentaren "/** "Forælder › Modul" for et modul, ellers bare navnet. */" er nu FYSISK
+     adskilt fra sin funktion (systemDisplayName) af den nyindsatte importSummaryText, som fik sin egen kommentar
+     lige under — ren cut/paste-forskydning, ingen funktionel effekt, men vildledende ved næste læsning oppefra.
+  2. capability-import.page.ts: fejler GET /api/capabilities (canImport-opslaget) på selve importsiden, vises
+     kun en generisk problem-besked (toProblem uden præfiks) — filvælgeren forbliver usynlig uden forklaring på
+     HVORFOR (canImport() er null, hverken true eller false-grenen rammer). Lavt praktisk risiko (samme kald
+     lykkes på kortsiden lige før), ingen test dækker det. Tjek ved næste ændring af denne side.
+- Mønster at genbruge: "beskrivelse ændret"-annotationen er et godt mønster for "diff af et felt, der ikke selv
+  vises i tabellen" — spørg om samme mønster er nødvendigt, når en fremtidig ændringstabel har et felt, der ikke
+  indgår i den korte visningstekst (fx en fremtidig CSV-import med et lignende "usynligt" felt).
