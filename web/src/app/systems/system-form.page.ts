@@ -95,7 +95,7 @@ export class SystemFormPage implements OnInit {
   protected readonly capabilityOptions = signal<CapabilityNode[]>([]);
   /** Systemets EGNE koblinger — det eneste, formularen sender (hele listen, altid). */
   protected readonly ownCapabilities = signal<CapabilityRef[]>([]);
-  /** Familiens koblinger (via modul/forælder) — vises, men redigeres på det andet system. */
+  /** Koblinger via forælder eller moduler — vises, men redigeres på det andet system. */
   protected readonly familyCapabilities = signal<SystemCapabilityDto[]>([]);
   /** Søgeteksten. Et almindeligt felt (ikke en FormControl): feltet tømmes selv efter et valg — se addCapability. */
   protected readonly capabilityQuery = signal('');

@@ -187,7 +187,7 @@
       }
       @if (familyCapabilities().length) {
         <div class="muted family" data-testid="family-capabilities">
-          <p>Familiens kapabiliteter (redigeres på det andet system):</p>
+          <p>Kapabiliteter via forælder eller moduler (redigeres på det andet system):</p>
           <ul>
             @for (c of familyCapabilities(); track c.capability.id + '/' + c.heldBy!.id) {
               <li>

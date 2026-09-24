@@ -73,6 +73,13 @@
     </mat-form-field>
   </div>
 
+  @if (filter().capabilityId && filter().capabilityId !== 'none') {
+    <p class="muted hint" data-testid="capability-help">
+      Viser alle systemer og moduler, der er koblet direkte til kapabiliteten. Overlap på kortet regner et system og dets
+      moduler som ét system og tæller ikke planlagte, udfasede og nedlagte systemer eller systemer af typen Lokal
+      løsning/udtræk med.
+    </p>
+  }
   <p class="count muted" data-testid="count">
     @if (isFiltered()) {
       Viser {{ items().length }} af {{ total() }} systemer

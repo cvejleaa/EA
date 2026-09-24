@@ -247,7 +247,7 @@ describe('SystemFormPage', () => {
       const rows = Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row'));
       expect(rows.map((r) => r.classList.contains('flagged'))).toEqual([false, true, true]);
       expect(text(el(f).querySelector('[data-testid="family-capabilities"]'))).toBe(
-        'Familiens kapabiliteter (redigeres på det andet system): K2.1 Bevillinger — via modulet Laboratorie',
+        'Kapabiliteter via forælder eller moduler (redigeres på det andet system): K2.1 Bevillinger — via modulet Laboratorie',
       );
     });
 

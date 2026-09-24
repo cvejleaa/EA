@@ -2,8 +2,15 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
-import type { LifecycleStatus, PersonDto, SystemDetail, SystemRole, SystemType } from '../api/types';
-import { lifecycleLabels, moveReasonLabels, relativeAge, roleLabels, systemTypeLabels } from '../core/labels';
+import type { LifecycleStatus, OverlapMember, PersonDto, SystemDetail, SystemRole, SystemType } from '../api/types';
+import {
+  lifecycleLabels,
+  moveReasonLabels,
+  overlapExclusionLabels,
+  relativeAge,
+  roleLabels,
+  systemTypeLabels,
+} from '../core/labels';
 import { toProblem } from '../core/problem';
 import { SystemIntegrationsComponent } from '../integrations/system-integrations.component';
 import { SystemsApi } from './systems.api';
@@ -30,6 +37,16 @@ export class SystemDetailPage {
 
   protected readonly roleLabels = roleLabels;
   protected readonly moveReasonLabels = moveReasonLabels;
+  protected readonly exclusionLabels = overlapExclusionLabels;
+
+  /** Et system med årsagen til, at det ikke tæller med i overlap, fx "Ugle (udfases)". */
+  protected memberText(m: OverlapMember): string {
+    return m.exclusion ? `${m.name} (${overlapExclusionLabels[m.exclusion]})` : m.name;
+  }
+
+  protected hasShared(s: SystemDetail): boolean {
+    return s.capabilities.some((c) => c.sharedWith.length > 0);
+  }
 
   protected readonly businessOwner = computed(() => this.holders('Forretningsejer')[0] ?? null);
   protected readonly systemOwner = computed(() => this.holders('Systemejer')[0] ?? null);

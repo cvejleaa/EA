@@ -141,6 +141,10 @@ describe('SystemListPage', () => {
 
       expect(systems.request.params.get('capabilityId')).toBe('cap-K1.1');
       expect(selected(fixture)).toBe('K1.1 Optagelse');
+      // Listen viser alle, der er koblet direkte — ikke overlap-tallet; det siger hjælpelinjen.
+      expect(text((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]'))).toBe(
+        'Viser alle systemer og moduler, der er koblet direkte til kapabiliteten. Overlap på kortet regner et system og dets moduler som ét system og tæller ikke planlagte, udfasede og nedlagte systemer eller systemer af typen Lokal løsning/udtræk med.',
+      );
     });
 
     it('en udgået kapabilitet findes på listen over koblinger, der bør flyttes', async () => {
@@ -169,6 +173,7 @@ describe('SystemListPage', () => {
 
       expect(systems.request.params.get('capabilityId')).toBe('none');
       expect(selected(fixture)).toBe('Ikke angivet (nedlagte undtaget)');
+      expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]')).toBeNull();
       // afterEach(http.verify) fejler, hvis kortet blev hentet.
     });
   });
