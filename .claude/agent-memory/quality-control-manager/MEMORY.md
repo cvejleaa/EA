@@ -391,3 +391,40 @@ systemer) → de 8 udenfor korrekt listet i `notInFile`, ingenting slettet for d
   giver, hvad en 3d-web-side skal bruge (linje+kolonne på fejl/advarsler, before/after via Kind, fingeraftryk,
   `notInFile`-liste) — samme facon som 3a-web's velprøvede mønster (fejltabel, "Filen er identisk", canCommit).
   Vurderet: 3d-web bør kunne bygges UDEN yderligere serverændringer.
+
+## Kode-gennemgang delopg. 3d-web (eb6a1df + 4a554fd + 860d661, PR #11, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE. Ingen blokerende eller BØR-fund. Verificeret ved kørsel (node24 — node22 giver falske
+fejl, se tidligere note): `ng lint` ren, 106/106 web-tests grønne (op fra 96), `ng build` OK (coupling-import-page
+er sin egen lazy chunk, samme mønster som capability-import-page). Verificeret LIVE mod kørende dev-API+web (Eva
+Arkitekt, kun GET/tør-kørsel, intet gennemført i ea_dev):
+- HEADER-KRYDSGENKENDELSEN virker end-to-end gennem den RIGTIGE UI, ikke kun unit-test: downloadede koblings-CSV'en
+  via UI'et og uploadede den uændret til kort-importsiden → præcis fejlteksten "Det er filen med koblinger, ikke
+  kortet. Den indlæses med \"Importér koblinger\" på siden Kapabiliteter." (linje 1, ingen kolonne). Teksten
+  matcher bogstaveligt knappens tekst på den anden side (case-følsomt, testet begge veje server-side med
+  SequenceEqual på hele header-listen — kun eksakt match udløser genkendelsen, en delvis afvigelse falder tilbage
+  til den generiske "Første linje skal være …"-fejl, hvilket er en fornuftig grænse for mekanismen).
+- "Tøm koden, slet ikke rækken" vs. "slet hele systemets sidste række" ER FAKTISK TO FORSKELLIGE STIER, verificeret
+  live med to konstruerede filer mod ægte dev-seed-data: (1) fjernede ALLE linjer for ét system (Laborant) → korrekt
+  i `notInFile`, systemets kobling rørt IKKE; (2) tømte kun `Kode`-cellen på én linje for et system, der stadig har
+  andre linjer i filen → korrekt registreret som "Fjernes" for netop den kobling. Begge scenarier var i mine egne
+  plan-fund (delvis fil, slettet række) og er nu bekræftet reelt, ikke kun i CSV-testfixtures.
+- `couplingImportSummaryText` matcher forslaget fra plan-gennemgangen ("12 koblinger tilføjes · 3 fjernes · 240
+  uændrede — på 15 af filens 280 systemer" → landede som "… — 3 af filens 14 systemer ændres", udelod kun ordet
+  "på" og flyttede "ændres" til slutningen — samme information, læses naturligt, ingen indholdsmæssig afvigelse).
+- Alle fire knaptekster ("Hent kortet (CSV)", "Importér kort", "Hent koblinger (CSV)", "Importér koblinger") er
+  grep-bekræftet IDENTISKE på tværs af knap, serverens fejltekster (begge retninger), docs/csv-koblinger.md og
+  CLAUDE.md's spejl-liste — ingen af de fire strenge afviger noget sted.
+- Ingen "løsninger"/"familie" på siden: dækket af eksplicit negativ regex-test (`not.toMatch(/løsninger|famili/i)`
+  på HELE sidens tekst, ikke kun en enkelt linje) — det korrekte mønster (genkend på POSITIV FRAVÆR-test, ikke kun
+  fravær af assertion).
+- `ImportFlow<T>` (ny fælles klasse i core/import-flow.ts) er en ren udtrækning af den tilstandsmaskine, kort-
+  importsiden allerede havde (fil → tør-kørsel → commit m. fingeraftryk) — CapabilityImportPage er omskrevet til
+  at BRUGE den (ikke duplikeret), verificeret ved diff at dens template/tests er uændrede i adfærd (samme
+  data-testid'er, samme rækkefølge). God model: fælles tilstandsmaskine, sider beholder hver deres tekster/DTO.
+- Kortets header ændret fra to enkeltstående knapper til to `role="group"`-blokke (Kortet / Koblinger), testet
+  eksplicit at begge canImport-styrede knapper (import + import-couplings) er server-permission-gatede hver for
+  sig, og at koblings-gruppen kun vises når `t.items.length` (intet map = ingen mening i at hente/importere
+  koblinger endnu) — bevidst og korrekt, ikke en overset sammenhæng.
+- Route-placering: `/kapabiliteter/koblinger/import`, nested under samme Kapabiliteter-forælder som
+  `/kapabiliteter/import` — konsistent placering, ingen ny topmenu-indgang (koblinger er ikke et selvstændigt
+  koncept for en bruger, kun en gren af kapabilitetskortet).
