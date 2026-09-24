@@ -25,7 +25,8 @@ public static class CapabilityImport
             return ([], [csv.Error]);
         }
 
-        if (CsvImport.HeaderError(csv.Header, CapabilityCsv.Header) is { } headerError)
+        if (CsvImport.HeaderError(csv.Header, CapabilityCsv.Header, (CouplingCsv.Header,
+                "Det er filen med koblinger, ikke kortet. Den indlæses med \"Importér koblinger\" på siden Kapabiliteter.")) is { } headerError)
         {
             return ([], [headerError]);
         }

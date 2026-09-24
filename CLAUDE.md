@@ -165,7 +165,9 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
     (golden-fil) ⇄ `docs/csv-kapabiliteter.md` (kolonner og grænser).
   - Koblings-CSV'en ligeså: `Capabilities/CouplingCsv.cs` ⇄
     `docs/csv/koblinger-eksempel.csv` (golden-fil) ⇄ `docs/csv-koblinger.md`
-    (kolonner og koderne for `OverlapExclusion` og `MoveReason`).
+    (kolonner, koderne for `OverlapExclusion` og `MoveReason`, og importens
+    grænser). Importens ændringstyper (`CouplingChangeKind`) ⇄
+    `couplingChangeKindLabels` i `labels.ts`.
   - Overlap og dækning afgøres ét sted hver: `CapabilityRules.OverlapOf` og
     `CapabilityQueries.Uncovered`. Kort, systemside, systemliste og CSV bruger
     dem — klienten regner aldrig selv.

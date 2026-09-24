@@ -4,6 +4,8 @@ import type {
   CapabilityNode,
   CapabilityRef,
   CapabilityTreeResponse,
+  CouplingImportResult,
+  CouplingImportSummary,
   IntegrationDto,
   MeResponse,
   SystemDetail,
@@ -166,4 +168,33 @@ export function systemCapability(
   overrides: Partial<CapabilityRef> = {},
 ): SystemCapabilityDto {
   return { capability: capabilityRef(code, overrides), heldBy };
+}
+
+export function couplingSummary(overrides: Partial<CouplingImportSummary> = {}): CouplingImportSummary {
+  return {
+    systemsInFile: 0,
+    systemsChanged: 0,
+    added: 0,
+    removed: 0,
+    unchanged: 0,
+    systemsCleared: 0,
+    largeRemoval: false,
+    systemsChangedSinceExport: 0,
+    systemsNotInFile: 0,
+    ignoredEdits: 0,
+    ...overrides,
+  };
+}
+
+export function couplingResult(overrides: Partial<CouplingImportResult> = {}): CouplingImportResult {
+  return {
+    committed: false,
+    errors: [],
+    warnings: [],
+    summary: couplingSummary(),
+    changes: [],
+    notInFile: [],
+    fingerprint: null,
+    ...overrides,
+  };
 }
