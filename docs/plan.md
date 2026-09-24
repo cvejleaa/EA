@@ -61,7 +61,9 @@ Hver delopgave kan landes alene og giver værdi for sig.
    overlap.
 4. **Forvaltere redigerer egne systemer og ændringshistorik**. Adgangen
    bindes til `oid` på rolletildelingen. Denne delopgave skal være landet, før
-   der kommer rigtige data ind.
+   der kommer rigtige data ind. Skift af forælder (`ParentSystemId`) skal kræve
+   ret over målforælderen, for et moduls koblinger og integrationer følger med
+   (Security Reviewer, 3b).
 5. **Teknologi og EOL**. Produkt og version registreres pr. system, og der
    kan søges på "hvem bruger X?". EOL hentes via en adapter
    (endoflife.date/fixture). Tekniske detaljer får deres egen adgangspolicy.
@@ -110,13 +112,14 @@ forslagene.
 | E | **Overlap-reglen (én funktion på serveren):** et system tæller med, når det er `Indfases` eller `IDrift` og ikke er en lokal løsning/udtræk. Forælder og moduler er ét system. Overlap betyder 2 eller flere systemer, der tæller med. `Udfases` tæller aldrig. `Planlagt` tæller ikke, men giver mærket "Planlagt: N", når der allerede er et aktivt system på kapabiliteten. | En truffet beslutning (udfasning) er ikke en kandidat. Et nyt system oven på et gammelt er dét, der skal fanges *(ejerens spørgsmål 1)*. |
 | F | **Ordet "løsninger" bruges ikke på skærmen**, fordi det støder sammen med "Lokal løsning". Tallene hedder "N systemer" og "N kapabiliteter med overlap". Undtagelsens årsag er en kontrakt-enum med separate værdier for `Planlagt`, `Nedlagt`, `Udfases` og `LokalLoesning`. | Hvert tal skal have en entydig enhed. Enum-værdier omdøbes aldrig, så de deles op, før de lander. |
 | G | **Dækning øverst på kortet**: "Kapabiliteter angivet for X af Y systemer — se de manglende". | Et tomt overlap skal kunne skelnes fra "ingen har koblet endnu". |
-| H | **Udgåede kapabiliteter med koblinger får deres egen sektion** på kortet. Tør-kørslen viser, hvor mange koblinger en ny version flytter. | Oprydningsarbejdet efter en ny HERM-version må ikke fejle tavst. |
+| H | **Koblinger, der bør flyttes, har en fast arbejdsliste** på kortet (`toMove`): både udgåede kapabiliteter og blade, der har fået underkapabiliteter, med de berørte systemer. Ved systemet er koblingen markeret (`moveReason`). Tør-kørslen viser, hvor mange koblinger en ny version flytter. | Oprydningsarbejdet efter en ny HERM-version må ikke fejle tavst, og en tør-kørsel er ikke en arbejdsliste (QC, 3b). |
 
 **Skæring** (hver skive lander alene, serveren før klienten):
 - **3a:** model og import (server).
 - **3a-web:** kort og import-side.
 - **3b:** koblinger (server).
-- **3b-web:** systemside, formular og filter.
+- **3b-web:** systemside, formular og filter, samt kortets arbejdsliste over koblinger, der bør flyttes, og et
+  link fra hvert blad til systemlisten.
 - **3d:** import af koblinger fra regneark, hvis ejeren siger ja. Den skal ligge før 3c-web, så overlap ikke lander på tomme data.
 - **3c:** overlap, koblings-CSV og dækning.
 

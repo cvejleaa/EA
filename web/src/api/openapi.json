@@ -971,6 +971,7 @@
           "reactivated",
           "unchanged",
           "currentTotal",
+          "removedFromMap",
           "largeRemoval",
           "couplingsToMove",
           "systemsToMove"
@@ -1002,6 +1003,10 @@
             "format": "int32"
           },
           "currentTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "removedFromMap": {
             "type": "integer",
             "format": "int32"
           },
@@ -1072,7 +1077,7 @@
           "code",
           "name",
           "path",
-          "retired"
+          "moveReason"
         ],
         "type": "object",
         "properties": {
@@ -1089,8 +1094,15 @@
           "path": {
             "type": "string"
           },
-          "retired": {
-            "type": "boolean"
+          "moveReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MoveReason"
+              }
+            ]
           }
         }
       },
@@ -1123,10 +1135,45 @@
           }
         }
       },
+      "CapabilityToMove": {
+        "required": [
+          "id",
+          "code",
+          "name",
+          "path",
+          "reason",
+          "systems"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/MoveReason"
+          },
+          "systems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoupledSystem"
+            }
+          }
+        }
+      },
       "CapabilityTreeResponse": {
         "required": [
           "items",
-          "retired",
+          "toMove",
           "canImport"
         ],
         "type": "object",
@@ -1137,10 +1184,10 @@
               "$ref": "#/components/schemas/CapabilityNode"
             }
           },
-          "retired": {
+          "toMove": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RetiredCapability"
+              "$ref": "#/components/schemas/CapabilityToMove"
             }
           },
           "canImport": {
@@ -1692,6 +1739,13 @@
           }
         }
       },
+      "MoveReason": {
+        "enum": [
+          "Udgaaet",
+          "HarUnderkapabiliteter",
+          null
+        ]
+      },
       "PersonDto": {
         "required": [
           "id",
@@ -1719,45 +1773,6 @@
               "null",
               "string"
             ]
-          }
-        }
-      },
-      "RetiredCapability": {
-        "required": [
-          "id",
-          "code",
-          "name",
-          "retiredPath",
-          "retiredAt",
-          "systems"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "retiredPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "retiredAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "systems": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CoupledSystem"
-            }
           }
         }
       },

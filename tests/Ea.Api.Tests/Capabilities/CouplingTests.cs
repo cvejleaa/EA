@@ -45,8 +45,8 @@ public sealed class CouplingTests
         await (await admin.CoupleAsync(system, ids["K2.1"], ids["K1.1.1"])).ExpectAsync(HttpStatusCode.OK);
         var coupled = await admin.GetSystemAsync(system.Id);
         Assert.Equal([("K1.1.1", null), ("K2.1", null)], Codes(coupled));
-        Assert.Equal(("Optagelse", "Uddannelse › Studieadministration", false),
-            (coupled.Capabilities[0].Capability.Name, coupled.Capabilities[0].Capability.Path, coupled.Capabilities[0].Capability.Retired));
+        Assert.Equal(("Optagelse", "Uddannelse › Studieadministration", (MoveReason?)null),
+            (coupled.Capabilities[0].Capability.Name, coupled.Capabilities[0].Capability.Path, coupled.Capabilities[0].Capability.MoveReason));
 
         // En klient, der ikke sender feltet (null), må ikke slette koblingerne.
         var untouched = await admin.PutSystemAsync(system.Id, coupled.ToWrite() with { Description = "Ny beskrivelse", CapabilityIds = null });
@@ -120,7 +120,7 @@ public sealed class CouplingTests
 
         await keep.ExpectAsync(HttpStatusCode.OK);
         var kept = Assert.Single((await admin.GetSystemAsync(a.Id)).Capabilities).Capability;
-        Assert.Equal(("K2.1", true, "Forskning"), (kept.Code, kept.Retired, kept.Path));
+        Assert.Equal(("K2.1", MoveReason.Udgaaet, "Forskning"), (kept.Code, kept.MoveReason, kept.Path));
         Assert.Equal(["\"K2.1 Laboratorier\" er udgået af kortet og kan ikke vælges."], (await add.ValidationErrorsAsync())["capabilityIds"]);
     }
 
@@ -244,15 +244,15 @@ public sealed class CouplingTests
         Assert.Equal("Nordlys › HR", preview.Changes[1].AffectedSystems[0].Name);
         Assert.Equal(
             new CapabilityImportSummary(New: 0, Changed: 0, Removed: 1, Retired: 1, Reactivated: 0, Unchanged: 4,
-                CurrentTotal: 6, LargeRemoval: true, CouplingsToMove: 1, SystemsToMove: 1),
+                CurrentTotal: 6, RemovedFromMap: 2, LargeRemoval: true, CouplingsToMove: 1, SystemsToMove: 1),
             preview.Summary);
 
         await admin.ImportAsync(withoutK2);
 
         var tree = await admin.CapabilitiesAsync();
         Assert.DoesNotContain(tree.Items, i => i.Code is "K2" or "K2.1");
-        var retired = Assert.Single(tree.Retired);
-        Assert.Equal(("K2.1", "Forskning", TestApp.Start), (retired.Code, retired.RetiredPath, retired.RetiredAt));
+        var retired = Assert.Single(tree.ToMove);
+        Assert.Equal(("K2.1", "Forskning", MoveReason.Udgaaet), (retired.Code, retired.Path, retired.Reason));
         Assert.Equal(["Nordlys › HR"], retired.Systems.Select(s => s.Name));
         Assert.Equal([("K2.1", null)], Codes(await admin.GetSystemAsync(hr.Id)));
 
@@ -276,9 +276,9 @@ public sealed class CouplingTests
         Assert.Contains((CapabilityChangeKind.Genaktiveres, "K2.1"), preview.Changes.Select(c => (c.Kind, c.Code)));
         Assert.Equal(1, preview.Summary.Reactivated);
         var tree = await admin.CapabilitiesAsync();
-        Assert.Empty(tree.Retired);
+        Assert.Empty(tree.ToMove);
         Assert.Equal((1, "Forskning", true), tree.Items.Where(i => i.Code == "K2.1").Select(i => (i.Depth, i.Path, i.Selectable)).Single());
-        Assert.False(Assert.Single((await admin.GetSystemAsync(system.Id)).Capabilities).Capability.Retired);
+        Assert.Null(Assert.Single((await admin.GetSystemAsync(system.Id)).Capabilities).Capability.MoveReason);
     }
 
     [Fact]
@@ -296,8 +296,10 @@ public sealed class CouplingTests
         await admin.ImportAsync(withoutK2);
 
         Assert.Equal([(CapabilityChangeKind.Slettes, "K2.1")], preview.Changes.Select(c => (c.Kind, c.Code)));
-        Assert.Equal(0, preview.Summary.CurrentTotal - 2); // Det udgåede tæller ikke med i kortet.
-        Assert.Empty((await admin.CapabilitiesAsync()).Retired);
+        // Oprydningen af det udgåede tæller i Removed, men ikke i kortet: 0 af kortets 2 forsvinder.
+        Assert.Equal((1, 2, 0, false), (preview.Summary.Removed, preview.Summary.CurrentTotal, preview.Summary.RemovedFromMap,
+            preview.Summary.LargeRemoval));
+        Assert.Empty((await admin.CapabilitiesAsync()).ToMove);
     }
 
     [Fact]
@@ -319,6 +321,37 @@ public sealed class CouplingTests
             preview.Changes.Select(c => (c.Kind, c.Code, c.AffectedSystems.Count)));
         Assert.Equal((2, 0, 6, 1, 1), (preview.Summary.New, preview.Summary.Changed, preview.Summary.Unchanged,
             preview.Summary.CouplingsToMove, preview.Summary.SystemsToMove));
+    }
+
+    [Fact]
+    public async Task Et_koblet_blad_der_har_faaet_boern_staar_paa_arbejdslisten_og_ved_systemet()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var system = await admin.CreateSystemAsync("Kompas");
+        await (await admin.CoupleAsync(system, ids["K1.2"], ids["K2.1"])).ExpectAsync(HttpStatusCode.OK);
+
+        await admin.ImportAsync(File(
+            ("K1", "Uddannelse", null, null), ("K1.1", "Studieadministration", "K1", null), ("K1.1.1", "Optagelse", "K1.1", null),
+            ("K1.2", "Undervisning", "K1", null), ("K1.2.1", "Kursusindhold", "K1.2", null),
+            ("K2", "Forskning", null, null), ("K2.1", "Laboratorier", "K2", null)));
+
+        var toMove = Assert.Single((await admin.CapabilitiesAsync()).ToMove);
+        Assert.Equal(("K1.2", "Uddannelse", MoveReason.HarUnderkapabiliteter), (toMove.Code, toMove.Path, toMove.Reason));
+        Assert.Equal(["Kompas"], toMove.Systems.Select(s => s.Name));
+        Assert.Equal(
+            [("K1.2", MoveReason.HarUnderkapabiliteter), ("K2.1", (MoveReason?)null)],
+            (await admin.GetSystemAsync(system.Id)).Capabilities.Select(c => (c.Capability.Code, c.Capability.MoveReason)));
+    }
+
+    [Fact]
+    public async Task En_kapabilitet_med_boern_men_uden_koblinger_staar_ikke_paa_arbejdslisten()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, _) = await StartAsync(app);
+
+        // K1, K1.1 og K2 har børn, men ingen koblinger: intet at flytte.
+        Assert.Empty((await admin.CapabilitiesAsync()).ToMove);
     }
 
     [Fact]

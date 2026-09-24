@@ -129,7 +129,7 @@ export function capabilityNode(code: string, depth: number, overrides: Partial<C
 }
 
 export function capabilityTree(items: CapabilityNode[], canImport = true): CapabilityTreeResponse {
-  return { items, retired: [], canImport };
+  return { items, toMove: [], canImport };
 }
 
 export function importSummary(overrides: Partial<CapabilityImportSummary> = {}): CapabilityImportSummary {
@@ -141,6 +141,7 @@ export function importSummary(overrides: Partial<CapabilityImportSummary> = {}):
     reactivated: 0,
     unchanged: 0,
     currentTotal: 0,
+    removedFromMap: 0,
     largeRemoval: false,
     couplingsToMove: 0,
     systemsToMove: 0,

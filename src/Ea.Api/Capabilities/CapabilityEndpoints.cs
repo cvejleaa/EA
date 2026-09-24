@@ -44,15 +44,18 @@ public static partial class CapabilityEndpoints
             .ToList();
 
         var coupled = await CapabilityQueries.CoupledSystemsAsync(db, ct);
-        var retired = all
-            .Where(c => c.RetiredAt is not null)
-            .OrderBy(c => c.Code, CapabilityRules.CodeOrder)
-            .Select(c => new RetiredCapability(c.Id, c.Code, c.Name, c.RetiredPath, c.RetiredAt!.Value,
-                coupled.GetValueOrDefault(c.Id) ?? []))
+        var toMove = all
+            .Select(c => (Capability: c, Reason: CapabilityRules.MoveReasonOf(c, parents.Contains(c.Id)),
+                Systems: coupled.GetValueOrDefault(c.Id) ?? []))
+            .Where(x => x.Reason is not null && x.Systems.Count > 0)
+            .OrderBy(x => x.Reason)
+            .ThenBy(x => x.Capability.Code, CapabilityRules.CodeOrder)
+            .Select(x => new CapabilityToMove(x.Capability.Id, x.Capability.Code, x.Capability.Name,
+                CapabilityRules.DisplayPath(x.Capability, byId), x.Reason!.Value, x.Systems))
             .ToList();
 
         var canImport = (await auth.AuthorizeAsync(user, Policies.ManageCapabilities)).Succeeded;
-        return TypedResults.Ok(new CapabilityTreeResponse(items, retired, canImport));
+        return TypedResults.Ok(new CapabilityTreeResponse(items, toMove, canImport));
     }
 
     private static async Task<FileContentHttpResult> Export(EaDbContext db, TimeProvider time, CancellationToken ct)
@@ -87,7 +90,7 @@ public static partial class CapabilityEndpoints
         {
             return commit
                 ? Problems.Validation("file", $"Filen har {errors.Count} fejl. Kør tør-kørslen for at se dem.")
-                : TypedResults.Ok(new CapabilityImportResult(false, errors, new CapabilityImportSummary(0, 0, 0, 0, 0, 0, 0, false, 0, 0), [], null));
+                : TypedResults.Ok(new CapabilityImportResult(false, errors, new CapabilityImportSummary(0, 0, 0, 0, 0, 0, 0, 0, false, 0, 0), [], null));
         }
 
         if (!commit)

@@ -629,6 +629,7 @@ public static class SystemEndpoints
         }
 
         var byId = await db.Capabilities.AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
+        var parents = byId.Values.Where(c => c.RetiredAt is null && c.ParentId is not null).Select(c => c.ParentId!.Value).ToHashSet();
         var treeOrder = CapabilityRules.Ordered(byId.Values)
             .Select((n, index) => (n.Capability.Id, index))
             .ToDictionary(x => x.Id, x => x.index);
@@ -639,8 +640,8 @@ public static class SystemEndpoints
                     x.Capability.Id,
                     x.Capability.Code,
                     x.Capability.Name,
-                    x.Capability.RetiredAt is null ? CapabilityRules.PathOf(x.Capability, byId) : x.Capability.RetiredPath ?? "",
-                    x.Capability.RetiredAt is not null),
+                    CapabilityRules.DisplayPath(x.Capability, byId),
+                    CapabilityRules.MoveReasonOf(x.Capability, parents.Contains(x.Capability.Id))),
                 x.Link.SystemId == s.Id ? null : new SystemRef(x.Link.SystemId, family[x.Link.SystemId])))
             .OrderBy(c => c.HeldBy is not null)
             .ThenBy(c => treeOrder.GetValueOrDefault(c.Capability.Id, int.MaxValue)) // Kortets rækkefølge; udgåede sidst.

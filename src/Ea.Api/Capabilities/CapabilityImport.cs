@@ -299,6 +299,7 @@ public static class CapabilityImport
             Reactivated: reactivated,
             Unchanged: rows.Count - added - changed - reactivated,
             CurrentTotal: active,
+            RemovedFromMap: removedFromMap,
             LargeRemoval: active > 0 && removedFromMap > active * CapabilityRules.LargeRemovalShare,
             CouplingsToMove: toMove.Count,
             SystemsToMove: toMove.Select(s => s.Id).Distinct().Count());

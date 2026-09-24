@@ -12,7 +12,8 @@ public sealed class CapabilityImportTests
 {
     /// <summary>Tallene uden koblinger (intet udgår, genaktiveres eller skal flyttes).</summary>
     private static CapabilityImportSummary Summary(int New, int Changed, int Removed, int Unchanged, int CurrentTotal) =>
-        new(New, Changed, Removed, Retired: 0, Reactivated: 0, Unchanged, CurrentTotal, LargeRemoval: false, CouplingsToMove: 0, SystemsToMove: 0);
+        new(New, Changed, Removed, Retired: 0, Reactivated: 0, Unchanged, CurrentTotal, RemovedFromMap: Removed, LargeRemoval: false,
+            CouplingsToMove: 0, SystemsToMove: 0);
 
     private static readonly byte[] Model = File(
         ("K1", "Uddannelse", null, null),

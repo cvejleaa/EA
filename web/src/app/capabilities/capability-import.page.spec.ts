@@ -187,10 +187,13 @@ describe('CapabilityImportPage', () => {
     await click(f, 'dry-run');
     importRequest().flush(
       preview({
+        // 25 slettes (heraf 5 oprydning af allerede udgåede) + 15 udgår: 35 forsvinder fra kortet — ikke 40, ikke 25.
         summary: importSummary({
-          removed: 40,
+          removed: 25,
+          retired: 15,
           unchanged: 60,
           currentTotal: 100,
+          removedFromMap: 35,
           largeRemoval: true,
         }),
       }),
@@ -198,7 +201,7 @@ describe('CapabilityImportPage', () => {
     await settle(f);
 
     expect(text(q(f, '[data-testid="large-removal"]'))).toBe(
-      'Importen fjerner 40 af kortets 100 kapabiliteter. Filen skal være hele kortet — er det en delvis fil?',
+      'Importen fjerner 35 af kortets 100 kapabiliteter. Filen skal være hele kortet — er det en delvis fil?',
     );
   });
 

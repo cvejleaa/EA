@@ -12,15 +12,31 @@ public sealed record CapabilityNode(
 /// <summary>Et system, vist med fuldt navn ("Forælder › Modul" for et modul).</summary>
 public sealed record CoupledSystem(Guid Id, string Name);
 
-/// <summary>En kapabilitet, der ikke længere står i kortet, men stadig har koblinger, der skal flyttes.</summary>
-public sealed record RetiredCapability(
-    Guid Id, string Code, string Name, string? RetiredPath, DateTimeOffset RetiredAt, IReadOnlyList<CoupledSystem> Systems);
+/// <summary>Hvorfor koblinger til en kapabilitet bør flyttes. Danske koder (ekstern kontrakt).</summary>
+public enum MoveReason
+{
+    /// <summary>Kapabiliteten står ikke længere i kortet (se docs/csv-kapabiliteter.md).</summary>
+    Udgaaet,
+
+    /// <summary>Kapabiliteten har fået underkapabiliteter; kun blade kan vælges.</summary>
+    HarUnderkapabiliteter,
+}
+
+/// <summary>
+/// Arbejdslisten efter en ny udgave af kortet: kapabiliteter med koblinger, der bør flyttes — med de systemer, det
+/// gælder. <c>Path</c> er, hvor kapabiliteten sidder (for en udgået: hvor den sad).
+/// </summary>
+public sealed record CapabilityToMove(
+    Guid Id, string Code, string Name, string Path, MoveReason Reason, IReadOnlyList<CoupledSystem> Systems);
 
 public sealed record CapabilityTreeResponse(
-    IReadOnlyList<CapabilityNode> Items, IReadOnlyList<RetiredCapability> Retired, bool CanImport);
+    IReadOnlyList<CapabilityNode> Items, IReadOnlyList<CapabilityToMove> ToMove, bool CanImport);
 
-/// <summary>Kapabiliteten, som den vises ved et system. <c>Path</c> er navnene ovenover (for en udgået: hvor den sad).</summary>
-public sealed record CapabilityRef(Guid Id, string Code, string Name, string Path, bool Retired);
+/// <summary>
+/// Kapabiliteten, som den vises ved et system. <c>Path</c> er navnene ovenover (for en udgået: hvor den sad).
+/// <c>MoveReason</c> er sat, når koblingen bør flyttes (samme regel som kortets arbejdsliste).
+/// </summary>
+public sealed record CapabilityRef(Guid Id, string Code, string Name, string Path, MoveReason? MoveReason);
 
 /// <summary>
 /// En kobling på systemsiden. <c>HeldBy</c> er null for systemets egne koblinger; ellers det familiemedlem, der har
@@ -59,10 +75,11 @@ public sealed record CapabilityChange(
     IReadOnlyList<CoupledSystem> AffectedSystems);
 
 /// <summary>
-/// Tallene øverst i tør-kørslen (alle i kapabiliteter, undtagen de to sidste). <c>CurrentTotal</c> er kortet nu
-/// (uden udgåede). <c>LargeRemoval</c>: importen fjerner (sletter eller lader udgå) en stor del af kortet —
-/// typisk en delvis fil, for filen er HELE kortet. <c>CouplingsToMove</c>/<c>SystemsToMove</c>: koblinger (og
-/// antal forskellige systemer), der bør flyttes bagefter.
+/// Tallene øverst i tør-kørslen (alle i kapabiliteter, undtagen de to sidste). <c>Removed</c> tæller alt, der
+/// slettes — også oprydning af allerede udgåede. <c>CurrentTotal</c> er kortet nu (uden udgåede), og
+/// <c>RemovedFromMap</c> er, hvor mange af DEM der forsvinder (slettes eller udgår) — tallet bag "fjerner N af M" og
+/// <c>LargeRemoval</c> (en stor del af kortet: typisk en delvis fil, for filen er HELE kortet).
+/// <c>CouplingsToMove</c>/<c>SystemsToMove</c>: koblinger (og antal forskellige systemer), der bør flyttes bagefter.
 /// </summary>
 public sealed record CapabilityImportSummary(
     int New,
@@ -72,6 +89,7 @@ public sealed record CapabilityImportSummary(
     int Reactivated,
     int Unchanged,
     int CurrentTotal,
+    int RemovedFromMap,
     bool LargeRemoval,
     int CouplingsToMove,
     int SystemsToMove);

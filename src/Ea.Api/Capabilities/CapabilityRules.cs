@@ -35,6 +35,19 @@ public static class CapabilityRules
                 ? $"\"{capability.Code} {capability.Name}\" har underkapabiliteter — vælg den, der passer bedst."
                 : null;
 
+    /// <summary>
+    /// Hvorfor koblinger til kapabiliteten bør flyttes — eller null. Samme regel som for nye koblinger
+    /// (<see cref="CoupleBlockedReason"/>), så arbejdslisten og vælgeren aldrig er uenige.
+    /// </summary>
+    public static MoveReason? MoveReasonOf(Capability capability, bool hasChildren) =>
+        capability.RetiredAt is not null ? MoveReason.Udgaaet
+        : hasChildren ? MoveReason.HarUnderkapabiliteter
+        : null;
+
+    /// <summary>Stien til visning: hvor kapabiliteten sidder — eller, for en udgået, hvor den sad.</summary>
+    public static string DisplayPath(Capability capability, IReadOnlyDictionary<Guid, Capability> byId) =>
+        capability.RetiredAt is null ? PathOf(capability, byId) : capability.RetiredPath ?? "";
+
     /// <summary>Navnene fra øverste niveau ned til (men uden) kapabiliteten selv, fx "Uddannelse › Studieadministration".</summary>
     public static string PathOf(Capability capability, IReadOnlyDictionary<Guid, Capability> byId)
     {

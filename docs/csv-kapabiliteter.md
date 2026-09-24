@@ -23,16 +23,18 @@ slettes.
 En kapabilitet, der fjernes, **slettes kun, hvis ingen systemer er koblet til den**. Ellers:
 
 - **Den udgår.** Den forsvinder fra kortet og fra eksporten, men koblingerne bevares. Den kan ikke vælges til
-  nye koblinger, og den vises under "Udgåede kapabiliteter" på kortet med de systemer, der skal flyttes, og med
-  stien til, hvor den sad.
+  nye koblinger. Den står på kortets liste over **koblinger, der bør flyttes**, sammen med de systemer, det
+  gælder, og stien til, hvor den sad. Ved systemet er koblingen markeret som udgået.
 - **Den genaktiveres, hvis koden står i en senere fil.** Så kan en fejlimport rulles tilbage uden at miste
   koblinger.
 - **En udgået kapabilitet uden koblinger slettes** ved næste import, hvor den ikke står i filen.
 - **Et koblet blad, der får underkapabiliteter**, meldes i tør-kørslen. Koblingerne bevares, men bør flyttes ned
-  på det blad, der passer bedst, for kun blade kan vælges.
+  på det blad, der passer bedst, for kun blade kan vælges. Det står også på listen over koblinger, der bør
+  flyttes, indtil koblingerne er flyttet.
 
 Tør-kørslen tæller koblingerne, der bør flyttes, fx "37 koblinger på 21 systemer", så prisen for en ny udgave af
-kortet ses, før der trykkes. **Omdøber en ny HERM-udgave en kode**, bliver det til "udgår + ny". Flyt så
+kortet ses, før der trykkes. Advarslen om en delvis fil tæller kun det, der forsvinder fra kortet: oprydning af
+allerede udgåede kapabiliteter tæller ikke med. **Omdøber en ny HERM-udgave en kode**, bliver det til "udgår + ny". Flyt så
 koblingerne fra den udgåede kapabilitet til den nye.
 
 ## Kolonner

@@ -1044,6 +1044,8 @@ export interface components {
             unchanged: number;
             /** Format: int32 */
             currentTotal: number;
+            /** Format: int32 */
+            removedFromMap: number;
             largeRemoval: boolean;
             /** Format: int32 */
             couplingsToMove: number;
@@ -1069,7 +1071,7 @@ export interface components {
             code: string;
             name: string;
             path: string;
-            retired: boolean;
+            moveReason: null | components["schemas"]["MoveReason"];
         };
         CapabilitySnapshot: {
             code: string;
@@ -1077,9 +1079,18 @@ export interface components {
             parentCode: null | string;
             description: null | string;
         };
+        CapabilityToMove: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            path: string;
+            reason: components["schemas"]["MoveReason"];
+            systems: components["schemas"]["CoupledSystem"][];
+        };
         CapabilityTreeResponse: {
             items: components["schemas"]["CapabilityNode"][];
-            retired: components["schemas"]["RetiredCapability"][];
+            toMove: components["schemas"]["CapabilityToMove"][];
             canImport: boolean;
         };
         ConfirmSystemRequest: {
@@ -1210,22 +1221,14 @@ export interface components {
             name: string;
             lifecycleStatus: components["schemas"]["LifecycleStatus"];
         };
+        /** @enum {unknown} */
+        MoveReason: "Udgaaet" | "HarUnderkapabiliteter" | null;
         PersonDto: {
             /** Format: uuid */
             id: string;
             displayName: string;
             email: null | string;
             department: null | string;
-        };
-        RetiredCapability: {
-            /** Format: uuid */
-            id: string;
-            code: string;
-            name: string;
-            retiredPath: null | string;
-            /** Format: date-time */
-            retiredAt: string;
-            systems: components["schemas"]["CoupledSystem"][];
         };
         RoleAssignmentDto: {
             role: components["schemas"]["SystemRole"];

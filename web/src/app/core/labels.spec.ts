@@ -38,7 +38,13 @@ describe('systemDisplayName', () => {
 
 describe('importSummaryText', () => {
   it('skriver ental og flertal ved hvert tal og skelner tør-kørsel fra gennemført import', () => {
-    const none = { retired: 0, reactivated: 0, couplingsToMove: 0, systemsToMove: 0 };
+    const none = {
+      retired: 0,
+      reactivated: 0,
+      removedFromMap: 0,
+      couplingsToMove: 0,
+      systemsToMove: 0,
+    };
     const one = {
       new: 1,
       changed: 1,
@@ -72,6 +78,7 @@ describe('importSummaryText', () => {
       reactivated: 1,
       unchanged: 5,
       currentTotal: 8,
+      removedFromMap: 3,
       largeRemoval: false,
       couplingsToMove: 3,
       systemsToMove: 2,
