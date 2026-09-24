@@ -43,12 +43,12 @@ hurtigt kan svare på:
 
 Hver delopgave kan landes alene og giver værdi for sig.
 
-1. **Fundament og systemregister** *(denne PR)*. Omfatter systemer, moduler,
+1. **Fundament og systemregister** *(landet i PR #1)*. Omfatter systemer, moduler,
    aliaser, livscyklus, type, forvaltende team, roller (forretningsejer,
    systemejer, systemforvaltere) og personer med afdeling. Dertil søgning,
    filtre, friskhed ("Bekræft uændret"), adgang på serveren, dev-login, CI og
    API-kontrakten.
-2. **Integrationer og "hvad rammes"** *(server landet i PR #2; brugerfladen følger)*. Integrationer registreres med fra/til,
+2. **Integrationer og "hvad rammes"** *(landet i PR #2 og #3)*. Integrationer registreres med fra/til,
    type (API/fil/event/direkte-DB/udtræk), dataobjekter og CSV-eksport. CSV'en
    er også det fremtidige importformat og skal indeholde en matchnøgle (id
    eller ExternalKey). Den udleveres til foranalysen som skabelon. Lister og
