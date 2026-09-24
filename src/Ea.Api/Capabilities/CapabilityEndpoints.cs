@@ -222,7 +222,7 @@ public static partial class CapabilityEndpoints
             },
             current =>
             {
-                CouplingImport.Apply(current, time.GetUtcNow());
+                CouplingImport.Apply(current, db, time.GetUtcNow());
                 return Task.CompletedTask;
             },
             ct);

@@ -424,6 +424,37 @@ public sealed class CouplingImportTests
     }
 
     /// <summary>
+    /// Nogen gemmer systemet (fx beskrivelsen i formularen, som ikke tager koblingslåsen), mens importen gennemføres:
+    /// importens opdatering af systemet opdager det (xmin) — og hele importen afvises med 409, ikke en 500 eller en
+    /// halv import (CsvImport.CommitIfUnchangedAsync).
+    /// </summary>
+    [Fact]
+    public async Task En_samtidig_aendring_af_systemet_under_gennemfoerelsen_afviser_importen()
+    {
+        await using var app = await TestApp.StartAsync();
+        var (admin, ids) = await StartAsync(app);
+        var kompas = await CoupledAsync(admin, await admin.CreateSystemAsync("Kompas"), ids["K1.1"]);
+        var file = CouplingFile((kompas.Id, "Kompas", "K1.1"), (kompas.Id, "Kompas", "K1.2"));
+        var fingerprint = (await admin.CouplingDryRunAsync(file)).Fingerprint;
+
+        await using var form = new NpgsqlConnection(app.ConnectionString);
+        await form.OpenAsync();
+        await using var transaction = await form.BeginTransactionAsync();
+        await Sql(form, transaction, $"UPDATE ea.systems SET description = 'Gemt imens' WHERE id = '{kompas.Id}'");
+
+        var import = admin.PostCouplingImportAsync(file, dryRun: false, fingerprint);
+        await WaitForBlockedBackendAsync(form, transaction);
+        await transaction.CommitAsync();
+
+        var response = await import;
+        await response.ExpectAsync(HttpStatusCode.Conflict);
+        Assert.Equal(Problems.StaleDryRunType, await response.ProblemTypeAsync());
+        var after = await admin.GetSystemAsync(kompas.Id);
+        Assert.Equal(["K1.1"], Codes(after));
+        Assert.Equal("Gemt imens", after.Description);
+    }
+
+    /// <summary>
     /// Sletning tager koblingslåsen FØR systemrækken (samme rækkefølge som importen): mens en import holder låsen,
     /// venter sletningen uden at have låst systemet — ellers kunne importens opdatering af systemet give en deadlock.
     /// </summary>

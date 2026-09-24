@@ -1,4 +1,5 @@
 using Ea.Api.Common;
+using Ea.Api.Data;
 using Ea.Api.Integrations;
 using Ea.Api.Systems;
 
@@ -232,7 +233,7 @@ public static class CouplingImport
     /// før importen, får "ændret af en anden" i stedet for at rulle importen tilbage — men IKKE en ny bekræftelse:
     /// den er forvalterens udsagn om, at data er rigtige.
     /// </summary>
-    public static void Apply(CouplingImportPlan plan, DateTimeOffset now)
+    public static void Apply(CouplingImportPlan plan, EaDbContext db, DateTimeOffset now)
     {
         foreach (var (systemId, (add, remove)) in plan.Diff.Where(d => d.Value.Add.Count + d.Value.Remove.Count > 0))
         {
@@ -240,6 +241,9 @@ public static class CouplingImport
             system.CapabilityLinks.RemoveAll(l => remove.Contains(l.CapabilityId));
             system.CapabilityLinks.AddRange(add.Select(id => new SystemCapability { SystemId = systemId, CapabilityId = id }));
             system.UpdatedAt = now;
+            // Rækken skrives ALTID (som i formularen), så samtidighedstjekket (xmin) også sker, når uret ikke har
+            // flyttet sig — en samtidig ændring af systemet afviser så importen i stedet for at blive overset.
+            db.Entry(system).Property(s => s.UpdatedAt).IsModified = true;
         }
     }
 }
