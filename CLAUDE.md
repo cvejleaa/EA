@@ -160,9 +160,13 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
     `Integrations/IntegrationCsv.cs` ⇄ `docs/csv/integrationer-eksempel.csv`
     (golden-fil, `UPDATE_CONTRACT=1`) ⇄ `docs/csv-integrationer.md`
     (kolonner og typekoder — en test tjekker, at alle er nævnt).
-  - Konflikt-typer (`Common/Problems.cs`, fx `urn:ea:problem:stale-version`)
-    ⇄ `web/src/app/core/problem.ts`. Kun en forældet version må tilbyde
-    "Hent nyeste version".
+  - Kapabilitets-CSV'en er også en ekstern kontrakt:
+    `Capabilities/CapabilityCsv.cs` ⇄ `docs/csv/kapabiliteter-eksempel.csv`
+    (golden-fil) ⇄ `docs/csv-kapabiliteter.md` (kolonner og grænser).
+  - Konflikt-typer (`Common/Problems.cs`, fx `urn:ea:problem:stale-version`
+    og `urn:ea:problem:stale-dry-run`) ⇄ `web/src/app/core/problem.ts`. Kun
+    en forældet version må tilbyde "Hent nyeste version"; en forældet
+    tør-kørsel beder om en ny tør-kørsel.
 - **Serveren er eneste autoritet.** Validering i klienten kan omgås. Server-
   adgangstjek må aldrig være mere gavmilde end klientens regler — og de skal
   ligge FØR de dyre operationer, så en afvisning er billig.

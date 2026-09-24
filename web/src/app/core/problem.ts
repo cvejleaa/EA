@@ -3,6 +3,9 @@ import { HttpErrorResponse } from '@angular/common/http';
 /** ProblemDetails-typen for en forældet version — den ENESTE konflikt, hvor "Hent nyeste version" giver mening. */
 export const STALE_VERSION = 'urn:ea:problem:stale-version';
 
+/** En tør-kørsel, der er forældet: data er ændret siden. Handlingen er en ny tør-kørsel (ikke "Hent nyeste version"). */
+export const STALE_DRY_RUN = 'urn:ea:problem:stale-dry-run';
+
 export interface ProblemInfo {
   status: number;
   /** ProblemDetails.type, fx STALE_VERSION. Skelner konflikter, der ellers alle er 409. */

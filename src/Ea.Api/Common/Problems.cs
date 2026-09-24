@@ -19,9 +19,18 @@ public static class Problems
     /// <summary>Handlingen er blokeret af noget, der afhænger af den (fx sletning af et system i brug).</summary>
     public const string BlockedType = "urn:ea:problem:blocked";
 
+    /// <summary>
+    /// Data er ændret siden en tør-kørsel. Handlingen er at køre tør-kørslen igen — ikke "Hent nyeste version".
+    /// </summary>
+    public const string StaleDryRunType = "urn:ea:problem:stale-dry-run";
+
     public static ProblemHttpResult StaleVersion(string subject) => Conflict(
         $"{subject} er ændret af en anden, siden du åbnede det. Genindlæs for at se den nyeste version.",
         StaleVersionType);
+
+    public static ProblemHttpResult StaleDryRun() => Conflict(
+        "Kortet er ændret, siden du lavede tør-kørslen. Kør tør-kørslen igen for at se, hvad importen nu vil gøre.",
+        StaleDryRunType);
 
     public static ProblemHttpResult Duplicate(string detail) => Conflict(detail, DuplicateType);
 

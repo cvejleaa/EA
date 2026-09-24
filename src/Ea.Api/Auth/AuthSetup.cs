@@ -74,6 +74,7 @@ public static class AuthSetup
             .AddPolicy(Policies.CreateSystem, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManagePersons, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManageDataObjects, p => p.RequireRole(AppRoles.Admin))
+            .AddPolicy(Policies.ManageCapabilities, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.EditSystem, p => p.AddRequirements(new EditSystemRequirement()))
             .AddPolicy(Policies.EditIntegration, p => p.AddRequirements(new EditIntegrationRequirement()));
 

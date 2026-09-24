@@ -1,0 +1,7 @@
+﻿Kode;Navn;ForælderKode;Beskrivelse
+EK;Uddannelse (eksempel);;
+EK-STUD;Studieadministration (eksempel);EK;
+EK-STUD-2;Optagelse (eksempel);EK-STUD;"Fra ansøgning til optagelse; inkl. dispensationer"
+EK-STUD-10;Eksamen (eksempel);EK-STUD;
+FO;Forskning (eksempel);;
+FO-LAB;Laboratoriedrift (eksempel);FO;

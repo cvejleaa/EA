@@ -152,6 +152,60 @@ admin-bruger (`me(true)`) — se også a0caef1's canAdd/canEdit-fund, der VAR d�
 Tjek altid: findes der et scenarie i specs, hvor den relevante permission-flag er FALSE, ikke kun
 TRUE?
 
+## Fund 840d4c4 (delopgave 3a, server, EA-register): kapabilitetskort + CSV-import — meget stærk kerne, tre kategorier af huller
+
+**Kernen (Csv.Unguard/Read, CapabilityImport.Parse/Plan/Apply, endpoint Import, CapabilityRules.CodeOrder/Ordered,
+golden-fil+docs) er exceptionelt grundigt mutationstestet.** Kørte ca. 25 målrettede mutationer i
+`Common/Csv.cs`, `Common/CsvRead.cs`, `Capabilities/CapabilityImport.cs`, `Capabilities/CapabilityRules.cs`,
+`Capabilities/CapabilityEndpoints.cs`, `Capabilities/CapabilityCsv.cs`, `Auth/AuthSetup.cs` og
+`docs/csv-kapabiliteter.md` — ALLE dræbt undtagen dem nævnt nedenfor. Baseline 65/65 i namespacet
+`Ea.Api.Tests.Capabilities`. Bemærkelsesværdigt: ringdetektionens `chain.Contains(next)`-vagt, fjernet, gav
+ikke en assertion-fejl men en UENDELIG LØKKE (måtte `timeout 60`+`pkill -9` for at redde miljøet) — dvs. koden
+har ingen løkke-beskyttelse (fx max-iterationer), kun selve logikken forhindrer uendelig kørsel. Dræbt (i den
+forstand at fjernelsen tydeligt IKKE er sikker), men risikabelt at gentage uden timeout-wrapper.
+
+**Nyt mønster: forward-reference i `Apply` er reelt dækket, men ikke ved det oplagte scenarie.**
+`CapabilityImport.Apply` forudberegner ALLE ids (nye og eksisterende) i et loop FØR hovedloopet, netop for at
+understøtte at en række kan referere en `ForælderKode`, der optræder SENERE i filen (rækkefølgen er erklæret
+ligegyldig i `docs/csv-kapabiliteter.md`). Fjernede forudberegningen og flyttede id-oprettelsen ind i
+hovedloopet (lazy) → `KeyNotFoundException` og netop testen
+`Soeskende_ordnes_efter_kode_med_tal_som_tal_uanset_filens_raekkefoelge` (K1.10 med ForælderKode "K1" nævnt
+FØR selve K1-rækken i filen) blev rød. Denne test er ikke navngivet efter forward-reference, men beviser det
+alligevel — værd at genkende: en søskende-sorterings-test kan tilfældigt også dække en helt anden mekanisme.
+
+**Overlevede — reelle huller, alle i validerings-/robusthedslaget, INGEN i selve import/plan/apply-kernen:**
+1. **Feltlængde-grænserne er helt utestede.** `CapabilityRules.CodeMaxLength` (40), `NameMaxLength` (200) og
+   `DescriptionMaxLength` (4000) håndhæves i `CapabilityImport.Parse`, men INGEN test i `BadFiles()`
+   (`CapabilityImportTests.cs`) rammer dem. Fjernede alle tre tjek (`code.Length > CodeMaxLength`,
+   `name.Length > NameMaxLength`, `description?.Length > DescriptionMaxLength`) hver for sig → suiten (65/65)
+   forblev grøn hver gang. Kun docs-testen `Vejledningen_naevner_hver_kolonne_og_graenserne` nævner tallene i
+   teksten — ingen funktionel test sender en for lang kode/navn/beskrivelse. Mangler: tre `[InlineData]`-cases
+   i `BadFiles()`, en pr. grænse (fx kode på 41 tegn, navn på 201 tegn, beskrivelse på 4001 tegn).
+2. **`CapabilityRules.MaxRows` (5000 rækker) er utestet.** Samme mønster: fjernede
+   `csv.Rows.Count > MaxRows`-tjekket i `Parse` → suiten forblev grøn. Kun docs-testen nævner grænsen i tekst.
+   `IntegrationCsv`/`SystemCsv` (delopgave 1-2) har muligvis samme mønster — værd at tjekke ved lejlighed.
+   Mangler: en test der bygger 5001 rækker og forventer fejlen "højst 5000 kan indlæses ad gangen" (ligesom
+   `En_for_stor_fil_afvises` gør for byte-grænsen, som ER dækket).
+3. **`LOCK TABLE`-sætningen i `Import`-endpointet (samtidighedslåsen) er utestet.** Fjernede linjen
+   `await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.capabilities IN SHARE ROW EXCLUSIVE MODE", ct)` →
+   suiten (65/65) forblev grøn. `Capability`-entiteten har INGEN `Version`/row-version-kolonne (modsat
+   `SystemEntity.Version`), så LOCK'en er den ENESTE beskyttelse mod en ægte race: to samtidige commits, der
+   begge læser samme `existing`-tilstand, begge beregner et matchende fingeraftryk og begge skriver — uden
+   LOCK kan den ene overskrive/tabe den andens ændringer under PostgreSQLs standard READ COMMITTED-isolation.
+   Ingen test i repoet bruger `Task.WhenAll`/parallelle HTTP-kald til at teste ægte databaseniveau-race
+   (samtidigheds-testene, inkl. `Er_kortet_aendret_siden_toer_koerslen_afvises_importen` her, er SEKVENTIELLE
+   —det ene kald venter på det andet, hvilket kun beviser fingeraftryks-sammenligningen, ikke selve låsen).
+   Mangler: enten en egentlig parallel-race-test (to `Task`'er der begge poster med samme forældede
+   fingeraftryk-udgangspunkt, afstemt med en kort forsinkelse i request-behandlingen) eller en accepteret
+   note om, at LOCK'en er bevidst udokumenteret-ved-test defense-in-depth. Det er reelt en huller-kategori,
+   CLAUDE.md selv fremhæver ("samtidighed") — bør nævnes til Quality Control/Release Manager, selv hvis Test
+   Manager ikke blokerer alene på den (svær at teste deterministisk uden at indføre kunstig forsinkelse i
+   produktionskoden).
+
+**Ikke undersøgt (uden for opgavens mutationsliste, men værd at nævne):** `DevSeed.SeedCapabilitiesAsync` er
+utestet (som al anden DevSeed-kode i repoet — konsistent, ikke et nyt hul), og web-siden af kontrakten
+(`web/src/app/core/problem.ts`s `STALE_DRY_RUN`) har endnu ingen bruger, da 3a-web ikke er bygget endnu.
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

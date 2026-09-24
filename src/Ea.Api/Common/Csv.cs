@@ -8,7 +8,8 @@ namespace Ea.Api.Common;
 /// Formel-neutralisering, så et regneark aldrig udfører indhold fra registret som formel — heller ikke hvis
 /// filen åbnes med komma eller tabulator som skilletegn (andre sprogindstillinger):
 /// et ' sættes foran = + - @ (og fuldbredde-varianterne) i starten af et felt og lige efter et komma eller en
-/// tabulator. Importen fjerner det igen (docs/csv-integrationer.md).
+/// tabulator. En apostrof, der allerede står dér, får også en foran, så <see cref="Read"/> kan fjerne præcis
+/// det, skriveren satte: Read(Write(x)) giver altid x (docs/csv-integrationer.md).
 /// </summary>
 public static partial class Csv
 {
@@ -16,6 +17,9 @@ public static partial class Csv
     public const char FormulaGuard = '\'';
 
     private static readonly char[] FormulaStart = ['=', '+', '-', '@', '＝', '＋', '－', '＠', '\t', '\r'];
+
+    /// <summary>Tegn, der får en apostrof foran i starten af et felt: formeltegnene og apostroffen selv.</summary>
+    private static readonly char[] GuardedStart = [.. FormulaStart, FormulaGuard];
     private static readonly char[] NeedsQuoting = [Separator, ',', '\t', '"', '\r', '\n'];
 
     public static byte[] Write(IReadOnlyList<string> header, IEnumerable<IReadOnlyList<string?>> rows)
@@ -42,13 +46,14 @@ public static partial class Csv
             return "";
         }
 
-        if (Array.IndexOf(FormulaStart, value[0]) >= 0)
+        if (Array.IndexOf(GuardedStart, value[0]) >= 0)
         {
             value = FormulaGuard + value;
         }
 
-        // Et andet skilletegn (komma, tabulator) kan gøre midten af et felt til starten af en celle.
-        value = AfterOtherSeparator().Replace(value, "$0" + FormulaGuard);
+        // Et andet skilletegn (komma, tabulator) eller et linjeskift kan gøre midten af et felt til starten af en
+        // celle, når filen åbnes med andre sprogindstillinger.
+        value = AfterOtherSeparator().Replace(value, FormulaGuard.ToString());
 
         var quote = value.IndexOfAny(NeedsQuoting) >= 0 || char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]);
         return quote ? "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : value;
@@ -69,9 +74,29 @@ public static partial class Csv
         text.Append("\r\n");
     }
 
-    // "-" alene eller før mellemrum (fx dansk "100,- kr.") er ikke en formel og efterlades.
-    [System.Text.RegularExpressions.GeneratedRegex("[,\\t](?=[=+@＝＋＠]|[-－][^\\s])")]
+    // Hvor et andet skilletegn (komma, tabulator) eller et linjeskift kan starte en ny celle — evt. efter
+    // citationstegn og mellemrum, som et regneark springer over ("x,""=1" bliver ellers cellen =1).
+    // "-" før mellemrum (fx dansk "100,- kr.") er ikke en formel og efterlades. Står "-" sidst i feltet
+    // ("pris 100,-"), bliver feltets afsluttende citationstegn en del af cellen (-"…), og så kan resten af
+    // linjen udgøre en formel — derfor får den en apostrof.
+    // En apostrof dér får også en foran (se GuardedStart).
+    [System.Text.RegularExpressions.GeneratedRegex("(?<=[,\\t\\r\\n][\"\\s]*)(?=[=+@＝＋＠']|[-－](?!\\s))")]
     private static partial System.Text.RegularExpressions.Regex AfterOtherSeparator();
+
+    // Det omvendte: præcis den apostrof, skriveren satte samme sted.
+    [System.Text.RegularExpressions.GeneratedRegex("(?<=[,\\t\\r\\n][\"\\s]*)'(?=[=+@＝＋＠']|[-－](?!\\s))")]
+    private static partial System.Text.RegularExpressions.Regex GuardAfterOtherSeparator();
+
+    /// <summary>Fjerner præcis de apostroffer, <see cref="Field"/> satte (det omvendte af formel-neutraliseringen).</summary>
+    public static string Unguard(string value)
+    {
+        if (value.Length >= 2 && value[0] == FormulaGuard && Array.IndexOf(GuardedStart, value[1]) >= 0)
+        {
+            value = value[1..];
+        }
+
+        return GuardAfterOtherSeparator().Replace(value, "");
+    }
 
     /// <summary>ASCII-venligt filnavn ud fra et systemnavn (æøå omskrives, resten bliver bindestreger).</summary>
     public static string Slug(string name)
