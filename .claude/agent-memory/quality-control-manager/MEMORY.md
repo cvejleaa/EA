@@ -428,3 +428,45 @@ Arkitekt, kun GET/tør-kørsel, intet gennemført i ea_dev):
 - Route-placering: `/kapabiliteter/koblinger/import`, nested under samme Kapabiliteter-forælder som
   `/kapabiliteter/import` — konsistent placering, ingen ny topmenu-indgang (koblinger er ikke et selvstændigt
   koncept for en bruger, kun en gren af kapabilitetskortet).
+
+## Kode-gennemgang delopg. 3c-2 (f18dd09, PR #12, branch claude/trusting-brahmagupta-4v2ukj) — kun API
+Konklusion: GOD AT LANDE. Ingen blokerende fund. Verificeret ved kørsel (313/313 API-tests, `dotnet format`
+ren, `has-pending-model-changes` ren, `UPDATE_CONTRACT=1` OpenApiContractTests uden diff, `npm run gen:api`
+uden diff, web: `ng lint` ren, 106/106 (uændret antal — korrekt, ren API-skive uden nyt web), `ng build` OK —
+alt kørt på node24, jf. tidligere note om at node22 giver falske fejl) OG ved LIVE kald mod kørende dev-API
+(Eva Arkitekt, kun GET, ingen skrivning): overlap for søskendemoduler (K3.1.2: Nordlys Økonomi + Nordlys
+Projekter, begge moduler af Nordlys ERP, tæller Counted=1, ikke 2), family-udelukkelse i SharedWith (Nordlys
+Projekters side viser tomt SharedWith, fordi eneste anden holder er søskendemodulet), OwnExclusion for en
+udfaset holder, og PlannedOnTopOfActive uden selvmodsigelse ved Counted=0 (Studieadministration/Optagelse:
+counted=0, planned=1, plannedOnTopOfActive=FALSE — modsat Kompas Sag/Studium: counted=1, planned=1, true).
+- FUND (bekræftet reel drift, nu rettet — ikke kun en stilrettelse): FØR denne PR holdt Beslutning K's løfte
+  ("Det er samme regel som 'Ikke angivet' på systemlisten … findes ét sted i koden") IKKE i praksis.
+  `ExportCouplings` filtrerede allerede `Uncovered && LifecycleStatus != Nedlagt` (to Where-led), men
+  systemlistens `capabilityId=none`-filter brugte kun rå `Uncovered` UDEN nedlagt-udelukkelsen (git-verificeret
+  ved `git show 6e2cb6d`). Et nedlagt, ukoblet system stod altså IKKE på CSV'ens manglende-liste, men VILLE stå
+  under "Ikke angivet" på systemlisten — to forskellige svar på "mangler dette system en kobling?". Denne PR
+  retter det ved at trække begge Where-led ud i `CapabilityQueries.Missing()` og bruge den begge steder (samt i
+  det nye `CouplingCoverage`-tal). Testet eksplicit (`Daekningen_er_praecis_systemlistens_Ikke_angivet_...`,
+  System E+F nedlagt+ukoblet, IKKE på listen, IKKE talt med). LÆR: når en beslutning i plan.md siger "findes ét
+  sted i koden", så VERIFICÉR det (grep efter alle forbrugere af den underliggende regel), stol ikke på at
+  teksten allerede var sand bare fordi den stod i en tidligere godkendt plan — den kan sagtens beskrive en
+  FREMTIDIG tilstand, planen selv ikke havde opdaget var brudt endnu.
+- Genbrug, ikke duplikering: `OverlapHolder`/`OverlapAssessment`/`CapabilityRules.OverlapOf` fandtes allerede
+  (3c-1, til CSV'en) — denne PR eksponerer PRÆCIS samme funktion via API'et (kort + systemside), ingen ny
+  parallel beregning. God model, matcher plan-kravet "overlap … den ENESTE funktion".
+- Ydelse: `GetTree` henter alle overlap-holdere i ÉT lookup-kald for hele træet (ingen N+1 pr. knude).
+  Systemsidens `CapabilitiesOf` tilføjer ÉN ny forespørgsel pr. visning (`OverlapHoldersAsync` scoped til kun
+  systemets egne+families kapabilitets-id'er), og KUN når systemet har mindst én kobling (tidligt return ellers)
+  — acceptabelt, ikke en N+1-fælde.
+- API-formen er nok til 3c-web UDEN flere serverændringer: dækningslinjen (`CouplingCoverage`), "Overlap og
+  planlagte"-filter+tællelinje (klienten kan tælle på det allerede hentede træs `Overlap.IsOverlap`/`.Planned`),
+  mærke+medlemmer (`Overlap.Members`), "Deles med"/"tæller ikke med" (`SharedWith`/`OwnExclusion`), og
+  hjælpelinjen på en kapabilitetsfiltreret systemliste (samme mønster som 3b-web's `loadCapabilityName`: slå op
+  i det allerede hentede træ, som nu OGSÅ har Overlap pr. knude — ingen ny visning kræver et nyt endpoint).
+- MINDRE (ikke blokerende): `CouplingCsv.cs`'s XML-doc-kommentar refererer stadig `<see cref="CapabilityQueries.
+  Uncovered"/>`, som nu er `private` (utilgængelig cross-ref fra en anden klasse) — ingen build-advarsel udløst,
+  men lidt vildledende ved næste læsning. Overvej at pege den på `Missing` i stedet, næste gang filen røres.
+- IKKE en fejl, men værd at holde øje med: `status=Nedlagt` OG `capabilityId=none` sammen giver ALTID et tomt
+  resultat (Missing() udelukker nedlagte pr. definition) — logisk konsekvent med den nye label "Ikke angivet
+  (nedlagte undtaget)", ingen modsigelse, men listen har ingen forklarende tomme-tilstand for netop DENNE
+  filterkombination. Lav risiko, ingen handling krævet nu.
