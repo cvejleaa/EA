@@ -281,3 +281,43 @@ dry-run-kald mod kørende dev-API (kun GET/tør-kørsel, intet gennemført/rette
   i samme filer (SystemEndpoints.cs m.fl.) for et bekræftet TOCTOU-fund (ValidateCapabilities uden lås, race
   mod import → 500 i stedet for 409). Skal committes og lande SAMMEN med denne PR. Tjek status ved næste
   gennemgang af samme gren.
+
+## Kode-gennemgang delopg. 3b-web (7e785e2, branch claude/trusting-brahmagupta-4v2ukj) — kun web
+Konklusion: GOD AT LANDE. Ingen blokerende eller BØR-fund. Verificeret ved kørsel: `ng lint` ren, 96/96
+web-tests grønne (op fra 76+), `ng build` OK, ingen `git status`-diff efter build (ingen kontrakt-drift, som
+forventet — ingen server-DTO ændret i denne skive). Visuelt efterprøvet med Playwright/Chromium mod kørende
+dev-API+web (Eva Arkitekt): kort (kun blade linker, grupper er ren tekst), filtreret systemliste (navneopslag
+virker), systemside (egne + families kapabiliteter, "via forælderen/modulet"), redigeringsformular (chips for
+alle tre egne koblinger).
+- LUKKER et tidligere BØR-fund (3b-server-gennemgangen, 89d8011): "FaarUnderkapabiliteter har intet permanent
+  hjemsted efter import" er nu løst — SystemCapabilityDto.capability.moveReason (permanent, på systemsiden) og
+  CapabilityTreeResponse.toMove (permanent, del af det almindelige GET /api/capabilities-svar, ikke kun ét
+  dry-run-svar) dækker begge grene (Udgaaet og HarUnderkapabiliteter) samme sted. God løsning — ingen kobling
+  kan længere "forsvinde" efter det ene dry-run, der udløste den.
+- Server-diff-semantikken er RIGTIGT forstået af klienten: SystemEndpoints.ValidateCapabilities valmakere kun
+  NYE id'er (ikke allerede-koblede) mod selectable-reglen; klienten sender ALTID hele ownCapabilities-listen
+  tilbage (inkl. udgåede/flaggede), server beholder eksisterende koblinger uanset status. Testet begge veje
+  (web: "sender HELE listen … men aldrig familiens"; server allerede testet i 3b). Flytning sker ved at fjerne
+  chippen (altid muligt, matChipRemove uden selectable-tjek) + tilføje en ny via autocomplete (kun selectable).
+- capabilityIds sendes ALTID som array (aldrig null) fra formularen — også ved oprettelse af nyt system (tomt
+  array) og ved uændret gem (fuld liste) — undgår null-betyder-uændret-fælden fra planen. Testet eksplicit med
+  kommentar om hvorfor ("En tom liste, ikke null").
+- Listefilterets navneopslag (loadCapabilityName) slår op i BÅDE tree.items og tree.toMove, så et link til en
+  UDGÅET kapabilitet (som ikke findes i det aktive træ) stadig får et navn, og filtreringen selv sker uafhængigt
+  af opslaget (capabilityId sendes til systemer-endpointet uanset om navnet blev fundet). Fejler opslaget (500),
+  falder UI'et tavst tilbage til "Valgt kapabilitet" uden fejlbanner — bevidst og testet ("kan navnet ikke
+  hentes, filtreres der alligevel"); vurderet OK, fordi selve filtreringen (det der betyder noget) ikke fejler,
+  kun en sekundær visningstekst. Server-filteret bekræftet at matche PRÆCIS (ingen undertræ-filtrering, heller
+  ikke for retired-id'er): `CapabilityLinks.Any(l.CapabilityId == capability)`, uden RetiredAt-betingelse.
+- Friskheds-rækkevidden (mønster fra tidligere gennemgange) udvidet korrekt: hint-teksten under "Bekræft
+  uændret" blev ændret fra "Systemets oplysninger …" til "Systemets oplysninger og EGNE kapabiliteter …" —
+  ordet "egne" er præcist (udelukker familiens skrivebeskyttede koblinger, som vises men ikke ejes af dette
+  system). /confirm-endepunktet selv er uændret (rører ikke capabilityIds), så "Bekræft uændret" ændrer stadig
+  ikke data — kun teksten ved siden af blev udvidet til at nævne det nye synlige felt. God skabelon at genbruge.
+- "Kun blade linker" (design-valget fra opgavebeskrivelsen) holder både på kortet (n.selectable, som er
+  leaf+ikke-udgået) og er IKKE brugt samme sted på systemsidens egen kapabilitetsliste (dér linker ALLE koblinger,
+  inkl. udgåede/ikke-blade, til den eksakt-filtrerede liste) — det er bevidst OG korrekt, fordi filteret altid er
+  eksakt uanset kilde; kun kortets grupper (som reelt ikke har direkte koblinger) er udelukket fra at linke.
+- moveReasonLabels (lang form, kort/systemsiden) og moveReasonShortLabels (kort form, chip på formularen) er to
+  Records for samme enum — ikke en dobbelt-vagt (begge er ren tekst, ingen forretningslogik), men et mønster at
+  genkende, hvis en fremtidig gennemgang undrer sig over to labels-opslag for samme enum.
