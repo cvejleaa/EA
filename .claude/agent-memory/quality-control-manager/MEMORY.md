@@ -338,3 +338,56 @@ alle tre egne koblinger).
 - system-integrations.component.ts skriver stadig "lokale løsninger/udtræk" (flertal) på systemsiden → en
   "løsninger står ikke på skærmen"-test på systemsiden er kun grøn, hvis fixturet mangler ≥2 lokale løsninger.
 - "Familie" i UI/docs = HERM's øverste niveau (csv-kapabiliteter.md). Brug aldrig ordet om system+moduler på skærmen.
+
+## Kode-gennemgang delopg. 3d-server (d3c91b3 + b8d6ff5, PR #10, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE. Ingen blokerende eller BØR-fund. Verificeret ved kørsel (171/171 Capabilities-tests,
+inkl. 53 Coupling-specifikke) OG ved levende dry-run mod kørende dev-API med fem konstruerede scenarier (kun
+GET/tør-kørsel, intet gennemført i ea_dev): (A) én kobling-række slettet af flere for samme system → kun DEN
+kobling fjernes; (B) ALLE et systems rækker slettet → systemet optræder korrekt i `notInFile`, røres slet ikke
+(bekræfter beslutning M/plan-fund 6: "slet sidste række" er nu synlig, ikke tavs); (C) `FuldtNavn` ændret
+(simuleret omdøbning) → blokerende fejl med præcis besked; (D) delvis fil (kun `Overlap=Ja`-rækker, 2 af 10
+systemer) → de 8 udenfor korrekt listet i `notInFile`, ingenting slettet for dem; (E) en kolonne fjernet i Excel
+→ afvist med præcis "Første linje skal være …"-besked. Alle fem af mine egne plan-fund (3,4,5,6,11) er ført ind
+1:1 i beslutning M i docs/plan.md OG i koden:
+- `SidstÆndret` (fuld præcision, `T`/`Z` forhindrer Excel i at gøre det til en dato) sammenlignes mod
+  `system.UpdatedAt` og giver `ChangedSinceExport` PR kobling, ikke kun pr. system — testet med bånd (Kompas
+  redigeret → true, Ugle kun bekræftet → false, samme scenarie, viser at kun redigering, ikke bekræftelse,
+  udløser advarslen).
+- "Tøm koden, slet ikke rækken": dokumenteret præcist i docs/csv-koblinger.md ("Indlæs filen igen"-afsnittet,
+  nyt i denne PR) OG håndhævet i kode via `notInFile` (systemer med koblinger, der ikke har nogen række i filen)
+  — begge veje verificeret live (scenarie B).
+- 20 %-advarslen (`LargeRemoval`) bruger korrekt `removed+unchanged` (koblinger FØR importen på systemerne i
+  filen) som nævner, ikke et tal der inkluderer `added` — samme mønster som 3a's B6-fund. Testet med bånd (1/5 =
+  20 % → false, 2/5 = 40 % → true), kommentar nævner eksplicit at `>=` ville give forkert resultat ved 20 %.
+- Advarsler om ignorerede kolonner (`IgnoredEdits`/`Warnings`) dækker kun `CouplingCsv.SystemColumns` (de
+  system-relaterede felter en forvalter kunne tro var redigerbare: Forælder, Status, Type, ForvaltendeTeam,
+  Forretningsejer, Systemejer, SidstBekræftet, Systembeskrivelse) — IKKE de rene overlap-beregnede kolonner
+  (Kapabilitet, Sti, Overlap, SystemerDerTæller, AntalPlanlagte, TællerIkkeMed, DelesMed, BørFlyttes). Bevidst og
+  fornuftigt: kun `SystemId`+`Kode` er nøglerne, og de udeladte kolonner ligner ikke redigerbare felter på samme
+  måde. Ingen risiko fundet ved gennemgangen.
+- `FuldtNavn`-udvejen (tøm cellen for at omgå omdøbnings-tjekket) er dokumenteret og testet begge veje (udfyldt
+  og forkert → fejl; tom → ingen tjek).
+- Fem sandsynlige fejlscenarier fra opgavebeskrivelsen (slettet række, gammel eksport, delvis fil, omdøbt system,
+  kolonne slettet i Excel) er ALLE enten direkte testet i CouplingImportTests.cs eller verificeret live i denne
+  gennemgang (se ovenfor). "Datoer/tal ændret af Excel" er dækket strukturelt: kun `SystemColumns` (streng-
+  sammenligning, ingen parsing) advarer, og de rene talkolonner (AntalPlanlagte mv.) indlæses slet ikke, så en
+  Excel-ombygget talformatering kan ikke korrumpere noget. "Modul dækket af forælderen" er ren dokumentation
+  (findes via "Hent systemliste (CSV)"), ikke en kode-sti der kan fejle — ingen særbehandling nødvendig, da
+  ethvert gyldigt SystemId (modul eller ej) virker ens i `Plan()`.
+- Delte flader alle bekræftet uændrede/korrekt udvidet: kortimportens 409-tekst er BOGSTAVELIGT uændret (samme
+  streng, nu produceret via `Problems.StaleDryRun(subject)` med `subject="Kortet eller koblingerne til det"` —
+  verificeret ved diff, ikke kun læsning). `DeleteSystem` tager nu koblingslåsen FØR systemrækken, i samme
+  rækkefølge som importen — testet med en ægte race (rå SQL-forbindelse holder låsen, sletning venter uden selv
+  at have låst systemet, `FOR UPDATE NOWAIT` beviser det). `Common/CsvImport.cs` er en ren generalisering
+  (commit d3c91b3, "uden ny adfærd") af det, der allerede lå i `CapabilityImport.cs` — ingen ny fejlvej fundet.
+  64 MB-grænsen har en KODET begrundelse (`En_eksport_af_hele_DTU_kan_indlaeses_igen`-testen, 2000 systemer × 5
+  koblinger, dobbelt margin), ikke en påstået konstant.
+- `Version`/xmin: `Apply()` sætter kun `UpdatedAt` på systemer, der FAKTISK ændres (`Diff.Where(add+remove>0)`),
+  ikke på alle systemer i filen — testet eksplicit (uændret re-import: samme `UpdatedAt`/`Version` før/efter).
+  Undgår falske "ændret af en anden"-konflikter på formularer, der er åbne på urørte systemer i samme fil.
+- Ny enum `CouplingChangeKind` (Fjernes/Tilfoejes) har INGEN post i `labels.ts` endnu — korrekt udskudt, ingen
+  web-kode refererer den, og header-genkendelsen ("det ligner en koblingsfil", knappen "Importér koblinger") er
+  bevidst udskudt til 3d-web sammen med selve UI'et. `CouplingImportResult`/`CouplingChange`/`CouplingImportSummary`
+  giver, hvad en 3d-web-side skal bruge (linje+kolonne på fejl/advarsler, before/after via Kind, fingeraftryk,
+  `notInFile`-liste) — samme facon som 3a-web's velprøvede mønster (fejltabel, "Filen er identisk", canCommit).
+  Vurderet: 3d-web bør kunne bygges UDEN yderligere serverændringer.
