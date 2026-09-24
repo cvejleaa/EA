@@ -105,10 +105,22 @@ public sealed class CsvTests
     [Theory]
     [InlineData("1,5 mio. kr.")]
     [InlineData("A, B og C")]
-    [InlineData("pris 100,-")]
     [InlineData("pris 100,- kr.")]
     public void Almindelige_kommaer_efterlades_uaendrede(string value) =>
         Assert.Equal(["1", value], ReadBack(Csv.Write(Header, [["1", value]]))[1]);
+
+    /// <summary>
+    /// "-" sidst i et felt med komma: med komma som skilletegn starter cellen "-" + feltets afsluttende
+    /// citationstegn + resten af linjen, og det kan være en formel. Derfor apostrof — importen fjerner den igen.
+    /// </summary>
+    [Fact]
+    public void En_bindestreg_sidst_efter_et_komma_faar_apostrof_og_kommer_uaendret_tilbage_ved_import()
+    {
+        var bytes = Csv.Write(Header, [["1", "pris 100,-"]]);
+
+        Assert.Equal(["1", "pris 100,'-"], ReadBack(bytes)[1]);
+        Assert.Equal(["1", "pris 100,-"], Assert.Single(Csv.Read(bytes).Rows).Fields);
+    }
 
     [Fact]
     public void Tomme_og_manglende_felter_skrives_tomme() =>

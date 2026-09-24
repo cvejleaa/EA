@@ -71,7 +71,8 @@ række er forkert. Registret afviser blandt andet:
 ## Apostroffer mod formler
 
 Som i de andre CSV-filer sætter registret `'` foran `=`, `+`, `-` og `@`, når tegnet står først i et felt
-eller lige efter et komma eller en tabulator. Det sker også foran en apostrof, der allerede står dér.
+eller lige efter et komma, en tabulator eller et linjeskift (se `csv-integrationer.md`). Det sker også
+foran en apostrof, der allerede står dér.
 **Importen fjerner præcis de apostroffer igen**, så en eksport, der indlæses uændret, giver nul ændringer.
 
 ## Excel

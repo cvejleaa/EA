@@ -51,8 +51,9 @@ public static partial class Csv
             value = FormulaGuard + value;
         }
 
-        // Et andet skilletegn (komma, tabulator) kan gøre midten af et felt til starten af en celle.
-        value = AfterOtherSeparator().Replace(value, "$0" + FormulaGuard);
+        // Et andet skilletegn (komma, tabulator) eller et linjeskift kan gøre midten af et felt til starten af en
+        // celle, når filen åbnes med andre sprogindstillinger.
+        value = AfterOtherSeparator().Replace(value, FormulaGuard.ToString());
 
         var quote = value.IndexOfAny(NeedsQuoting) >= 0 || char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]);
         return quote ? "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : value;
@@ -73,13 +74,17 @@ public static partial class Csv
         text.Append("\r\n");
     }
 
-    // "-" alene eller før mellemrum (fx dansk "100,- kr.") er ikke en formel og efterlades.
-    // En apostrof efter komma/tabulator får også en foran (se GuardedStart).
-    [System.Text.RegularExpressions.GeneratedRegex("[,\\t](?=[=+@＝＋＠']|[-－][^\\s])")]
+    // Hvor et andet skilletegn (komma, tabulator) eller et linjeskift kan starte en ny celle — evt. efter
+    // citationstegn og mellemrum, som et regneark springer over ("x,""=1" bliver ellers cellen =1).
+    // "-" før mellemrum (fx dansk "100,- kr.") er ikke en formel og efterlades. Står "-" sidst i feltet
+    // ("pris 100,-"), bliver feltets afsluttende citationstegn en del af cellen (-"…), og så kan resten af
+    // linjen udgøre en formel — derfor får den en apostrof.
+    // En apostrof dér får også en foran (se GuardedStart).
+    [System.Text.RegularExpressions.GeneratedRegex("(?<=[,\\t\\r\\n][\"\\s]*)(?=[=+@＝＋＠']|[-－](?!\\s))")]
     private static partial System.Text.RegularExpressions.Regex AfterOtherSeparator();
 
-    // Det omvendte: apostroffen, skriveren satte efter et komma eller en tabulator.
-    [System.Text.RegularExpressions.GeneratedRegex("(?<=[,\\t])'(?=[=+@＝＋＠']|[-－][^\\s])")]
+    // Det omvendte: præcis den apostrof, skriveren satte samme sted.
+    [System.Text.RegularExpressions.GeneratedRegex("(?<=[,\\t\\r\\n][\"\\s]*)'(?=[=+@＝＋＠']|[-－](?!\\s))")]
     private static partial System.Text.RegularExpressions.Regex GuardAfterOtherSeparator();
 
     /// <summary>Fjerner præcis de apostroffer, <see cref="Field"/> satte (det omvendte af formel-neutraliseringen).</summary>

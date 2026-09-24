@@ -118,47 +118,92 @@ public static class CapabilityImport
         return (rows, errors.OrderBy(e => e.Line).Take(MaxErrors).ToList());
     }
 
-    /// <summary>Forældre, der ikke findes, ringe i forælder-kæden og for mange niveauer.</summary>
-    private static IEnumerable<ImportRowError> TreeErrors(List<CapabilityImportRow> rows)
+    /// <summary>
+    /// Forældre, der ikke findes, ringe i forælder-kæden og for mange niveauer. Hver række besøges én gang
+    /// (lineært), så en stor eller ondsindet fil ikke kan binde serveren.
+    /// </summary>
+    private static List<ImportRowError> TreeErrors(List<CapabilityImportRow> rows)
     {
+        var errors = new List<ImportRowError>();
         var byCode = rows.ToDictionary(r => CapabilityRules.NormalizeCode(r.Code));
+
+        CapabilityImportRow? ParentOf(CapabilityImportRow row) =>
+            row.ParentCode is { } parent ? byCode.GetValueOrDefault(CapabilityRules.NormalizeCode(parent)) : null;
 
         foreach (var row in rows)
         {
-            if (row.ParentCode is { } parent && !byCode.ContainsKey(CapabilityRules.NormalizeCode(parent)))
+            if (row.ParentCode is { } parent && ParentOf(row) is null)
             {
-                yield return new ImportRowError(row.Line, "ForælderKode", $"Forælderen \"{parent}\" findes ikke i filen.");
+                errors.Add(new ImportRowError(row.Line, "ForælderKode", $"Forælderen \"{parent}\" findes ikke i filen."));
             }
         }
 
-        foreach (var row in rows)
+        // Niveau pr. række: 1 for det øverste niveau; null = ukendt (ring eller manglende forælder højere oppe).
+        var level = new Dictionary<CapabilityImportRow, int?>();
+        foreach (var start in rows)
         {
-            var chain = new List<CapabilityImportRow> { row };
-            var current = row;
-            while (current.ParentCode is { } parent && byCode.TryGetValue(CapabilityRules.NormalizeCode(parent), out var next))
+            var path = new List<CapabilityImportRow>();
+            var onPath = new Dictionary<CapabilityImportRow, int>();
+            var current = start;
+            int? known = null;
+            while (true)
             {
-                if (next == row)
+                if (level.TryGetValue(current, out var done))
                 {
-                    yield return new ImportRowError(row.Line, "ForælderKode",
-                        $"Forælder-kæden går i ring: {string.Join(" → ", chain.Select(c => c.Code).Append(row.Code))}.");
+                    known = done;
                     break;
                 }
 
-                if (chain.Contains(next))
+                if (onPath.TryGetValue(current, out var ringStart))
                 {
-                    break; // Rækken fører ind i en ring, der meldes på ringens egne rækker.
+                    var ring = path.GetRange(ringStart, path.Count - ringStart);
+                    foreach (var member in ring)
+                    {
+                        errors.Add(new ImportRowError(member.Line, "ForælderKode", RingMessage(ring, member)));
+                        level[member] = null;
+                    }
+
+                    path.RemoveRange(ringStart, ring.Count);
+                    known = null;
+                    break;
                 }
 
-                chain.Add(next);
-                current = next;
+                onPath[current] = path.Count;
+                path.Add(current);
+                var parent = ParentOf(current);
+                if (parent is null)
+                {
+                    // Øverste niveau — eller en manglende forælder, der allerede er meldt.
+                    known = current.ParentCode is null ? 0 : null;
+                    break;
+                }
+
+                current = parent;
             }
 
-            if (chain.Count > CapabilityRules.MaxDepth && current.ParentCode is null)
+            // Tildel niveauer baglæns: rækken nærmest det kendte niveau først.
+            for (var i = path.Count - 1; i >= 0; i--)
             {
-                yield return new ImportRowError(row.Line, "ForælderKode",
-                    $"Kapabiliteten ligger på niveau {chain.Count}, men kortet må højst have {CapabilityRules.MaxDepth} niveauer.");
+                known = known is { } above ? above + 1 : null;
+                level[path[i]] = known;
+                if (known > CapabilityRules.MaxDepth)
+                {
+                    errors.Add(new ImportRowError(path[i].Line, "ForælderKode",
+                        $"Kapabiliteten ligger på niveau {known}, men kortet må højst have {CapabilityRules.MaxDepth} niveauer."));
+                }
             }
         }
+
+        return errors;
+    }
+
+    /// <summary>Ringen set fra én af dens rækker, afkortet så beskeden forbliver læsbar.</summary>
+    private static string RingMessage(List<CapabilityImportRow> ring, CapabilityImportRow member)
+    {
+        var from = ring.IndexOf(member);
+        var codes = ring.Skip(from).Concat(ring.Take(from)).Select(r => r.Code).ToList();
+        var shown = codes.Count <= 5 ? codes.Append(member.Code) : codes.Take(5).Append("…");
+        return $"Forælder-kæden går i ring: {string.Join(" → ", shown)}.";
     }
 
     public static CapabilityImportPlan Plan(IReadOnlyList<CapabilityImportRow> rows, IReadOnlyCollection<Capability> existing)

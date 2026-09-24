@@ -71,6 +71,44 @@
   (DDE/cmd, WEBSERVICE-exfil). Brug KUN harmløse markører (=1+1) til
   CSV-test – det er nok til at bevise, at en celle bliver til en formel.
 
+## Delopgave 3a (840d4c4, kapabilitetskort + CSV-import) – kørt 2026-09-24
+- BEKRÆFTET lukket (Kestrel, raw socket): læser/anonym med Content-Length
+  100 MB og INGEN krop -> 403/401 på 3-64 ms, dvs. kroppen læses ikke før
+  policyen. Admin: CL=3 MB -> 400 straks; chunked 3 MB -> 400 efter 2 MB.
+  Læser: tør-kørsel og gennemførelse 403, intet gemt. Export/GET åbne for
+  læsere (bevidst). Ingen cookies/CORS i src -> CSRF irrelevant.
+- Fingeraftryk = SHA256 af Changes (ikke HMAC). Ikke en adgangskontrol, kun
+  optimistisk samtidighed: samme ændringsliste = samme effekt, så forfalskning
+  giver intet. 8 samtidige commits fra samme tilstand -> præcis 1x 200, 7x 409.
+  LOCK TABLE SHARE ROW EXCLUSIVE blokerer ikke SELECT.
+- FUND (BEKRÆFTET, admin-only DoS): TreeErrors går hele kæden (ikke stop ved
+  MaxDepth) med List.Contains -> O(n^3). Lineær kæde 1000=3,5 s, 2000=25 s,
+  5000 > 100 s (TestServer-timeout). Ring 2000 x 40-tegns koder: 75 s, +390 MB
+  RSS, 18 MB svar (hver fejl rummer hele ringen). Parse ignorerer ct.
+- FUND (BEKRÆFTET på python-csv, Excel formodet): formelvagten dækker ikke
+  (a) linjeskift i felt (',' eller TAB-parse: "tekst\n=1+1," -> celle =1+1),
+  (b) citationstegn mellem skilletegn og formeltegn ('x,"=1+1,' -> celle
+  =1+1, fordi " fordobles og åbner et citeret felt i ','-parse). ';'-parse
+  ren (0 af 50.000 fuzz-værdier). Rammer ALLE eksporter (fælles Csv.Field).
+  SKAL lukkes før delopgave 4 (ikke-admin skriver).
+- NUL-byte (\u0000) i felt: tør-kørsel 200, commit 500 (Postgres afviser),
+  generisk ProblemDetails, intet gemt. Robusthed.
+- Read(Write(x)) != x ved tomme/whitespace-linjer i citerede felter
+  (TextFieldParser dropper dem). Integritet, ikke sikkerhed -> QC.
+
+## PoC-mønstre (tilføjet 3a)
+- Angrebstests i egen worktree: `git worktree add --detach <scratch>/wt <sha>`,
+  læg fil i tests/Ea.Api.Tests/Zattack/, byg med
+  -p:RunAnalyzersDuringBuild=false (analyzere fejler ellers), kør med
+  `-- --filter-class ...`. Log til fil (xunit sluger stdout). TestServer-
+  HttpClient har 100 s timeout.
+- Auth-før-krop: kun Kestrel beviser det (raw socket, stor CL, ingen krop).
+- API på Kestrel: Development + ConnectionStrings__Ea=egen DB; token-svar
+  hedder `accessToken`. ALDRIG `pkill -f Ea.Api` (rammer egen shell) –
+  brug pgrep + kill PID.
+- CSV-fuzz: alfabet = + - @ ' , TAB CR LF ; " mellemrum + fuldbredde;
+  parse med python csv ',' og TAB; frasortér '-' alene/før mellemrum.
+
 ## PoC-mønstre (genbrug)
 - CSV-injektion: eksportér, parse med python csv.reader BÅDE delimiter ';'
   og ',', led efter celler der starter med = + - @ (filtrér tomme celler fra).

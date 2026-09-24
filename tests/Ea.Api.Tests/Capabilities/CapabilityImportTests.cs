@@ -281,6 +281,34 @@ public sealed class CapabilityImportTests
             preview.Errors.Select(e => (e.Line, e.Message)));
     }
 
+    /// <summary>
+    /// Træ-tjekket er lineært: før rettelsen tog en kæde på 2000 rækker ~25 s og en ring på 2000 ~75 s (kubisk);
+    /// nu skal begge være langt under 2 s. Ringens besked afkortes, og antallet af fejl er begrænset.
+    /// </summary>
+    [Fact]
+    public void Lange_kaeder_og_store_ringe_tjekkes_hurtigt_og_giver_korte_beskeder()
+    {
+        var code = new string('K', 35);
+        var chain = Enumerable.Range(1, 5000)
+            .Select(i => new CsvRow(i + 1, [$"{code}{i}", "Navn", i == 1 ? "" : $"{code}{i - 1}", ""]))
+            .ToList();
+        var ring = Enumerable.Range(1, 2000)
+            .Select(i => new CsvRow(i + 1, [$"{code}{i}", "Navn", $"{code}{(i % 2000) + 1}", ""]))
+            .ToList();
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var (_, chainErrors) = CapabilityImport.Parse(new CsvReadResult(CapabilityCsv.Header, chain, null));
+        var (_, ringErrors) = CapabilityImport.Parse(new CsvReadResult(CapabilityCsv.Header, ring, null));
+        watch.Stop();
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"Træ-tjekket tog {watch.Elapsed}.");
+        Assert.Equal(CapabilityImport.MaxErrors, chainErrors.Count);
+        Assert.Equal("Kapabiliteten ligger på niveau 5, men kortet må højst have 4 niveauer.", chainErrors[0].Message);
+        Assert.Equal(CapabilityImport.MaxErrors, ringErrors.Count);
+        Assert.All(ringErrors, e => Assert.True(e.Message.Length < 300, e.Message));
+        Assert.EndsWith("→ …", ringErrors[0].Message.TrimEnd('.'), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task En_komma_separeret_fil_faar_en_forklaring()
     {
@@ -337,15 +365,39 @@ public sealed class CapabilityImportTests
     }
 
     [Fact]
-    public async Task En_for_stor_fil_afvises()
+    public async Task Graensen_er_2_MB_praecis()
     {
         await using var app = await TestApp.StartAsync();
         var admin = await app.ClientFor(TestUsers.Admin);
-        var file = Encoding.UTF8.GetBytes("Kode;Navn;ForælderKode;Beskrivelse\r\n" + new string('x', CapabilityRules.MaxFileBytes));
+        const int twoMegabytes = 2 * 1024 * 1024; // Skrevet som tal, ikke konstanten — så en ændret grænse bliver rød.
+        static byte[] Sized(int size)
+        {
+            var header = Encoding.UTF8.GetBytes("Kode;Navn;ForælderKode;Beskrivelse\r\nK1;");
+            return [.. header, .. Enumerable.Repeat((byte)'x', size - header.Length)];
+        }
 
-        var response = await admin.PostImportAsync(file, dryRun: true);
+        var atLimit = await admin.PostImportAsync(Sized(twoMegabytes), dryRun: true);
+        var overLimit = await admin.PostImportAsync(Sized(twoMegabytes + 1), dryRun: true);
 
-        await response.ExpectAsync(HttpStatusCode.BadRequest);
+        await atLimit.ExpectAsync(HttpStatusCode.OK); // Læst og vurderet (navnet er for langt) — ikke afvist for størrelse.
+        await overLimit.ExpectAsync(HttpStatusCode.BadRequest);
+        Assert.Contains("større end 2 MB", string.Join(" ", (await overLimit.ValidationErrorsAsync())["file"]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Hoejst_5000_raekker_ad_gangen()
+    {
+        await using var app = await TestApp.StartAsync();
+        var admin = await app.ClientFor(TestUsers.Admin);
+        static byte[] Rows(int count) =>
+            File(Enumerable.Range(1, count).Select(i => ($"R{i}", $"Række {i}", (string?)null, (string?)null)).ToArray());
+
+        var atLimit = await admin.DryRunAsync(Rows(5000));
+        var overLimit = await admin.DryRunAsync(Rows(5001));
+
+        Assert.Empty(atLimit.Errors);
+        Assert.Equal(5000, atLimit.Summary.New);
+        Assert.Equal("Filen har 5001 rækker; højst 5000 kan indlæses ad gangen.", Assert.Single(overLimit.Errors).Message);
     }
 
     [Fact]

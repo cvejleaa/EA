@@ -1,5 +1,4 @@
 using System.Text;
-using Microsoft.VisualBasic.FileIO;
 
 namespace Ea.Api.Common;
 
@@ -21,8 +20,9 @@ public static partial class Csv
 
     /// <summary>
     /// Læser en fil i registrets CSV-format (<see cref="Write"/>): strikt UTF-8 (BOM valgfri), semikolon,
-    /// citering efter RFC 4180. Apostroffer fra formel-neutraliseringen fjernes igen (<see cref="Unguard"/>).
-    /// Tomme linjer og linjer med kun tomme felter springes over (Excel efterlader dem gerne).
+    /// citering efter RFC 4180, linjeskift som CRLF, LF eller CR. Apostroffer fra formel-neutraliseringen fjernes
+    /// igen (<see cref="Unguard"/>), så Read(Write(x)) giver x — også tomme linjer inde i et felt.
+    /// Rækker med kun tomme felter springes over (Excel efterlader dem gerne).
     /// </summary>
     public static CsvReadResult Read(byte[] bytes)
     {
@@ -32,45 +32,101 @@ public static partial class Csv
         var invalidAt = FirstInvalidUtf8(content);
         if (invalidAt >= 0)
         {
-            var line = content[..invalidAt].Count((byte)'\n') + 1;
-            return Failed(new ImportRowError(line, null, $"Filen er ikke gemt som UTF-8. {SaveAsUtf8Advice}"));
+            var badLine = content[..invalidAt].Count((byte)'\n') + 1;
+            return Failed(new ImportRowError(badLine, null, $"Filen er ikke gemt som UTF-8. {SaveAsUtf8Advice}"));
         }
 
         var text = Encoding.UTF8.GetString(content);
-        var lineCount = text.Length == 0 ? 0 : text.Count(c => c == '\n') + (text.EndsWith('\n') ? 0 : 1);
+        var nul = text.IndexOf('\0', StringComparison.Ordinal);
+        if (nul >= 0)
+        {
+            return Failed(new ImportRowError(LineAt(text, nul), null, "Filen indeholder et ugyldigt tegn (NUL)."));
+        }
 
         var records = new List<CsvRow>();
-        using var parser = new TextFieldParser(new StringReader(text))
+        var fields = new List<string>();
+        var field = new StringBuilder();
+        var line = 1;
+        var recordLine = 1;
+        var i = 0;
+
+        while (i <= text.Length)
         {
-            TextFieldType = FieldType.Delimited,
-            HasFieldsEnclosedInQuotes = true,
-            TrimWhiteSpace = false,
-        };
-        parser.SetDelimiters(Separator.ToString());
-
-        while (!parser.EndOfData)
-        {
-            string[] fields;
-            try
+            // Starten af et felt.
+            if (i < text.Length && text[i] == '"')
             {
-                fields = parser.ReadFields() ?? [];
+                var quoteLine = line;
+                i++;
+                while (true)
+                {
+                    if (i >= text.Length)
+                    {
+                        return Failed(new ImportRowError(quoteLine, null,
+                            "Linjen kan ikke læses: et citationstegn (\") er ikke lukket."));
+                    }
+
+                    var c = text[i];
+                    if (c == '"')
+                    {
+                        if (i + 1 < text.Length && text[i + 1] == '"')
+                        {
+                            field.Append('"');
+                            i += 2;
+                            continue;
+                        }
+
+                        i++;
+                        break;
+                    }
+
+                    if (c == '\n' || (c == '\r' && !(i + 1 < text.Length && text[i + 1] == '\n')))
+                    {
+                        line++;
+                    }
+
+                    field.Append(c);
+                    i++;
+                }
+
+                if (i < text.Length && text[i] != Separator && text[i] != '\r' && text[i] != '\n')
+                {
+                    return Failed(new ImportRowError(line, null,
+                        "Linjen kan ikke læses: der står tekst efter et afsluttende citationstegn (\")."));
+                }
             }
-            catch (MalformedLineException ex)
+            else
             {
-                return Failed(new ImportRowError((int)ex.LineNumber, null,
-                    "Linjen kan ikke læses: et citationstegn (\") er ikke lukket."));
+                while (i < text.Length && text[i] != Separator && text[i] != '\r' && text[i] != '\n')
+                {
+                    field.Append(text[i]);
+                    i++;
+                }
             }
 
-            // Parseren springer tomme linjer over, så startlinjen regnes baglæns fra, hvor rækken slutter.
-            var endLine = parser.LineNumber < 0 ? lineCount : (int)parser.LineNumber - 1;
-            var startLine = endLine - fields.Sum(f => f.Count(c => c == '\n'));
+            fields.Add(field.ToString());
+            field.Clear();
 
-            if (fields.All(f => f.Length == 0))
+            if (i < text.Length && text[i] == Separator)
             {
+                i++;
                 continue;
             }
 
-            records.Add(new CsvRow(startLine, fields.Select(Unguard).ToList()));
+            // Slutningen af en række: linjeskift eller filens slutning.
+            if (fields.Any(f => f.Length > 0))
+            {
+                records.Add(new CsvRow(recordLine, fields.Select(Unguard).ToList()));
+            }
+
+            fields = [];
+            if (i >= text.Length)
+            {
+                break;
+            }
+
+            i += text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n' ? 2 : 1;
+            line++;
+            recordLine = line;
         }
 
         return records.Count == 0
@@ -79,6 +135,8 @@ public static partial class Csv
     }
 
     private static CsvReadResult Failed(ImportRowError error) => new([], [], error);
+
+    private static int LineAt(string text, int index) => text.AsSpan(0, index).Count('\n') + 1;
 
     /// <summary>Byte-positionen for den første ugyldige UTF-8-sekvens, eller -1.</summary>
     private static int FirstInvalidUtf8(ReadOnlySpan<byte> bytes)
