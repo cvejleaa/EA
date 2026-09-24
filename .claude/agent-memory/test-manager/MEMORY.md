@@ -105,6 +105,53 @@ jeg fjerner PRÆCIS den linje, testen skal bevise, bliver den så rød?". Sandsy
 (en rigtig systemklokke ændrer sig næsten altid mellem to HTTP-kald), men testen i sig selv beviser det
 ikke for netop "kun dataobjekter ændres"-scenariet.
 
+## Fund 36c0817 (delopgave 2, WEB, EA-register): 9 kernepåstande dræbt, 3 nye overlevede mutationer
+
+Alle 9 udpegede kernepåstande (retning fra/til, fritekst-guard mod "det andet system", platform-
+filter + selv-eksklusion i kandidater, "Hent nyeste version" kun ved stale-version, PUT sender
+`version` + enderne skrivebeskyttede ved redigering, tællelinjens ental/flertal + betingede led
+(lokale løsninger/via platform) + directDb-advarsel, canAdd/canEdit-styrede knapper,
+`fileNameFrom`'s `filename*`-præference + revoke, `systemDisplayName`) blev bekræftet DØDE ved
+mutation — presist, streng lighed pr. gren (mønster fra a0caef1 fortsat). `npx ng test --watch=false`
+fra `web/` med `PATH=/opt/node24/bin:$PATH` er kørende testkommando (53/53 baseline, 8 filer).
+
+**Overlevede — reelle huller, alle i `integration-form.page.ts`/`system-list.page.ts`:**
+1. **`canManageDataObjects()`-gating er slet ikke testet.** Byttede `computed(() => this.auth.me()
+   ?.permissions.canManageDataObjects ?? false)` til `computed(() => true)` → suiten (53/53) forblev
+   grøn. Alle tests i `integration-form.page.spec.ts` kører med `me(true)` (admin) — der er intet
+   scenarie med en ikke-priviligeret bruger, der bekræfter, at "Dataobjektet findes ikke på listen?"-
+   knappen er SKJULT. Brud på samme mønster, som ellers er godt dækket for Tilføj/Rediger-knapperne
+   (`canAdd`/`canEdit`) i `system-integrations.component.spec.ts`. Mangler: en test der sætter
+   `me(false)` og bekræfter knappen er fraværende.
+2. **Hele `addDataObject()`-metoden er dødt kode ift. dækning.** Gjorde metoden til en tidlig
+   `return;` (POST til `/api/data-objects`, sortering af listen, tilføjelse af det nye id til
+   `dataObjectIds`, nulstilling af feltet — alt sammen) → suiten forblev grøn, 0 fejl. Ingen test
+   rører `addDataObject`, `newDataObject` eller `createDataObject`. Mangler: en test der klikker
+   "Tilføj", udfylder navnet, sender POST, og bekræfter (a) det nye dataobjekt lander i `dataObjectIds`
+   ved submit, og (b) listen vises sorteret.
+3. **`downloadSystemList()` (system-list.page.ts, "Hent systemliste (CSV)"-knappen) er utestet.**
+   Gjorde metoden til en no-op (fjernede kaldet til `integrationsApi.downloadSystemList()` og
+   fejlhåndteringen) → suiten forblev grøn. `system-list.page.spec.ts` blev ikke udvidet i denne PR,
+   selvom knappen og metoden er nye. Mangler: en test der klikker `[data-testid="download-systems"]`
+   og bekræfter GET mod `/api/systems/export.csv`.
+
+**Bekræftet ekstra solidt, MEN med en overlevet mutation udover de 9 punkter:** `flags()`-metoden i
+`system-integrations.component.ts` har to UAFHÆNGIGE betingelser (livscyklus ≠ IDrift, type =
+LokalLoesning) — mutationstestet ved at duplikere anden betingelse ind i den første
+(`if (system.type === 'LokalLoesning')` i stedet for `if (system.lifecycleStatus !== 'IDrift')`):
+suiten forblev grøn (53/53), fordi test-fixturet 'Lønudtræk' altid har BEGGE egenskaber sammen
+(`type: 'LokalLoesning', lifecycleStatus: 'Udfases'`) — et klassisk "to grene, ét fixture"-hul.
+Mangler: et system i fixturet med KUN den ene egenskab (fx `lifecycleStatus: 'Udfases', type:
+'Egenudviklet'`) for at bevise de to flag-kilder er uafhængige.
+
+**Mønster at genkende næste gang**: "canX()"-gating, der styrer en synlig knap/sektion, testes ofte
+KUN i den positive retning (admin ser knappen), fordi testopsætningens `beforeEach` sætter en fast
+admin-bruger (`me(true)`) — se også a0caef1's canAdd/canEdit-fund, der VAR dækket, fordi
+`system-integrations.component.spec.ts` eksplicit skifter `TestBed`-modul og re-renderer med
+`canAdd: false`. `integration-form.page.spec.ts` gør ikke det samme for `canManageDataObjects`.
+Tjek altid: findes der et scenarie i specs, hvor den relevante permission-flag er FALSE, ikke kun
+TRUE?
+
 ## Generel lektie
 `if (false)`/direkte konstant-udkommentering af en gren udløser ofte C# CS0162
 ("Unreachable code") som fejl (TreatWarningsAsErrors=true i dette repo) og stopper builden

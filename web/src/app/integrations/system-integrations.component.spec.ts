@@ -38,13 +38,14 @@ describe('SystemIntegrationsComponent', () => {
       integrations([
         integrationItem({
           relation: 'Ud',
-          counterpart: systemLink('Lønudtræk', { type: 'LokalLoesning', lifecycleStatus: 'Udfases' }),
+          // Kun "lokal løsning" (i drift) her og kun livscyklus på HR nedenfor: de to markeringer er uafhængige.
+          counterpart: systemLink('Lønudtræk', { type: 'LokalLoesning', lifecycleStatus: 'IDrift' }),
           localModule: { id: 'm', name: 'HR' },
           integration: integration({ type: 'Udtraek', name: 'Månedligt', description: 'Til lønkontoret' }),
         }),
         integrationItem({
           relation: 'Ind',
-          counterpart: systemLink('HR', { parent: { id: 'p', name: 'Nordlys' } }),
+          counterpart: systemLink('HR', { parent: { id: 'p', name: 'Nordlys' }, lifecycleStatus: 'Udfases' }),
           integration: integration({ id: 'int-2', type: null, dataObjects: [{ id: 'd1', name: 'Medarbejder' }, { id: 'd2', name: 'Løn' }] }),
         }),
         integrationItem({
@@ -56,9 +57,9 @@ describe('SystemIntegrationsComponent', () => {
     );
 
     const [ud, ind, via] = rows(f);
-    expect(ud.slice(0, 3)).toEqual(['Sender data til', 'Lønudtræk Udfases Lokal løsning/udtræk (modul: HR)', 'Udtræk']);
+    expect(ud.slice(0, 3)).toEqual(['Sender data til', 'Lønudtræk Lokal løsning/udtræk (modul: HR)', 'Udtræk']);
     expect(ud[5]).toBe('Månedligt Til lønkontoret');
-    expect(ind.slice(0, 5)).toEqual(['Modtager data fra', 'Nordlys › HR', 'Ikke angivet', '', 'Medarbejder, Løn']);
+    expect(ind.slice(0, 5)).toEqual(['Modtager data fra', 'Nordlys › HR Udfases', 'Ikke angivet', '', 'Medarbejder, Løn']);
     expect(via.slice(0, 4)).toEqual(['Går via platformen', 'A → B', 'API', 'Platformen']);
   });
 

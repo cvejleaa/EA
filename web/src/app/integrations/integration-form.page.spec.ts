@@ -28,7 +28,10 @@ describe('IntegrationFormPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(existing?: IntegrationDto): Promise<ComponentFixture<IntegrationFormPage>> {
+  async function render(
+    existing?: IntegrationDto,
+    dataObjects = [{ id: 'd1', name: 'Medarbejder' }],
+  ): Promise<ComponentFixture<IntegrationFormPage>> {
     const fixture = TestBed.createComponent(IntegrationFormPage);
     fixture.componentRef.setInput('id', 'sys-1');
     if (existing) {
@@ -37,7 +40,7 @@ describe('IntegrationFormPage', () => {
     fixture.detectChanges();
     http.expectOne('/api/systems/sys-1').flush(systemDetail());
     http.expectOne((r) => r.url === '/api/systems').flush({ items: systems, total: systems.length });
-    http.expectOne('/api/data-objects').flush([{ id: 'd1', name: 'Medarbejder' }]);
+    http.expectOne('/api/data-objects').flush(dataObjects);
     if (existing) {
       http.expectOne(`/api/integrations/${existing.id}`).flush(existing);
     }
@@ -75,6 +78,41 @@ describe('IntegrationFormPage', () => {
     request.flush(integration());
     await settle(f);
     expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/systemer', 'sys-1']);
+  });
+
+  const button = (f: ComponentFixture<IntegrationFormPage>, label: string) =>
+    Array.from(el(f).querySelectorAll('button')).find((b) => text(b) === label) as HTMLButtonElement | undefined;
+
+  it('kun den, der må vedligeholde dataobjekter, kan oprette et nyt fra formularen', async () => {
+    TestBed.inject(AuthService).me.set(me(false));
+    const reader = await render();
+    expect(button(reader, 'Dataobjektet findes ikke på listen?')).toBeUndefined();
+
+    TestBed.inject(AuthService).me.set(me(true));
+    await settle(reader);
+    expect(button(reader, 'Dataobjektet findes ikke på listen?')).toBeDefined();
+  });
+
+  it('et nyt dataobjekt oprettes, sorteres på dansk og vælges på integrationen', async () => {
+    const f = await render(undefined, [
+      { id: 'd1', name: 'Medarbejder' },
+      { id: 'd2', name: 'Ørken' },
+    ]);
+    c(f)['form'].controls.dataObjectIds.setValue(['d1']);
+    button(f, 'Dataobjektet findes ikke på listen?')!.click();
+    await settle(f);
+    c(f)['newDataObject'].setValue('  Ærinde ');
+    button(f, 'Tilføj')!.click();
+
+    const post = http.expectOne((r) => r.method === 'POST' && r.url === '/api/data-objects');
+    expect(post.request.body).toEqual({ name: 'Ærinde' });
+    post.flush({ id: 'd3', name: 'Ærinde' });
+    await settle(f);
+
+    // Dansk: Æ før Ø og efter M (engelsk sortering ville sætte Æ først som "AE").
+    expect(c(f)['dataObjects']().map((o) => o.name)).toEqual(['Medarbejder', 'Ærinde', 'Ørken']);
+    expect(c(f)['form'].controls.dataObjectIds.value).toEqual(['d1', 'd3']);
+    expect(button(f, 'Tilføj')).toBeUndefined(); // feltet lukkes igen
   });
 
   it('det andet system skal vælges fra listen — fritekst sendes ikke', async () => {
