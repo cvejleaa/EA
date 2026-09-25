@@ -722,6 +722,7 @@ public static class SystemEndpoints
         SystemEntity s, ClaimsPrincipal user, IAuthorizationService auth, EaDbContext db, CancellationToken ct)
     {
         var canEdit = (await auth.AuthorizeAsync(user, s, Policies.EditSystem)).Succeeded;
+        // Én kilde til knappen: den, der ikke må slette, får altid en begrundelse — ellers systemets brug.
         var mayDelete = (await auth.AuthorizeAsync(user, Policies.DeleteSystem)).Succeeded;
         var deleteBlocked = mayDelete
             ? SystemRules.DeleteBlockedReason(s.Name, await CountUsage(db, s.Id, ct))
@@ -754,7 +755,7 @@ public static class SystemEndpoints
             s.Version,
             new SystemPermissions(
                 canEdit,
-                mayDelete && deleteBlocked is null,
+                deleteBlocked is null,
                 deleteBlocked,
                 parentBlocked));
     }
