@@ -109,6 +109,23 @@ public sealed class MySystemsTests
         var list = await frida.ListSystemsAsync("?mine=true&status=IDrift");
 
         Assert.Equal(["Aktivt"], list.Items.Select(i => i.Name));
+        Assert.Equal(["Planlagt"], (await frida.ListSystemsAsync("?mine=true&q=planl")).Items.Select(i => i.Name));
+    }
+
+    [Fact]
+    public async Task Samme_bekraeftelse_sorteres_efter_navn()
+    {
+        var (app, admin, frida, person) = await SetupAsync();
+        await using var _ = app;
+
+        // Samme tidspunkt (uret står stille): navnet afgør. Oprettet i omvendt orden, så rækkefølgen ikke er tilfældig.
+        foreach (var name in new[] { "Cirkel", "Alfa", "Bue" })
+        {
+            var system = await admin.CreateSystemAsync(name);
+            await SetRolesAsync(admin, system, (SystemRole.Systemforvalter, person.Id));
+        }
+
+        Assert.Equal(["Alfa", "Bue", "Cirkel"], (await frida.ListSystemsAsync("?mine=true")).Items.Select(i => i.Name));
     }
 
     [Fact]
