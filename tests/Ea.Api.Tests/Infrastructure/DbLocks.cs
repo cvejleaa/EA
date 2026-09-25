@@ -1,3 +1,4 @@
+using Ea.Api.Data;
 using Npgsql;
 
 namespace Ea.Api.Tests.Infrastructure;
@@ -13,6 +14,10 @@ public static class DbLocks
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         await command.ExecuteNonQueryAsync();
     }
+
+    /// <summary>Tager præcis den lås, API'et tager (samme faste liste), så testen efterligner produktionen.</summary>
+    public static Task Lock(NpgsqlConnection connection, NpgsqlTransaction transaction, TableLock tableLock) =>
+        Sql(connection, transaction, FormattableString.Invariant(TableLocks.Sql(tableLock)));
 
     /// <summary>Venter, til en anden forbindelse står i kø på en lås til <paramref name="table"/> (så testen rammer vinduet).</summary>
     public static async Task WaitForBlockedLockAsync(

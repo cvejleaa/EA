@@ -97,15 +97,15 @@ public static class CsvImport
         Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(changes)));
 
     /// <summary>
-    /// Gennemfører en import i én transaktion: låser (<paramref name="lockSql"/>), beregner planen igen på den låste
-    /// tilstand og gemmer kun, hvis aftrykket er det, tør-kørslen viste. Null betyder "data er ændret siden
-    /// tør-kørslen" — også når en samtidig ændring af en række opdages ved gem. Kører i EF's retry-strategi, så et
-    /// forbindelsesbrud starter forfra med en ny beregning.
+    /// Gennemfører en import i én transaktion: låser (<paramref name="tableLock"/> — en fast lås, aldrig en streng),
+    /// beregner planen igen på den låste tilstand og gemmer kun, hvis aftrykket er det, tør-kørslen viste. Null betyder
+    /// "data er ændret siden tør-kørslen" — også når en samtidig ændring af en række opdages ved gem. Kører i EF's
+    /// retry-strategi, så et forbindelsesbrud starter forfra med en ny beregning.
     /// </summary>
     /// <param name="recompute">Planen og dens aftryk på den låste tilstand; en null-plan (fx nye fejl) afvises.</param>
     public static Task<TPlan?> CommitIfUnchangedAsync<TPlan>(
         EaDbContext db,
-        string lockSql,
+        TableLock tableLock,
         string fingerprint,
         Func<Task<(TPlan? Plan, string? Fingerprint)>> recompute,
         Func<TPlan, Task> apply,
@@ -115,7 +115,7 @@ public static class CsvImport
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync(lockSql, ct);
+            await db.Database.LockAsync(tableLock, ct);
 
             var (plan, current) = await recompute();
             if (plan is null || !string.Equals(current, fingerprint, StringComparison.Ordinal))

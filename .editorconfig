@@ -400,3 +400,13 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 [**/Data/Migrations/*.cs]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
+
+# SQL-injektion i API'et: en overtrædelse er en byggefejl, ikke en advarsel (se Data/TableLocks.cs og
+# SqlSafetyTests). Testinfrastrukturen opretter databaser og simulerer låse med rå SQL med vilje.
+[src/**/*.cs]
+# Interpoleret tekst sendt til EF's rå SQL-metoder.
+dotnet_diagnostic.EF1002.severity = error
+# SQL-tekst fra en variabel i en kommando.
+dotnet_diagnostic.CA2100.severity = error
+# Brugerinput, der kan nå frem til SQL (dataflow-analyse).
+dotnet_diagnostic.CA3001.severity = error

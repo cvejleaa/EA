@@ -388,7 +388,7 @@ public static class SystemEndpoints
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE", ct);
+            await db.Database.LockAsync(TableLock.Couplings, ct);
 
             var system = await db.Systems.FirstOrDefaultAsync(s => s.Id == id, ct);
             if (system is null)
@@ -566,7 +566,7 @@ public static class SystemEndpoints
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync("LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE", ct);
+            await db.Database.LockAsync(TableLock.Couplings, ct);
             var result = await work();
             await transaction.CommitAsync(ct);
             return result;

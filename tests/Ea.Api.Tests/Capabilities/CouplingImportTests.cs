@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Ea.Api.Capabilities;
 using Ea.Api.Common;
+using Ea.Api.Data;
 using Ea.Api.Systems;
 using Ea.Api.Tests.Infrastructure;
 using Npgsql;
@@ -411,7 +412,7 @@ public sealed class CouplingImportTests
         await using var coupling = new NpgsqlConnection(app.ConnectionString);
         await coupling.OpenAsync();
         await using var transaction = await coupling.BeginTransactionAsync();
-        await Sql(coupling, transaction, "LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE");
+        await Lock(coupling, transaction, TableLock.Couplings);
         await Sql(coupling, transaction,
             $"INSERT INTO ea.system_capabilities (system_id, capability_id) VALUES ('{kompas.Id}', '{ids["K2.1"]}')");
 
@@ -470,7 +471,7 @@ public sealed class CouplingImportTests
         await using var import = new NpgsqlConnection(app.ConnectionString);
         await import.OpenAsync();
         await using var transaction = await import.BeginTransactionAsync();
-        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+        await Lock(import, transaction, TableLock.CapabilitiesAndCouplings);
 
         var delete = admin.DeleteAsync($"/api/systems/{system.Id}");
         await WaitForBlockedLockAsync(import, transaction);
@@ -496,7 +497,7 @@ public sealed class CouplingImportTests
         await using var import = new NpgsqlConnection(app.ConnectionString);
         await import.OpenAsync();
         await using var transaction = await import.BeginTransactionAsync();
-        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+        await Lock(import, transaction, TableLock.CapabilitiesAndCouplings);
 
         var delete = reader.DeleteAsync($"/api/systems/{system.Id}");
         var first = await Task.WhenAny(delete, Task.Delay(TimeSpan.FromSeconds(10)));
@@ -520,7 +521,7 @@ public sealed class CouplingImportTests
         await using var import = new NpgsqlConnection(app.ConnectionString);
         await import.OpenAsync();
         await using var transaction = await import.BeginTransactionAsync();
-        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+        await Lock(import, transaction, TableLock.CapabilitiesAndCouplings);
         await Sql(import, transaction,
             $"INSERT INTO ea.system_capabilities (system_id, capability_id) VALUES ('{opened.Id}', '{ids["K1.2"]}')");
         await Sql(import, transaction, $"UPDATE ea.systems SET updated_at = now() WHERE id = '{opened.Id}'");

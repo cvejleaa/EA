@@ -90,6 +90,8 @@ selv.
    CI (`.github/workflows/ci.yml`) kører på hver PR: **api** (dotnet format,
    build, alle tests mod PostgreSQL 16, migrationer i sync med modellen) og
    **web** (lint, tests, build, genererede typer i sync med kontrakten).
+   **CodeQL** (`.github/workflows/codeql.yml`) analyserer C# og TypeScript
+   for sikkerhedsfejl på hver PR og ugentligt.
    Der er endnu intet deploy-mål — prototypen kører lokalt (se README).
 5. Verificér i produktion og fortæl brugeren, hvad der er live.
 
@@ -175,6 +177,13 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
     og `urn:ea:problem:stale-dry-run`) ⇄ `web/src/app/core/problem.ts`. Kun
     en forældet version må tilbyde "Hent nyeste version"; en forældet
     tør-kørsel beder om en ny tør-kørsel.
+- **SQL: parametre og ORM overalt.** Al dataadgang går gennem EF Core/LINQ,
+  så værdier altid er parametre. API'ets eneste SQL-tekst er de faste
+  tabel-låse i `Data/TableLocks.cs` — en enum, aldrig en streng udefra.
+  `*Raw`-metoder og egne `NpgsqlCommand`'er i `src/` er forbudt:
+  `SqlSafetyTests`, analyzerne (EF1002, CA2100 og CA3001 er fejl i `src/`)
+  og CodeQL fanger dem. Databasen giver appen mindste rettighed: kun DML;
+  migreringer kører med en særskilt rolle (beslutning X i `docs/plan.md`).
 - **Serveren er eneste autoritet.** Validering i klienten kan omgås. Server-
   adgangstjek må aldrig være mere gavmilde end klientens regler — og de skal
   ligge FØR de dyre operationer, så en afvisning er billig.

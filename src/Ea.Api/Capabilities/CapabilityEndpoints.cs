@@ -138,7 +138,7 @@ public static partial class CapabilityEndpoints
         List<Capability> existing = [];
         var plan = await CsvImport.CommitIfUnchangedAsync(
             db,
-            "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE",
+            TableLock.CapabilitiesAndCouplings,
             fingerprint!,
             async () =>
             {
@@ -213,7 +213,7 @@ public static partial class CapabilityEndpoints
         // En fejl ved den nye beregning (fx et system slettet siden) betyder, at tør-kørslen ikke gælder længere.
         var plan = await CsvImport.CommitIfUnchangedAsync(
             db,
-            "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE",
+            TableLock.CapabilitiesAndCouplings,
             fingerprint!,
             async () =>
             {
