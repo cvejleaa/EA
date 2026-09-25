@@ -73,6 +73,31 @@ public sealed class SqlSafetyTests
         Assert.Equal(["Data/TableLocks.cs: ExecuteSqlAsync("], calls);
     }
 
+    /// <summary>
+    /// Positivlisten: de ENESTE filer, der må bruge databasedriveren eller ADO.NET direkte, og hvorfor. Et nyt driver-
+    /// API — også et, bloklisten ikke kender (Dapper, en ny Npgsql-metode) — kræver navnerummet og gør testen rød.
+    /// </summary>
+    private static readonly string[] DriverUsers =
+    [
+        "Common/Problems.cs", // Læser PostgreSQL's fejlkode for en unik-overtrædelse (PostgresErrorCodes) — ingen SQL.
+    ];
+
+    [Fact]
+    public void Kun_kendte_filer_bruger_databasedriveren_direkte()
+    {
+        // De genererede migreringer nævner Npgsql i EF's metadata; en håndskrevet fil i mappen tæller med.
+        var generated = new Regex(@"^Data/Migrations/(\d{14}_.*|EaDbContextModelSnapshot)\.cs$");
+        var driver = new Regex(@"\b(Npgsql|System\.Data|Dapper)\b");
+
+        var files = ApiSources()
+            .Where(s => !generated.IsMatch(s.Path) && driver.IsMatch(s.Text))
+            .Select(s => s.Path)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(DriverUsers, files);
+    }
+
     /// <summary>Tabeller, appen bevidst kun må læse og tilføje i (fx ændringshistorikken, beslutning W). Tom i dag.</summary>
     private static readonly string[] AppendOnlyTables = [];
 
