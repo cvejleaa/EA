@@ -97,3 +97,29 @@ Første plan lagt 2026-09-24: 1 fundament+systemregister, 2 integrationer+"hvad 
   ≠ dækning (selv+forælder+moduler, ikke søskende). Holderens egen status/type afgør.
 - Koblings-CSV: én række pr. egen kobling + én tom-Kode-række pr. system uden egne koblinger (= arbejdsliste OG "fjern alle").
 - 3d: fil = fuldt sæt egne koblinger for systemer i filen; kun NYE valideres; systems-rækken bumpes (UpdatedAt, ikke LastConfirmed).
+
+## Genbrugskatalog — adgang/identitet efter 3c-web (main a517cc0)
+- EditSystemHandler/EditIntegrationHandler (Authorization/) er SINGLETONS og ser kun IsInRole(Admin); resursen ignoreres.
+  CreateIntegration autoriserer en IKKE-gemt Integration med kun id'er (ingen navigationer) → handler skal slå op på id.
+  CanAdd = fake Integration{Source=id,Target=id} (IntegrationEndpoints l.68). ToDto pr. integration → N+1 hvis handler querier.
+- Person.EntraObjectId (Person.cs l.19, unikt indeks EaDbContext l.107-108) findes; POST /api/persons kan IKKE sætte den.
+  DevSeed.FridaOid (l.19) = dev-bruger "frida" = systemforvalter på Nordlys ERP + Laborant (forberedt til delopg. 4).
+- Person.Email: ikke normaliseret, ikke unik. Ingen person-slet/-redigér-endpoints.
+- /api/auth/mode (DevAuthEndpoints l.21) = klientens mode-switch; AuthService-kommentar forudser udskiftning af login-servicen.
+  Klienten: getToken() er SYNKRON (sessionStorage) → async token (Firebase/MSAL) kræver generalisering af interceptor.
+- Klienten følger allerede permissions (canEdit/canDelete/canAdd, parentBlockedReason) — ingen klient-adgangslogik at fjerne.
+- ParentCandidates (SystemEndpoints l.169) = kandidater via SAMME regel som gem → skal også filtreres på målret (inkl. nuv. forælder).
+- Alle skrivninger går via ChangeTracker (ingen ExecuteUpdate/Delete) → SaveChangesInterceptor fanger alt. MEN cascade-slettede
+  børn (roller, koblinger, integration_data_objects) er ikke tracked, medmindre slet-endpoint indlæser dem.
+- Ingen Dockerfile, intet deploy, ingen E2E. Playwright-browsere i /opt/pw-browsers (chromium-1194), @playwright/test ikke installeret.
+- AuthorizationTests: Production+Dev kaster (l.159), Entra kaster NotSupported (l.167).
+
+## Plan delopg. 4 + Firebase-drift (2026-09-25) — mine anbefalinger
+- Skiver: 4a server-adgang(+rename EntraObjectId→Oid, forældreskift, slet=admin) → 4b "Mine systemer"+E2E → F0 spike (Firebase-claims,
+  præ-kapring) → F1 server Firebase-mode → F2 web e-mail-link → F3 container/firebase.json/CLI-modes → [ejertrin] → F4 deploy.yml → 4c
+  historik server (interceptor + ea.change_log, system_ids uuid[]) → 4d historik web. Schema-omdøbninger FØR første prod-deploy.
+- oid i Firebase-mode = "fb:"+sub (ren funktion af tokenet); Person.Oid bindes ÉN gang via verificeret e-mail (betinget UPDATE WHERE oid IS NULL).
+  Admin via config-liste af oid'er (ikke e-mail). Ikke-registreret → 403 urn:ea:problem:not-registered (én vagt i OnTokenValidated/OnChallenge).
+- Adgangssæt pr. request (scoped): systemer hvor oid har Systemejer/Systemforvalter + deres moduler. Ingen FirebaseAdmin-NuGet (JwtBearer Authority).
+- Migrering i prod: bundle som Cloud Run Job, gated af GitHub Environment + app-CLI "pending-migrations"; app nægter health ved pending.
+- Største usikkerhed: email-link vs password-præ-kapring i Firebase (sign_in_provider="password" for begge?).
