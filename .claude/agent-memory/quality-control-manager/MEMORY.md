@@ -515,3 +515,20 @@ DTO'er genbruges råt).
   shell-init, så `source ~/.nvm/nvm.sh` fejlede i et senere kald selvom installationen lykkedes). Genbrug denne
   opskrift (`export NVM_DIR=/opt/nvm; . "$NVM_DIR/nvm.sh"; nvm use 24`) i stedet for at gengive node22-fejlen som
   et kodeproblem.
+
+## Plan-gennemgang delopg. 4 + Firebase-drift (2026-09-25, main a517cc0). Tjek ved kode-gennemgangen:
+- INVITATION HAR INGEN UI: personformularen (system-form.page.html, "Personen findes ikke på listen?") har kun Navn +
+  Afdeling, INGEN e-mail — og login binder på e-mail. Person kan ikke redigeres. Spørg altid: "hvordan giver EA en
+  kollega adgang, klik for klik?" og "hvor ser EA, hvem der har adgang / har logget ind?"
+- Sletteret ≠ redigeringsret: DeleteSystem bruger i dag Policies.EditSystem. Når forvaltere får EditSystem, skal
+  sletning have egen admin-policy FØR låsen (403), ikke en tekst i DeleteBlockedReason (ren brugs-funktion → 409).
+- "Sidst ændret" (kun systemrækken) står lige ved historikken, hvor integrationsændringer er nyere → modsigelse.
+  Historik tom på eksisterende systemer mens "Sidst ændret" viser en dato → skriv "føres fra <dato>".
+- Forældreskift i historik skal stå på gammel OG ny forælder; slettet modul på forælderen; person-oprettelse
+  logges men har ingen visning (lover mere end den giver).
+- toProblem() fladgør ALLE 403 til "Du har ikke adgang…" og taber type → en ny 403-type (not-registered) forsvinder.
+  authGuard/getToken() er synkrone og kalder logout() i catch → Firebase-sessionen skal awaites (authStateReady).
+- Banner "Prototype — alle data er fiktive" (app.ts) bliver usandt med rigtige login-brugere.
+- Import-grænser vs. Cloud Run: koblingsimport 64 MB (CouplingImport.MaxFileBytes), Cloud Run 32 MiB, Hosting 60 s.
+- E-mail-levering til @dtu.dk (spam/Safe Links, afsender firebaseapp.com ligner phishing) er den største praktiske
+  login-risiko — ikke dækket af E2E (emulator skåret væk).
