@@ -23,6 +23,8 @@ export interface SystemFilter {
   businessOwnerId?: string;
   /** Kapabilitets-id eller 'none': mangler at blive koblet (hverken systemet eller familien har en), nedlagte undtaget. */
   capabilityId?: string;
+  /** 'true': "Mine systemer" — hvor brugeren har en rolle, og deres moduler (ældst bekræftede først). */
+  mine?: 'true';
 }
 
 @Injectable({ providedIn: 'root' })

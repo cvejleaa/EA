@@ -312,6 +312,7 @@ export interface paths {
                     teamId?: string;
                     businessOwnerId?: string;
                     capabilityId?: string;
+                    mine?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -1355,6 +1356,10 @@ export interface components {
             name: string;
             roles: string[];
             permissions: components["schemas"]["MePermissions"];
+            /** Format: uuid */
+            personId: null | string;
+            /** Format: int32 */
+            mySystemCount: number;
         };
         ModuleDto: {
             /** Format: uuid */
@@ -1407,6 +1412,7 @@ export interface components {
             parent: null | components["schemas"]["SystemRef"];
             modules: components["schemas"]["ModuleDto"][];
             roles: components["schemas"]["RoleAssignmentDto"][];
+            editors: components["schemas"]["SystemEditor"][];
             capabilities: components["schemas"]["SystemCapabilityDto"][];
             /** Format: date-time */
             createdAt: string;
@@ -1418,6 +1424,10 @@ export interface components {
             /** Format: uint32 */
             version: number;
             permissions: components["schemas"]["SystemPermissions"];
+        };
+        SystemEditor: {
+            person: components["schemas"]["PersonDto"];
+            via: null | components["schemas"]["SystemRef"];
         };
         SystemIntegrationItem: {
             relation: components["schemas"]["IntegrationRelation"];
@@ -1452,6 +1462,7 @@ export interface components {
             lastConfirmedAt: string;
             /** Format: int32 */
             moduleCount: number;
+            myRoles?: null | components["schemas"]["SystemRole"][];
         };
         SystemListResponse: {
             items: components["schemas"]["SystemListItem"][];
@@ -1463,6 +1474,7 @@ export interface components {
             canDelete: boolean;
             deleteBlockedReason: null | string;
             parentBlockedReason: null | string;
+            canEditViaParent: boolean;
         };
         SystemRef: {
             /** Format: uuid */

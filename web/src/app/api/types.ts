@@ -9,6 +9,7 @@ export type SystemListItem = Schemas['SystemListItem'];
 export type SystemListResponse = Schemas['SystemListResponse'];
 export type SystemWriteRequest = Schemas['SystemWriteRequest'];
 export type SystemRef = Schemas['SystemRef'];
+export type SystemEditor = Schemas['SystemEditor'];
 export type SystemPermissions = Schemas['SystemPermissions'];
 export type LifecycleStatus = Schemas['LifecycleStatus'];
 // OpenAPI beskriver den nullable enum med null som værdi; selve typen er uden null.

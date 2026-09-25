@@ -264,6 +264,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -1972,7 +1979,9 @@
           "oid",
           "name",
           "roles",
-          "permissions"
+          "permissions",
+          "personId",
+          "mySystemCount"
         ],
         "type": "object",
         "properties": {
@@ -1990,6 +1999,17 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/MePermissions"
+          },
+          "personId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "mySystemCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -2180,6 +2200,7 @@
           "parent",
           "modules",
           "roles",
+          "editors",
           "capabilities",
           "createdAt",
           "updatedAt",
@@ -2254,6 +2275,12 @@
               "$ref": "#/components/schemas/RoleAssignmentDto"
             }
           },
+          "editors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemEditor"
+            }
+          },
           "capabilities": {
             "type": "array",
             "items": {
@@ -2281,6 +2308,28 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/SystemPermissions"
+          }
+        }
+      },
+      "SystemEditor": {
+        "required": [
+          "person",
+          "via"
+        ],
+        "type": "object",
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SystemRef"
+              }
+            ]
           }
         }
       },
@@ -2463,6 +2512,15 @@
           "moduleCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "myRoles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SystemRole"
+            }
           }
         }
       },
@@ -2490,7 +2548,8 @@
           "canEdit",
           "canDelete",
           "deleteBlockedReason",
-          "parentBlockedReason"
+          "parentBlockedReason",
+          "canEditViaParent"
         ],
         "type": "object",
         "properties": {
@@ -2511,6 +2570,9 @@
               "null",
               "string"
             ]
+          },
+          "canEditViaParent": {
+            "type": "boolean"
           }
         }
       },

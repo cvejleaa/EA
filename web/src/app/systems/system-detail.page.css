@@ -18,3 +18,4 @@
 .code { font-family: ui-monospace, monospace; color: var(--mat-sys-on-surface-variant); }
 .flag { margin-left: 4px; padding: 0 6px; border-radius: 4px; font: var(--mat-sys-label-medium); background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
 .shared { display: block; font: var(--mat-sys-body-small); }
+.editors { margin-top: 4px; }

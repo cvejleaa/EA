@@ -36,7 +36,14 @@ export function systemDetail(overrides: Partial<SystemDetail> = {}): SystemDetai
     lastConfirmedAt: '2026-08-01T10:00:00Z',
     lastConfirmedByName: 'Eva Arkitekt',
     version: 7,
-    permissions: { canEdit: true, canDelete: true, deleteBlockedReason: null, parentBlockedReason: null },
+    editors: [],
+    permissions: {
+      canEdit: true,
+      canDelete: true,
+      deleteBlockedReason: null,
+      parentBlockedReason: null,
+      canEditViaParent: false,
+    },
     ...overrides,
   };
 }
@@ -57,12 +64,15 @@ export function listItem(overrides: Partial<SystemListItem> = {}): SystemListIte
   };
 }
 
-export function me(canEdit: boolean): MeResponse {
+export function me(canEdit: boolean, overrides: Partial<MeResponse> = {}): MeResponse {
   return {
     oid: 'oid-1',
     name: canEdit ? 'Eva Arkitekt' : 'Leo Læser',
     roles: canEdit ? ['EA.Admin'] : [],
     permissions: { canCreateSystems: canEdit, canManagePersons: canEdit, canManageDataObjects: canEdit },
+    personId: null,
+    mySystemCount: 0,
+    ...overrides,
   };
 }
 

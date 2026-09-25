@@ -12,7 +12,12 @@ describe('SystemDetailPage', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideDanishLocale()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideDanishLocale(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -40,10 +45,24 @@ describe('SystemDetailPage', () => {
       systemDetail({
         parent: nordlys,
         capabilities: [
-          systemCapability('K1.1.1', null, { name: 'Optagelse', path: 'Uddannelse › Studieadministration' }),
-          systemCapability('K1.9', null, { name: 'Gammel eksamen', path: 'Uddannelse', moveReason: 'Udgaaet' }),
-          systemCapability('K2', nordlys, { name: 'Forskning', moveReason: 'HarUnderkapabiliteter' }),
-          systemCapability('K3.1', { id: 'sys-mod', name: 'Laboratorie' }, { name: 'Prøver', path: 'Laboratorier' }),
+          systemCapability('K1.1.1', null, {
+            name: 'Optagelse',
+            path: 'Uddannelse › Studieadministration',
+          }),
+          systemCapability('K1.9', null, {
+            name: 'Gammel eksamen',
+            path: 'Uddannelse',
+            moveReason: 'Udgaaet',
+          }),
+          systemCapability('K2', nordlys, {
+            name: 'Forskning',
+            moveReason: 'HarUnderkapabiliteter',
+          }),
+          systemCapability(
+            'K3.1',
+            { id: 'sys-mod', name: 'Laboratorie' },
+            { name: 'Prøver', path: 'Laboratorier' },
+          ),
         ],
       }),
     );
@@ -55,10 +74,17 @@ describe('SystemDetailPage', () => {
       'K2 Forskning · via forælderen Nordlys Har fået underkapabiliteter — vælg den, der passer bedst',
       'K3.1 Prøver · Laboratorier · via modulet Laboratorie',
     ]);
-    expect(items.map((li) => li.querySelector('[data-testid="move-reason"]') !== null)).toEqual([false, true, true, false]);
+    expect(items.map((li) => li.querySelector('[data-testid="move-reason"]') !== null)).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
     expect(items.map((li) => li.classList.contains('held'))).toEqual([false, false, true, true]);
     // Hver kobling fører til systemlisten filtreret på kapabiliteten.
-    expect(items[0].querySelector('a')?.getAttribute('href')).toBe('/systemer?capabilityId=cap-K1.1.1');
+    expect(items[0].querySelector('a')?.getAttribute('href')).toBe(
+      '/systemer?capabilityId=cap-K1.1.1',
+    );
     expect(q(f, '[data-testid="capabilities-none"]')).toBeNull();
   });
 
@@ -72,8 +98,14 @@ describe('SystemDetailPage', () => {
     const f = await render(
       systemDetail({
         roles: [
-          { role: 'Forretningsejer', person: { id: 'p1', displayName: 'Bo Bogholder', email: null, department: 'Økonomi' } },
-          { role: 'Systemforvalter', person: { id: 'p2', displayName: 'Frida', email: null, department: null } },
+          {
+            role: 'Forretningsejer',
+            person: { id: 'p1', displayName: 'Bo Bogholder', email: null, department: 'Økonomi' },
+          },
+          {
+            role: 'Systemforvalter',
+            person: { id: 'p2', displayName: 'Frida', email: null, department: null },
+          },
         ],
       }),
     );
@@ -94,7 +126,15 @@ describe('SystemDetailPage', () => {
 
   it('skjuler alle handlinger for en læser', async () => {
     const f = await render(
-      systemDetail({ permissions: { canEdit: false, canDelete: false, deleteBlockedReason: null, parentBlockedReason: null } }),
+      systemDetail({
+        permissions: {
+          canEdit: false,
+          canDelete: false,
+          deleteBlockedReason: null,
+          parentBlockedReason: null,
+          canEditViaParent: false,
+        },
+      }),
     );
     expect(q(f, '[data-testid="edit"]')).toBeNull();
     expect(q(f, '[data-testid="confirm"]')).toBeNull();
@@ -104,7 +144,15 @@ describe('SystemDetailPage', () => {
   it('deaktiverer sletning og forklarer hvorfor, når systemet har moduler', async () => {
     const reason = 'Nordlys har moduler (3) — flyt eller slet dem først.';
     const f = await render(
-      systemDetail({ permissions: { canEdit: true, canDelete: false, deleteBlockedReason: reason, parentBlockedReason: null } }),
+      systemDetail({
+        permissions: {
+          canEdit: true,
+          canDelete: false,
+          deleteBlockedReason: reason,
+          parentBlockedReason: null,
+          canEditViaParent: false,
+        },
+      }),
     );
     expect((q(f, '[data-testid="delete"]') as HTMLButtonElement).disabled).toBe(true);
     expect(text(q(f, '[data-testid="delete-blocked"]'))).toBe(reason);
@@ -117,7 +165,13 @@ describe('SystemDetailPage', () => {
     const request = http.expectOne('/api/systems/sys-1/confirm');
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({ version: 7 });
-    request.flush(systemDetail({ version: 8, lastConfirmedAt: '2026-09-20T10:00:00Z', lastConfirmedByName: 'Frida Forvalter' }));
+    request.flush(
+      systemDetail({
+        version: 8,
+        lastConfirmedAt: '2026-09-20T10:00:00Z',
+        lastConfirmedByName: 'Frida Forvalter',
+      }),
+    );
     await settle(f);
 
     expect(text(q(f, '[data-testid="confirmed"]'))).toContain('20. sep. 2026 af Frida Forvalter');
@@ -128,7 +182,10 @@ describe('SystemDetailPage', () => {
     (q(f, '[data-testid="confirm"]') as HTMLButtonElement).click();
     http
       .expectOne('/api/systems/sys-1/confirm')
-      .flush({ detail: 'Systemet er ændret af en anden.' }, { status: 409, statusText: 'Conflict' });
+      .flush(
+        { detail: 'Systemet er ændret af en anden.' },
+        { status: 409, statusText: 'Conflict' },
+      );
     await settle(f);
 
     expect(text(q(f, '[role="alert"]'))).toBe('Systemet er ændret af en anden.');
@@ -184,6 +241,98 @@ describe('SystemDetailPage', () => {
       expect(q(f, '[data-testid="shared-with"]')).toBeNull();
       expect(q(f, '[data-testid="own-exclusion"]')).toBeNull();
       expect(q(f, '[data-testid="shared-hint"]')).toBeNull();
+    });
+  });
+  describe('roller og hvem der kan redigere', () => {
+    const bo = {
+      id: 'p1',
+      displayName: 'Bo Bogholder',
+      email: 'bo@eksempel.invalid',
+      department: 'Økonomi',
+    };
+    const frida = {
+      id: 'p2',
+      displayName: 'Frida',
+      email: 'frida@eksempel.invalid',
+      department: null,
+    };
+    const uden = { id: 'p3', displayName: 'Uden Mail', email: null, department: null };
+    const anne = {
+      id: 'p4',
+      displayName: 'Anne Ejer',
+      email: 'anne@eksempel.invalid',
+      department: null,
+    };
+    const nordlys = { id: 'sys-par', name: 'Nordlys' };
+
+    const links = (el: Element | null) =>
+      Array.from(el?.querySelectorAll('a') ?? []).map((a) => [text(a), a.getAttribute('href')]);
+
+    it('rollernes navne er mail-links, når personen har en e-mail', async () => {
+      const f = await render(
+        systemDetail({
+          roles: [
+            { role: 'Forretningsejer', person: bo },
+            { role: 'Systemforvalter', person: frida },
+            { role: 'Systemforvalter', person: uden },
+          ],
+        }),
+      );
+
+      expect(links(q(f, '[data-testid="business-owner"]'))).toEqual([
+        ['Bo Bogholder', 'mailto:bo@eksempel.invalid'],
+      ]);
+      expect(text(q(f, '[data-testid="stewards"]'))).toBe('Frida, Uden Mail');
+      expect(links(q(f, '[data-testid="stewards"]'))).toEqual([
+        ['Frida', 'mailto:frida@eksempel.invalid'],
+      ]);
+    });
+
+    it('den, der kan redigere, ser hvem der ellers redigerer — også via forælderen', async () => {
+      const f = await render(
+        systemDetail({
+          parent: nordlys,
+          editors: [
+            { person: frida, via: null },
+            { person: anne, via: nordlys },
+          ],
+        }),
+      );
+
+      expect(text(q(f, '[data-testid="editors"]'))).toBe(
+        'Redigeres af Frida, Anne Ejer (via Nordlys).',
+      );
+      expect(links(q(f, '[data-testid="editors"]'))).toEqual([
+        ['Frida', 'mailto:frida@eksempel.invalid'],
+        ['Anne Ejer', 'mailto:anne@eksempel.invalid'],
+      ]);
+    });
+
+    it('den, der ikke kan redigere, får at vide, hvem der retter systemet', async () => {
+      const f = await render(
+        systemDetail({
+          editors: [{ person: frida, via: null }],
+          permissions: {
+            canEdit: false,
+            canDelete: false,
+            deleteBlockedReason: null,
+            parentBlockedReason: null,
+            canEditViaParent: false,
+          },
+        }),
+      );
+
+      expect(text(q(f, '[data-testid="editors"]'))).toBe(
+        'Ser noget forkert ud? Det rettes af Frida.',
+      );
+    });
+
+    it('uden systemejer og forvaltere peges på enterprise arkitekten', async () => {
+      const f = await render(systemDetail({ editors: [] }));
+
+      expect(text(q(f, '[data-testid="editors"]'))).toBe(
+        'Systemet har ingen systemejer eller -forvalter. Kontakt enterprise arkitekten.',
+      );
     });
   });
 });

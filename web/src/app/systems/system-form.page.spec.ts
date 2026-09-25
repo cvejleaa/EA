@@ -21,7 +21,12 @@ describe('SystemFormPage', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideDanishLocale()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideDanishLocale(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     TestBed.inject(AuthService).me.set(me(true));
@@ -44,7 +49,9 @@ describe('SystemFormPage', () => {
       { id: 'p-bo', displayName: 'Bo Bogholder', email: null, department: 'Økonomi' },
       { id: 'p-fr', displayName: 'Frida', email: null, department: null },
     ]);
-    http.expectOne((r) => r.url === '/api/systems/parent-candidates').flush([{ id: 'parent-1', name: 'Nordlys' }]);
+    http
+      .expectOne((r) => r.url === '/api/systems/parent-candidates')
+      .flush([{ id: 'parent-1', name: 'Nordlys' }]);
     http.expectOne('/api/capabilities').flush(tree);
     if (existing) {
       http.expectOne(`/api/systems/${existing.id}`).flush(existing);
@@ -55,7 +62,9 @@ describe('SystemFormPage', () => {
 
   const form = (f: ComponentFixture<SystemFormPage>) => f.componentInstance['form'];
   const submit = async (f: ComponentFixture<SystemFormPage>) => {
-    ((f.nativeElement as HTMLElement).querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    (
+      (f.nativeElement as HTMLElement).querySelector('button[type="submit"]') as HTMLButtonElement
+    ).click();
     await settle(f);
   };
 
@@ -88,7 +97,9 @@ describe('SystemFormPage', () => {
     await submit(f);
 
     http.expectNone((r) => r.method === 'POST');
-    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]'))).toBe('Udfyld de markerede felter.');
+    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]'))).toBe(
+      'Udfyld de markerede felter.',
+    );
   });
 
   it('sender forretningsejer, forvaltere og aliaser som roller og liste', async () => {
@@ -123,6 +134,8 @@ describe('SystemFormPage', () => {
     });
     request.flush(systemDetail({ id: 'ny' }));
     await settle(f);
+    // Rollerne kan være ændret: "Mine systemer (N)" i menuen hentes igen.
+    http.expectOne('/api/me').flush(me(true));
     expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/systemer', 'ny']);
   });
 
@@ -134,7 +147,10 @@ describe('SystemFormPage', () => {
     const put = http.expectOne('/api/systems/sys-1');
     expect((put.request.body as SystemWriteRequest).version).toBe(7);
     put.flush(
-      { type: 'urn:ea:problem:stale-version', detail: 'Systemet er ændret af en anden, siden du åbnede det.' },
+      {
+        type: 'urn:ea:problem:stale-version',
+        detail: 'Systemet er ændret af en anden, siden du åbnede det.',
+      },
       { status: 409, statusText: 'Conflict' },
     );
     await settle(f);
@@ -148,10 +164,20 @@ describe('SystemFormPage', () => {
   it('forælder-feltet er låst med forklaring for et system med moduler', async () => {
     const reason = 'Systemet har selv moduler og kan derfor ikke gøres til modul.';
     const f = await render(
-      systemDetail({ permissions: { canEdit: true, canDelete: false, deleteBlockedReason: 'x', parentBlockedReason: reason } }),
+      systemDetail({
+        permissions: {
+          canEdit: true,
+          canDelete: false,
+          deleteBlockedReason: 'x',
+          parentBlockedReason: reason,
+          canEditViaParent: false,
+        },
+      }),
     );
     expect(form(f).controls.parentSystemId.disabled).toBe(true);
-    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]'))).toBe(reason);
+    expect(
+      text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]')),
+    ).toBe(reason);
   });
 
   it('et låst forælder-felt sender den nuværende forælder med — ellers ville et gem være en flytning', async () => {
@@ -159,11 +185,19 @@ describe('SystemFormPage', () => {
     const f = await render(
       systemDetail({
         parent: { id: 'parent-1', name: 'Nordlys' },
-        permissions: { canEdit: true, canDelete: false, deleteBlockedReason: 'x', parentBlockedReason: reason },
+        permissions: {
+          canEdit: true,
+          canDelete: false,
+          deleteBlockedReason: 'x',
+          parentBlockedReason: reason,
+          canEditViaParent: false,
+        },
       }),
     );
     expect(form(f).controls.parentSystemId.disabled).toBe(true);
-    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]'))).toBe(reason);
+    expect(
+      text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]')),
+    ).toBe(reason);
 
     form(f).patchValue({ description: 'Ny tekst' });
     await submit(f);
@@ -171,13 +205,17 @@ describe('SystemFormPage', () => {
     expect((request.request.body as SystemWriteRequest).parentSystemId).toBe('parent-1');
     request.flush(systemDetail());
     await settle(f);
+    http.expectOne('/api/me').flush(me(true));
   });
 
   it('en forvalter, der ikke må oprette personer, får at vide, hvem der kan', async () => {
     TestBed.inject(AuthService).me.set(me(false));
     const f = await render(systemDetail());
     const root = f.nativeElement as HTMLElement;
-    const addPerson = () => Array.from(root.querySelectorAll('button')).some((b) => text(b) === 'Personen findes ikke på listen?');
+    const addPerson = () =>
+      Array.from(root.querySelectorAll('button')).some(
+        (b) => text(b) === 'Personen findes ikke på listen?',
+      );
 
     expect(text(root.querySelector('[data-testid="person-missing-hint"]'))).toBe(
       'Mangler personen på listen? Kontakt enterprise arkitekten.',
@@ -197,23 +235,29 @@ describe('SystemFormPage', () => {
     http
       .expectOne((r) => r.method === 'POST')
       .flush(
-        { title: 'Der er fejl i oplysningerne.', errors: { roles: ['Et system kan kun have én forretningsejer.'] } },
+        {
+          title: 'Der er fejl i oplysningerne.',
+          errors: { roles: ['Et system kan kun have én forretningsejer.'] },
+        },
         { status: 400, statusText: 'Bad Request' },
       );
     await settle(f);
 
-    expect(text(f.nativeElement as HTMLElement)).toContain('Et system kan kun have én forretningsejer.');
+    expect(text(f.nativeElement as HTMLElement)).toContain(
+      'Et system kan kun have én forretningsejer.',
+    );
   });
 
   it('en valideringsfejl ved redigering tilbyder ikke at kassere ændringerne', async () => {
     const f = await render(systemDetail());
     await submit(f);
-    http
-      .expectOne('/api/systems/sys-1')
-      .flush(
-        { title: 'Der er fejl i oplysningerne.', errors: { roles: ['Et system kan kun have én forretningsejer.'] } },
-        { status: 400, statusText: 'Bad Request' },
-      );
+    http.expectOne('/api/systems/sys-1').flush(
+      {
+        title: 'Der er fejl i oplysningerne.',
+        errors: { roles: ['Et system kan kun have én forretningsejer.'] },
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
     await settle(f);
 
     const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
@@ -225,12 +269,13 @@ describe('SystemFormPage', () => {
   it('en navnedublet (409) tilbyder heller ikke at kassere ændringerne', async () => {
     const f = await render(systemDetail());
     await submit(f);
-    http
-      .expectOne('/api/systems/sys-1')
-      .flush(
-        { type: 'urn:ea:problem:duplicate', detail: 'Der findes allerede et system med navnet "Kompas".' },
-        { status: 409, statusText: 'Conflict' },
-      );
+    http.expectOne('/api/systems/sys-1').flush(
+      {
+        type: 'urn:ea:problem:duplicate',
+        detail: 'Der findes allerede et system med navnet "Kompas".',
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
     await settle(f);
 
     const problem = (f.nativeElement as HTMLElement).querySelector('[data-testid="problem"]');
@@ -242,8 +287,16 @@ describe('SystemFormPage', () => {
     const tree = capabilityTree([
       capabilityNode('K1', 0, { name: 'Uddannelse' }),
       capabilityNode('K1.1', 1, { name: 'Studieadministration', path: 'Uddannelse' }),
-      capabilityNode('K1.1.1', 2, { name: 'Optagelse', path: 'Uddannelse › Studieadministration', selectable: true }),
-      capabilityNode('K1.1.2', 2, { name: 'Eksamen', path: 'Uddannelse › Studieadministration', selectable: true }),
+      capabilityNode('K1.1.1', 2, {
+        name: 'Optagelse',
+        path: 'Uddannelse › Studieadministration',
+        selectable: true,
+      }),
+      capabilityNode('K1.1.2', 2, {
+        name: 'Eksamen',
+        path: 'Uddannelse › Studieadministration',
+        selectable: true,
+      }),
       capabilityNode('K1.2', 1, { name: 'Studievejledning', path: 'Uddannelse', selectable: true }),
       capabilityNode('K2', 0, { name: 'Forskning' }),
       capabilityNode('K2.1', 1, { name: 'Bevillinger', path: 'Forskning', selectable: true }),
@@ -251,19 +304,35 @@ describe('SystemFormPage', () => {
     const existing = () =>
       systemDetail({
         capabilities: [
-          systemCapability('K1.1.1', null, { name: 'Optagelse', path: 'Uddannelse › Studieadministration' }),
-          systemCapability('K1.9', null, { name: 'Gammel eksamen', path: 'Uddannelse', moveReason: 'Udgaaet' }),
+          systemCapability('K1.1.1', null, {
+            name: 'Optagelse',
+            path: 'Uddannelse › Studieadministration',
+          }),
+          systemCapability('K1.9', null, {
+            name: 'Gammel eksamen',
+            path: 'Uddannelse',
+            moveReason: 'Udgaaet',
+          }),
           systemCapability('K3', null, { name: 'Støtte', moveReason: 'HarUnderkapabiliteter' }),
-          systemCapability('K2.1', { id: 'sys-mod', name: 'Laboratorie' }, { name: 'Bevillinger', path: 'Forskning' }),
+          systemCapability(
+            'K2.1',
+            { id: 'sys-mod', name: 'Laboratorie' },
+            { name: 'Bevillinger', path: 'Forskning' },
+          ),
         ],
       });
 
     const el = (f: ComponentFixture<SystemFormPage>) => f.nativeElement as HTMLElement;
     const chips = (f: ComponentFixture<SystemFormPage>) =>
-      Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row')).map((c) => text(c));
+      Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row')).map((c) =>
+        text(c),
+      );
 
     /** Skriv i søgefeltet og returnér de tilbudte valgmuligheder (autocomplete ligger i et overlay). */
-    async function search(f: ComponentFixture<SystemFormPage>, query: string): Promise<HTMLElement[]> {
+    async function search(
+      f: ComponentFixture<SystemFormPage>,
+      query: string,
+    ): Promise<HTMLElement[]> {
       const input = el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement;
       input.dispatchEvent(new Event('focusin'));
       input.value = query;
@@ -280,7 +349,9 @@ describe('SystemFormPage', () => {
         'K1.9 Gammel eksamen · udgået ×',
         'K3 Støtte · har underkapabiliteter ×',
       ]);
-      const rows = Array.from(el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row'));
+      const rows = Array.from(
+        el(f).querySelectorAll('[data-testid="capability-chips"] mat-chip-row'),
+      );
       expect(rows.map((r) => r.classList.contains('flagged'))).toEqual([false, true, true]);
       expect(text(el(f).querySelector('[data-testid="family-capabilities"]'))).toBe(
         'Kapabiliteter via forælder eller moduler (redigeres på det andet system): K2.1 Bevillinger — via modulet Laboratorie',
@@ -294,7 +365,9 @@ describe('SystemFormPage', () => {
       expect((await search(f, 'studieadm')).map((o) => text(o))).toEqual([
         'K1.1.2 Eksamen · Uddannelse › Studieadministration',
       ]);
-      expect((await search(f, 'k1.2')).map((o) => text(o))).toEqual(['K1.2 Studievejledning · Uddannelse']);
+      expect((await search(f, 'k1.2')).map((o) => text(o))).toEqual([
+        'K1.2 Studievejledning · Uddannelse',
+      ]);
       expect((await search(f, 'uddannelse')).map((o) => text(o))).toEqual([
         'K1.1.2 Eksamen · Uddannelse › Studieadministration',
         'K1.2 Studievejledning · Uddannelse',
@@ -307,7 +380,9 @@ describe('SystemFormPage', () => {
       const [eksamen] = await search(f, 'eksamen');
       eksamen.click();
       await settle(f);
-      expect((el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement).value).toBe('');
+      expect(
+        (el(f).querySelector('[data-testid="capability-search"]') as HTMLInputElement).value,
+      ).toBe('');
       (el(f).querySelector('[data-testid="remove-capability"]') as HTMLButtonElement).click(); // K1.1.1
       await settle(f);
       expect(chips(f)).toEqual([
@@ -319,16 +394,28 @@ describe('SystemFormPage', () => {
       await submit(f);
       const put = http.expectOne('/api/systems/sys-1');
       // Koblinger, der bør flyttes, sendes med: de bevares, indtil nogen flytter dem.
-      expect((put.request.body as SystemWriteRequest).capabilityIds).toEqual(['cap-K1.9', 'cap-K3', 'cap-K1.1.2']);
+      expect((put.request.body as SystemWriteRequest).capabilityIds).toEqual([
+        'cap-K1.9',
+        'cap-K3',
+        'cap-K1.1.2',
+      ]);
       put.flush(systemDetail());
       await settle(f);
+      http.expectOne('/api/me').flush(me(true));
     });
 
     it('tilbyder højst 50 forslag ad gangen', async () => {
       const leaves = Array.from({ length: 60 }, (_, i) =>
-        capabilityNode(`B${i + 1}`, 1, { name: `Blad ${i + 1}`, path: 'Stor gruppe', selectable: true }),
+        capabilityNode(`B${i + 1}`, 1, {
+          name: `Blad ${i + 1}`,
+          path: 'Stor gruppe',
+          selectable: true,
+        }),
       );
-      const f = await render(undefined, capabilityTree([capabilityNode('B', 0, { name: 'Stor gruppe' }), ...leaves]));
+      const f = await render(
+        undefined,
+        capabilityTree([capabilityNode('B', 0, { name: 'Stor gruppe' }), ...leaves]),
+      );
 
       const options = await search(f, 'stor gruppe');
       // 60 blade matcher; de første 50 i kortets rækkefølge vises.
@@ -339,17 +426,120 @@ describe('SystemFormPage', () => {
     it('viser serverens fejl ved kapabiliteterne ved feltet', async () => {
       const f = await render(existing(), tree);
       await submit(f);
-      http
-        .expectOne('/api/systems/sys-1')
-        .flush(
-          { title: 'Der er fejl i oplysningerne.', errors: { capabilityIds: ['K1.1 har underkapabiliteter og kan ikke vælges.'] } },
-          { status: 400, statusText: 'Bad Request' },
-        );
+      http.expectOne('/api/systems/sys-1').flush(
+        {
+          title: 'Der er fejl i oplysningerne.',
+          errors: { capabilityIds: ['K1.1 har underkapabiliteter og kan ikke vælges.'] },
+        },
+        { status: 400, statusText: 'Bad Request' },
+      );
       await settle(f);
 
-      expect(Array.from(el(f).querySelectorAll('[data-testid="capability-error"]')).map((e) => text(e))).toEqual([
-        'K1.1 har underkapabiliteter og kan ikke vælges.',
-      ]);
+      expect(
+        Array.from(el(f).querySelectorAll('[data-testid="capability-error"]')).map((e) => text(e)),
+      ).toEqual(['K1.1 har underkapabiliteter og kan ikke vælges.']);
+    });
+  });
+  describe('advarsler om roller', () => {
+    const frida = { id: 'p-fr', displayName: 'Frida', email: null, department: null };
+    const bo = { id: 'p-bo', displayName: 'Bo Bogholder', email: null, department: 'Økonomi' };
+    const warning = (f: ComponentFixture<SystemFormPage>, id: string) =>
+      text((f.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`)) || null;
+    const permissions = (canEditViaParent: boolean) => ({
+      canEdit: true,
+      canDelete: false,
+      deleteBlockedReason: 'x',
+      parentBlockedReason: null,
+      canEditViaParent,
+    });
+
+    it('en forvalter, der fjerner sig selv, får at vide, at hun mister retten — og systemet sine redaktører', async () => {
+      TestBed.inject(AuthService).me.set(me(false, { personId: 'p-fr', mySystemCount: 1 }));
+      const f = await render(
+        systemDetail({
+          roles: [
+            { role: 'Forretningsejer', person: bo },
+            { role: 'Systemforvalter', person: frida },
+          ],
+          permissions: permissions(false),
+        }),
+      );
+      expect(warning(f, 'self-removal')).toBeNull();
+      expect(warning(f, 'no-editors')).toBeNull();
+
+      form(f).patchValue({ stewardIds: [] });
+      await settle(f);
+      expect(warning(f, 'self-removal')).toBe(
+        'Du fjerner dig selv som systemforvalter og kan derefter ikke redigere systemet.',
+      );
+      expect(warning(f, 'no-editors')).toBe(
+        'Systemet får ingen systemejer eller systemforvaltere. Så kan kun enterprise arkitekten redigere det.',
+      );
+
+      // Overdragelse: en anden overtager — så mister systemet ikke sine redaktører, men hun sin ret.
+      form(f).patchValue({ stewardIds: ['p-bo'] });
+      await settle(f);
+      expect(warning(f, 'self-removal')).not.toBeNull();
+      expect(warning(f, 'no-editors')).toBeNull();
+
+      form(f).patchValue({ stewardIds: ['p-fr'] });
+      await settle(f);
+      expect(warning(f, 'self-removal')).toBeNull();
+    });
+
+    it('systemejeren får ordet "systemejer"', async () => {
+      TestBed.inject(AuthService).me.set(me(false, { personId: 'p-fr', mySystemCount: 1 }));
+      const f = await render(
+        systemDetail({
+          roles: [{ role: 'Systemejer', person: frida }],
+          permissions: permissions(false),
+        }),
+      );
+
+      form(f).patchValue({ systemOwnerId: '' });
+      await settle(f);
+      expect(warning(f, 'self-removal')).toBe(
+        'Du fjerner dig selv som systemejer og kan derefter ikke redigere systemet.',
+      );
+    });
+
+    it('ingen advarsel, når hun kan redigere via forælderen, er EA eller ikke havde en redigerende rolle', async () => {
+      // Via forælderen (et modul): hun beholder retten, og forælderens redaktører er der stadig.
+      TestBed.inject(AuthService).me.set(me(false, { personId: 'p-fr', mySystemCount: 1 }));
+      const module = await render(
+        systemDetail({
+          parent: { id: 'parent-1', name: 'Nordlys' },
+          roles: [{ role: 'Systemforvalter', person: frida }],
+          permissions: permissions(true),
+        }),
+      );
+      form(module).patchValue({ stewardIds: [] });
+      await settle(module);
+      expect(warning(module, 'self-removal')).toBeNull();
+      expect(warning(module, 'no-editors')).toBeNull();
+      module.destroy();
+
+      // Enterprise arkitekten må alt.
+      TestBed.inject(AuthService).me.set(me(true, { personId: 'p-fr' }));
+      const admin = await render(
+        systemDetail({ roles: [{ role: 'Systemforvalter', person: frida }] }),
+      );
+      form(admin).patchValue({ stewardIds: [] });
+      await settle(admin);
+      expect(warning(admin, 'self-removal')).toBeNull();
+      admin.destroy();
+
+      // Kun forretningsejer: ingen redigerende rolle at miste.
+      TestBed.inject(AuthService).me.set(me(false, { personId: 'p-fr', mySystemCount: 1 }));
+      const owner = await render(
+        systemDetail({
+          roles: [{ role: 'Forretningsejer', person: frida }],
+          permissions: permissions(false),
+        }),
+      );
+      form(owner).patchValue({ businessOwnerId: '' });
+      await settle(owner);
+      expect(warning(owner, 'self-removal')).toBeNull();
     });
   });
 });

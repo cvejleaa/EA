@@ -1,5 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatSelect } from '@angular/material/select';
@@ -15,7 +19,12 @@ describe('SystemListPage', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideDanishLocale()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideDanishLocale(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -24,7 +33,11 @@ describe('SystemListPage', () => {
 
   const systemsRequest = (): TestRequest => http.expectOne((r) => r.url === '/api/systems');
 
-  async function render(items: SystemListItem[], total: number, canEdit = false): Promise<ComponentFixture<SystemListPage>> {
+  async function render(
+    items: SystemListItem[],
+    total: number,
+    canEdit = false,
+  ): Promise<ComponentFixture<SystemListPage>> {
     TestBed.inject(AuthService).me.set(me(canEdit));
     const fixture = TestBed.createComponent(SystemListPage);
     fixture.detectChanges();
@@ -51,7 +64,12 @@ describe('SystemListPage', () => {
           parent: { id: 'a', name: 'Nordlys' },
           businessOwner: { id: 'p', displayName: 'Hanne Holm', email: null, department: 'HR' },
         }),
-        listItem({ id: 'c', name: 'Servicedesk', matchedAlias: 'Serviceportalen', managingTeam: { id: 't', name: 'Stab' } }),
+        listItem({
+          id: 'c',
+          name: 'Servicedesk',
+          matchedAlias: 'Serviceportalen',
+          managingTeam: { id: 't', name: 'Stab' },
+        }),
       ],
       4,
     );
@@ -69,7 +87,9 @@ describe('SystemListPage', () => {
 
   it('viser antal uden filter og "viser X af Y" med filter', async () => {
     const f = await render([listItem(), listItem({ id: 'b', name: 'B' })], 2);
-    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="count"]'))).toBe('2 systemer');
+    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="count"]'))).toBe(
+      '2 systemer',
+    );
 
     f.componentInstance['setFilter']('businessOwnerId', 'none');
     const request = systemsRequest();
@@ -84,12 +104,19 @@ describe('SystemListPage', () => {
 
   it('"Hent systemliste (CSV)" henter referencelisten og viser en fejl, hvis det ikke lykkes', async () => {
     const f = await render([listItem()], 1);
-    Object.assign(URL, { createObjectURL: vi.fn().mockReturnValue('blob:s'), revokeObjectURL: vi.fn() });
+    Object.assign(URL, {
+      createObjectURL: vi.fn().mockReturnValue('blob:s'),
+      revokeObjectURL: vi.fn(),
+    });
     const clicked: string[] = [];
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
       clicked.push(this.download);
     });
-    const button = (f.nativeElement as HTMLElement).querySelector('[data-testid="download-systems"]') as HTMLButtonElement;
+    const button = (f.nativeElement as HTMLElement).querySelector(
+      '[data-testid="download-systems"]',
+    ) as HTMLButtonElement;
 
     button.click();
     http.expectOne('/api/systems/export.csv').flush(new Blob(['x'])); // uden Content-Disposition → reservenavnet
@@ -98,9 +125,13 @@ describe('SystemListPage', () => {
     expect((f.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
 
     button.click();
-    http.expectOne('/api/systems/export.csv').flush(new Blob(['x']), { status: 500, statusText: 'Fejl' });
+    http
+      .expectOne('/api/systems/export.csv')
+      .flush(new Blob(['x']), { status: 500, statusText: 'Fejl' });
     await settle(f);
-    expect(text((f.nativeElement as HTMLElement).querySelector('[role="alert"]'))).toBe('Uventet fejl (500).');
+    expect(text((f.nativeElement as HTMLElement).querySelector('[role="alert"]'))).toBe(
+      'Uventet fejl (500).',
+    );
     expect(clicked).toEqual(['systemer.csv']);
   });
 
@@ -109,7 +140,14 @@ describe('SystemListPage', () => {
     expect(text(reader.nativeElement as HTMLElement)).not.toContain('Nyt system');
 
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideDanishLocale()] });
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideDanishLocale(),
+      ],
+    });
     http = TestBed.inject(HttpTestingController);
     const admin = await render([], 0, true);
     expect(text(admin.nativeElement as HTMLElement)).toContain('Nyt system');
@@ -134,23 +172,37 @@ describe('SystemListPage', () => {
     }
 
     const selected = (f: ComponentFixture<unknown>) =>
-      text((f.nativeElement as HTMLElement).querySelector('[data-testid="capability-filter"] .mat-mdc-select-value'));
+      text(
+        (f.nativeElement as HTMLElement).querySelector(
+          '[data-testid="capability-filter"] .mat-mdc-select-value',
+        ),
+      );
     /** Værdierne i kapabilitets-vælgerens menu (også når den er lukket). */
     const options = (f: ComponentFixture<unknown>) =>
-      (f.debugElement.query(By.css('[data-testid="capability-filter"]')).injector.get(MatSelect).options ?? []).map(
-        (o) => o.value as string,
-      );
+      (
+        f.debugElement.query(By.css('[data-testid="capability-filter"]')).injector.get(MatSelect)
+          .options ?? []
+      ).map((o) => o.value as string);
 
     it('filtrerer på kapabiliteten fra linket og viser dens navn', async () => {
       const { fixture, systems } = await openWith('cap-K1.1', (r) =>
-        r.flush(capabilityTree([capabilityNode('K1', 0), capabilityNode('K1.1', 1, { name: 'Optagelse', selectable: true })])),
+        r.flush(
+          capabilityTree([
+            capabilityNode('K1', 0),
+            capabilityNode('K1.1', 1, { name: 'Optagelse', selectable: true }),
+          ]),
+        ),
       );
 
       expect(systems.request.params.get('capabilityId')).toBe('cap-K1.1');
       expect(selected(fixture)).toBe('K1.1 Optagelse');
       expect(options(fixture)).toEqual(['', 'none', 'cap-K1.1']);
       // Listen viser alle, der er koblet direkte — ikke overlap-tallet; det siger hjælpelinjen.
-      expect(text((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]'))).toBe(
+      expect(
+        text(
+          (fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]'),
+        ),
+      ).toBe(
         'Viser alle systemer og moduler, der er koblet direkte til kapabiliteten. Overlap på kortet regner et system og dets moduler som ét system og tæller ikke planlagte, udfasede og nedlagte systemer eller systemer af typen Lokal løsning/udtræk med.',
       );
     });
@@ -159,7 +211,16 @@ describe('SystemListPage', () => {
       const { fixture } = await openWith('cap-K9', (r) =>
         r.flush({
           ...capabilityTree([capabilityNode('K1', 0)]),
-          toMove: [{ id: 'cap-K9', code: 'K9', name: 'Gammel eksamen', path: '', reason: 'Udgaaet', systems: [] }],
+          toMove: [
+            {
+              id: 'cap-K9',
+              code: 'K9',
+              name: 'Gammel eksamen',
+              path: '',
+              reason: 'Udgaaet',
+              systems: [],
+            },
+          ],
         }),
       );
 
@@ -183,8 +244,163 @@ describe('SystemListPage', () => {
       expect(selected(fixture)).toBe('Ikke angivet (nedlagte undtaget)');
       // Ingen ekstra "Valgt kapabilitet" med værdien none i menuen.
       expect(options(fixture)).toEqual(['', 'none']);
-      expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="capability-help"]'),
+      ).toBeNull();
       // afterEach(http.verify) fejler, hvis kortet blev hentet.
+    });
+  });
+  describe('Mine systemer', () => {
+    const steward = me(false, { mySystemCount: 3, personId: 'p-fr' });
+
+    /** Åbn listen på en adresse (fx fra menuen) og svar på teams. Returnerer den første systemforespørgsel. */
+    async function openAt(url: string, who = steward) {
+      await TestBed.inject(Router).navigateByUrl(url);
+      TestBed.inject(AuthService).me.set(who);
+      const fixture = TestBed.createComponent(SystemListPage);
+      fixture.detectChanges();
+      http.expectOne('/api/teams').flush([]);
+      await settle(fixture);
+      return { fixture, first: systemsRequest() };
+    }
+
+    const el = (f: ComponentFixture<unknown>) => f.nativeElement as HTMLElement;
+    const toggle = (f: ComponentFixture<unknown>) =>
+      el(f).querySelector('[data-testid="mine-toggle"]');
+    const headers = (f: ComponentFixture<unknown>) =>
+      Array.from(el(f).querySelectorAll('th')).map((th) => text(th));
+
+    it('med mine=true sender listen mine, viser "Din rolle" og forklarer rækkefølgen', async () => {
+      const { fixture, first } = await openAt('/?mine=true');
+      expect(first.request.params.get('mine')).toBe('true');
+      first.flush({
+        items: [
+          listItem({ id: 'a', name: 'Kompas', myRoles: ['Forretningsejer', 'Systemejer'] }),
+          listItem({ id: 'b', name: 'HR', parent: { id: 'n', name: 'Nordlys' }, myRoles: [] }),
+        ],
+        total: 15,
+      });
+      await settle(fixture);
+
+      expect(headers(fixture)).toEqual([
+        'Navn',
+        'Din rolle',
+        'Type',
+        'Status',
+        'Forvaltende team',
+        'Forretningsejer',
+        'Bekræftet',
+      ]);
+      expect(
+        Array.from(el(fixture).querySelectorAll('[data-testid="my-role"]')).map((c) => text(c)),
+      ).toEqual(['Forretningsejer, Systemejer', 'Via Nordlys']);
+      expect(text(el(fixture).querySelector('[data-testid="mine-help"]'))).toBe(
+        'Systemer, hvor du har en rolle, og deres moduler. De ældst bekræftede står øverst — de trænger mest til et blik. Nedlagte står sidst.',
+      );
+      expect(toggle(fixture)!.getAttribute('aria-pressed')).toBe('true');
+      expect(text(el(fixture).querySelector('[data-testid="count"]'))).toBe(
+        'Viser 2 af 15 systemer Nulstil filtre',
+      );
+    });
+
+    it('uden mine er der hverken "Din rolle" eller hjælpelinje', async () => {
+      const { fixture, first } = await openAt('/');
+      expect(first.request.params.has('mine')).toBe(false);
+      first.flush({ items: [listItem()], total: 1 });
+      await settle(fixture);
+
+      expect(headers(fixture)).not.toContain('Din rolle');
+      expect(el(fixture).querySelector('[data-testid="mine-help"]')).toBeNull();
+      expect(toggle(fixture)!.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('et link til "Mine systemer" på samme side henter listen igen — og tilbage igen', async () => {
+      const { fixture, first } = await openAt('/');
+      first.flush({ items: [listItem()], total: 1 });
+      await settle(fixture);
+
+      await TestBed.inject(Router).navigateByUrl('/?mine=true');
+      await settle(fixture);
+      const mine = systemsRequest();
+      expect(mine.request.params.get('mine')).toBe('true');
+      mine.flush({ items: [], total: 1 });
+      await settle(fixture);
+      expect(toggle(fixture)!.getAttribute('aria-pressed')).toBe('true');
+
+      await TestBed.inject(Router).navigateByUrl('/');
+      await settle(fixture);
+      const all = systemsRequest();
+      expect(all.request.params.has('mine')).toBe(false);
+      all.flush({ items: [listItem()], total: 1 });
+      await settle(fixture);
+    });
+
+    it('knappen slår "Kun mine systemer" til og fra og står i URL\'en', async () => {
+      const { fixture, first } = await openAt('/');
+      first.flush({ items: [], total: 0 });
+      await settle(fixture);
+
+      (toggle(fixture) as HTMLButtonElement).click();
+      await settle(fixture);
+      const on = systemsRequest();
+      expect(on.request.params.get('mine')).toBe('true');
+      on.flush({ items: [], total: 0 });
+      await settle(fixture);
+      expect(TestBed.inject(Router).url).toBe('/?mine=true');
+
+      (toggle(fixture) as HTMLButtonElement).click();
+      await settle(fixture);
+      const off = systemsRequest();
+      expect(off.request.params.has('mine')).toBe(false);
+      off.flush({ items: [], total: 0 });
+      await settle(fixture);
+      expect(TestBed.inject(Router).url).toBe('/');
+    });
+
+    it('knappen vises ikke for den, der ingen roller har — men nok, hvis filtret er slået til', async () => {
+      const none = me(false, { mySystemCount: 0 });
+      const plain = await openAt('/', none);
+      plain.first.flush({ items: [], total: 0 });
+      await settle(plain.fixture);
+      expect(toggle(plain.fixture)).toBeNull();
+      plain.fixture.destroy();
+
+      const bookmarked = await openAt('/?mine=true', none);
+      bookmarked.first.flush({ items: [], total: 4 });
+      await settle(bookmarked.fixture);
+      expect(toggle(bookmarked.fixture)).not.toBeNull();
+      // Kun "mine" og en tom liste: brugeren har ingen roller — ikke "intet matcher".
+      expect(text(el(bookmarked.fixture).querySelector('[data-testid="empty"]'))).toBe(
+        'Du har ingen rolle på nogen systemer.',
+      );
+    });
+
+    it('mine sammen med et andet filter: "Ingen af dine systemer matcher."', async () => {
+      const { fixture, first } = await openAt('/?mine=true&status=Nedlagt');
+      expect(first.request.params.get('status')).toBe('Nedlagt');
+      first.flush({ items: [], total: 4 });
+      await settle(fixture);
+
+      expect(text(el(fixture).querySelector('[data-testid="empty"]'))).toBe(
+        'Ingen af dine systemer matcher.',
+      );
+    });
+
+    it('"Nulstil filtre" fjerner også "mine"', async () => {
+      const { fixture, first } = await openAt('/?mine=true');
+      first.flush({ items: [], total: 2 });
+      await settle(fixture);
+
+      const reset = Array.from(el(fixture).querySelectorAll('button')).find(
+        (b) => text(b) === 'Nulstil filtre',
+      ) as HTMLButtonElement;
+      reset.click();
+      await settle(fixture);
+      const all = systemsRequest();
+      expect(all.request.params.has('mine')).toBe(false);
+      all.flush({ items: [], total: 2 });
+      await settle(fixture);
+      expect(toggle(fixture)!.getAttribute('aria-pressed')).toBe('false');
     });
   });
 });

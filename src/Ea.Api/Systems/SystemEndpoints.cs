@@ -39,10 +39,17 @@ public static class SystemEndpoints
         string? teamId,
         string? businessOwnerId,
         string? capabilityId,
+        bool? mine,
+        ClaimsPrincipal user,
         EaDbContext db,
         CancellationToken ct)
     {
         var query = db.Systems.AsNoTracking();
+
+        if (mine == true)
+        {
+            query = query.Mine(user);
+        }
 
         if (status is not null)
         {
@@ -106,11 +113,18 @@ public static class SystemEndpoints
                     s.ParentSystem.Aliases.Any(a => EF.Functions.ILike(a, pattern, SqlPatterns.Escape)))));
         }
 
-        // Moduler står lige under deres forælder.
-        var rows = await query
-            .OrderBy(s => s.ParentSystem != null ? s.ParentSystem.NameNormalized : s.NameNormalized)
-            .ThenBy(s => s.ParentSystemId != null)
-            .ThenBy(s => s.NameNormalized)
+        // "Mine systemer": de ældst bekræftede øverst — de trænger mest til et blik. Nedlagte bekræftes ikke og står
+        // sidst (QC). Ellers står moduler lige under deres forælder.
+        var ordered = mine == true
+            ? query
+                .OrderBy(s => s.LifecycleStatus == LifecycleStatus.Nedlagt)
+                .ThenBy(s => s.LastConfirmedAt)
+                .ThenBy(s => s.NameNormalized)
+            : query
+                .OrderBy(s => s.ParentSystem != null ? s.ParentSystem.NameNormalized : s.NameNormalized)
+                .ThenBy(s => s.ParentSystemId != null)
+                .ThenBy(s => s.NameNormalized);
+        var rows = await ordered
             .Select(s => new
             {
                 s.Id,
@@ -129,6 +143,18 @@ public static class SystemEndpoints
             })
             .ToListAsync(ct);
 
+        // Brugerens egne roller pr. række ("Din rolle"). Tom for et modul, der kun er med via forælderen.
+        ILookup<Guid, SystemRole>? myRoles = null;
+        if (mine == true && user.OidOrNull() is { } oid)
+        {
+            var ids = rows.Select(r => r.Id).ToList();
+            myRoles = (await db.SystemRoles.AsNoTracking()
+                    .Where(r => r.Person.Oid == oid && ids.Contains(r.SystemId))
+                    .Select(r => new { r.SystemId, r.Role })
+                    .ToListAsync(ct))
+                .ToLookup(r => r.SystemId, r => r.Role);
+        }
+
         var items = rows.Select(r => new SystemListItem(
                 r.Id,
                 r.Name,
@@ -139,7 +165,8 @@ public static class SystemEndpoints
                 r.Team,
                 r.Owner,
                 r.LastConfirmedAt,
-                r.ModuleCount))
+                r.ModuleCount,
+                myRoles?[r.Id].Distinct().Order().ToList()))
             .ToList();
 
         var total = await db.Systems.CountAsync(ct);
@@ -712,6 +739,39 @@ public static class SystemEndpoints
             .ToList();
     }
 
+    /// <summary>
+    /// Hvem kan redigere systemet: systemejer og systemforvaltere på systemet, og — for et modul — på forælderen (samme
+    /// regel som SystemAccess: SystemRules.EditingRoles og forældre-arv). Egne først, en person kun én gang.
+    /// </summary>
+    private static async Task<List<SystemEditor>> EditorsOf(SystemEntity s, EaDbContext db, CancellationToken ct)
+    {
+        var roles = SystemRules.EditingRoles;
+        var own = s.Roles.Where(r => roles.Contains(r.Role)).Select(r => r.Person)
+            .DistinctBy(p => p.Id)
+            .OrderBy(p => p.DisplayName, StringComparer.CurrentCulture)
+            .Select(p => new SystemEditor(PersonDto.From(p), null))
+            .ToList();
+        if (s.ParentSystem is null)
+        {
+            return own;
+        }
+
+        var via = new SystemRef(s.ParentSystem.Id, s.ParentSystem.Name);
+        var fromParent = await db.SystemRoles.AsNoTracking()
+            .Where(r => r.SystemId == s.ParentSystem.Id && roles.Contains(r.Role))
+            .Select(r => r.Person)
+            .ToListAsync(ct);
+        return
+        [
+            .. own,
+            .. fromParent
+                .Where(p => own.All(o => o.Person.Id != p.Id))
+                .DistinctBy(p => p.Id)
+                .OrderBy(p => p.DisplayName, StringComparer.CurrentCulture)
+                .Select(p => new SystemEditor(PersonDto.From(p), via)),
+        ];
+    }
+
     /// <summary>Hvad afhænger af systemet — bruges af både sletning og permissions (én kilde).</summary>
     internal static async Task<SystemUsage> CountUsage(EaDbContext db, Guid id, CancellationToken ct) => new(
         await db.Systems.CountAsync(s => s.ParentSystemId == id, ct),
@@ -722,6 +782,8 @@ public static class SystemEndpoints
         SystemEntity s, ClaimsPrincipal user, IAuthorizationService auth, EaDbContext db, CancellationToken ct)
     {
         var canEdit = (await auth.AuthorizeAsync(user, s, Policies.EditSystem)).Succeeded;
+        var canEditViaParent = s.ParentSystem is { } viaParent
+            && (await auth.AuthorizeAsync(user, viaParent, Policies.EditSystem)).Succeeded;
         // Én kilde til knappen: den, der ikke må slette, får altid en begrundelse — ellers systemets brug.
         var mayDelete = (await auth.AuthorizeAsync(user, Policies.DeleteSystem)).Succeeded;
         var deleteBlocked = mayDelete
@@ -747,6 +809,7 @@ public static class SystemEndpoints
                 .Select(m => new ModuleDto(m.Id, m.Name, m.LifecycleStatus)).ToList(),
             s.Roles.OrderBy(r => r.Role).ThenBy(r => r.Person.DisplayName, StringComparer.CurrentCulture)
                 .Select(r => new RoleAssignmentDto(r.Role, PersonDto.From(r.Person))).ToList(),
+            await EditorsOf(s, db, ct),
             await CapabilitiesOf(s, db, ct),
             s.CreatedAt,
             s.UpdatedAt,
@@ -757,6 +820,7 @@ public static class SystemEndpoints
                 canEdit,
                 deleteBlocked is null,
                 deleteBlocked,
-                parentBlocked));
+                parentBlocked,
+                canEditViaParent));
     }
 }
