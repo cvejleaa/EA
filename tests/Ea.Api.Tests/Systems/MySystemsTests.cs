@@ -61,7 +61,7 @@ public sealed class MySystemsTests
         var foreign = await admin.CreateSystemAsync("Fremmed");                       // en andens → ikke med
         await SetRolesAsync(admin, foreign, (SystemRole.Systemforvalter, other.Id));
         var foreignModule = await admin.CreateSystemAsync("Fremmed-modul", foreign.Id); // hendes rolle på modulet → med
-        await SetRolesAsync(admin, foreignModule, (SystemRole.Systemforvalter, person.Id));
+        await SetRolesAsync(admin, foreignModule, (SystemRole.Systemforvalter, person.Id), (SystemRole.Forretningsejer, person.Id));
         app.Time.Advance(TimeSpan.FromDays(1));
 
         // Ejer-systemet (det ældste) bekræftes nu og rykker dermed nederst blandt de aktive.
@@ -75,14 +75,15 @@ public sealed class MySystemsTests
             [
                 ("Ejer-modul", "–"),
                 ("Systemejer-system", "Forretningsejer, Systemejer"),
-                ("Fremmed-modul", "Systemforvalter"),
+                ("Fremmed-modul", "Forretningsejer, Systemforvalter"),
                 ("Ejer-system", "Forretningsejer"),
                 ("Nedlagt-system", "Systemforvalter"),
             ],
             mine.Items.Select(i => (i.Name, i.MyRoles!.Count == 0 ? "–" : string.Join(", ", i.MyRoles))));
         Assert.DoesNotContain(mine.Items, i => i.Name == "Fremmed");
 
-        // Menuens tal og personen følger SAMME regel som listen.
+        // Menuens tal og personen følger SAMME regel som listen: 5 systemer — ikke hendes 6 roller (to systemer har to
+        // roller hver, og modulet via forælderen har ingen), så et tal efter en anden regel bliver rødt.
         var me = await MeAsync(frida);
         Assert.Equal(mine.Items.Count, me.MySystemCount);
         Assert.Equal(5, me.MySystemCount);
