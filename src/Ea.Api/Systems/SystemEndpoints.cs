@@ -165,22 +165,36 @@ public static class SystemEndpoints
         return TypedResults.File(SystemCsv.Write(systems), "text/csv; charset=utf-8", $"systemer-{date}.csv");
     }
 
-    /// <summary>Gyldige forældre for et (nyt eller eksisterende) system — samme regel som ved gem.</summary>
-    private static async Task<Ok<List<SystemRef>>> ParentCandidates(Guid? forSystemId, EaDbContext db, CancellationToken ct)
+    /// <summary>
+    /// Gyldige forældre for et (nyt eller eksisterende) system — samme regler som ved gem: modul-reglen og adgangen
+    /// (et skift kræver ret over systemet, den gamle og den nye forælder). At blive under den nuværende forælder er
+    /// ikke et skift, så den er med for den, der kan redigere systemet — også når modulet ikke må flyttes.
+    /// </summary>
+    private static async Task<Ok<List<SystemRef>>> ParentCandidates(
+        Guid? forSystemId, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct)
     {
+        var system = forSystemId is null ? null : await db.Systems.AsNoTracking().FirstOrDefaultAsync(s => s.Id == forSystemId, ct);
         var moduleCount = forSystemId is null
             ? 0
             : await db.Systems.CountAsync(s => s.ParentSystemId == forSystemId, ct);
+        var canCreate = system is null && (await auth.AuthorizeAsync(user, Policies.CreateSystem)).Succeeded;
 
         var all = await db.Systems.AsNoTracking()
             .OrderBy(s => s.NameNormalized)
             .Select(s => new ParentInfo(s.Id, s.Name, s.ParentSystemId))
             .ToListAsync(ct);
 
-        var candidates = all
-            .Where(p => SystemRules.ValidateParent(forSystemId, moduleCount, p.Id, p) is null)
-            .Select(p => new SystemRef(p.Id, p.Name))
-            .ToList();
+        var candidates = new List<SystemRef>();
+        foreach (var p in all.Where(p => SystemRules.ValidateParent(forSystemId, moduleCount, p.Id, p) is null))
+        {
+            var allowed = system is null
+                ? canCreate
+                : (await auth.AuthorizeAsync(user, new ParentChange(system, system.ParentSystemId, p.Id), Policies.MoveSystem)).Succeeded;
+            if (allowed)
+            {
+                candidates.Add(new SystemRef(p.Id, p.Name));
+            }
+        }
 
         return TypedResults.Ok(candidates);
     }
@@ -245,6 +259,7 @@ public static class SystemEndpoints
         EaDbContext db,
         ClaimsPrincipal user,
         IAuthorizationService auth,
+        SystemAccess access,
         TimeProvider time,
         CancellationToken ct)
     {
@@ -256,6 +271,14 @@ public static class SystemEndpoints
         }
 
         if (!(await auth.AuthorizeAsync(user, system, Policies.EditSystem)).Succeeded)
+        {
+            return TypedResults.Forbid();
+        }
+
+        // Et skift af forælder flytter koblinger og integrationer med og ændrer begge forældres dækning og overlap.
+        if (request.ParentSystemId != system.ParentSystemId
+            && !(await auth.AuthorizeAsync(
+                user, new ParentChange(system, system.ParentSystemId, request.ParentSystemId), Policies.MoveSystem)).Succeeded)
         {
             return TypedResults.Forbid();
         }
@@ -292,6 +315,8 @@ public static class SystemEndpoints
             return failure;
         }
 
+        // Rollerne eller forælderen kan være ændret (fx har forvalteren fjernet sig selv): svaret skal vise de nye rettigheder.
+        access.Invalidate();
         var updated = await LoadAggregate(db.Systems.AsNoTracking(), id, ct);
         return TypedResults.Ok(await ToDetail(updated!, user, auth, db, ct));
     }
@@ -341,8 +366,8 @@ public static class SystemEndpoints
     }
 
     /// <summary>
-    /// Sletning fjerner systemets koblinger (cascade). Opslag og adgangstjek sker FØR låsen, så en afvisning er billig
-    /// og en læser ikke kan stå i kø ved den. Koblingslåsen tages derefter FØR systemrækken — samme rækkefølge som
+    /// Sletning fjerner systemets koblinger (cascade) og er kun for enterprise arkitekten (fejloprettelser). Opslag og
+    /// adgangstjek sker FØR låsen, så en afvisning er billig og hverken en læser eller en forvalter kan stå i kø ved den. Koblingslåsen tages derefter FØR systemrækken — samme rækkefølge som
     /// formularen og importerne — så en samtidig koblingsimport ikke kan ende i en deadlock.
     /// </summary>
     private static async Task<Results<NoContent, NotFound, ForbidHttpResult, ProblemHttpResult>> DeleteSystem(
@@ -354,7 +379,7 @@ public static class SystemEndpoints
             return TypedResults.NotFound();
         }
 
-        if (!(await auth.AuthorizeAsync(user, found, Policies.EditSystem)).Succeeded)
+        if (!(await auth.AuthorizeAsync(user, Policies.DeleteSystem)).Succeeded)
         {
             return TypedResults.Forbid();
         }
@@ -697,7 +722,17 @@ public static class SystemEndpoints
         SystemEntity s, ClaimsPrincipal user, IAuthorizationService auth, EaDbContext db, CancellationToken ct)
     {
         var canEdit = (await auth.AuthorizeAsync(user, s, Policies.EditSystem)).Succeeded;
-        var deleteBlocked = SystemRules.DeleteBlockedReason(s.Name, await CountUsage(db, s.Id, ct));
+        // Én kilde til knappen: den, der ikke må slette, får altid en begrundelse — ellers systemets brug.
+        var mayDelete = (await auth.AuthorizeAsync(user, Policies.DeleteSystem)).Succeeded;
+        var deleteBlocked = mayDelete
+            ? SystemRules.DeleteBlockedReason(s.Name, await CountUsage(db, s.Id, ct))
+            : SystemRules.DeleteRequiresAdminReason;
+        // Samme regel som ved gem: at tage et modul ud af forælderen kræver ret over forælderen.
+        var parentBlocked = SystemRules.ParentChangeBlockedReason(s.Modules.Count)
+            ?? (canEdit && s.ParentSystem is { } parent
+                && !(await auth.AuthorizeAsync(user, new ParentChange(s, parent.Id, null), Policies.MoveSystem)).Succeeded
+                ? SystemRules.ParentMoveBlockedReason(parent.Name)
+                : null);
 
         return new SystemDetail(
             s.Id,
@@ -720,8 +755,8 @@ public static class SystemEndpoints
             s.Version,
             new SystemPermissions(
                 canEdit,
-                canEdit && deleteBlocked is null,
+                deleteBlocked is null,
                 deleteBlocked,
-                SystemRules.ParentChangeBlockedReason(s.Modules.Count)));
+                parentBlocked));
     }
 }

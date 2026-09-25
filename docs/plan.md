@@ -53,13 +53,14 @@ Hver delopgave kan landes alene og giver værdi for sig.
    er også det fremtidige importformat og skal indeholde en matchnøgle (id
    eller ExternalKey). Den udleveres til foranalysen som skabelon. Lister og
    datatræk registreres som systemer af typen "Lokal løsning/udtræk".
-3. **Kapabiliteter og funktionelt overlap** *(i gang; se beslutningerne
+3. **Kapabiliteter og funktionelt overlap** *(landet i PR #5–#13; se beslutningerne
    nedenfor)*. Kapabilitetsmodellen importeres via CSV (HERM hos DTU; der
    ligger ingen HERM-tekst i repoet af hensyn til licensen). Overlap vises som
    kapabiliteter med 2 eller flere systemer i drift eller under indfasning. Et
    system og dets moduler er ét system, og systemer, der udfases, er nedlagte
    eller er udtræk, tælles ikke (se beslutning E og I).
-4. **Forvaltere redigerer egne systemer og ændringshistorik**. Adgangen
+4. **Forvaltere redigerer egne systemer og ændringshistorik** *(i gang; se beslutningerne
+   nedenfor)*. Adgangen
    bindes til `oid` på rolletildelingen. Denne delopgave skal være landet, før
    der kommer rigtige data ind. Skift af forælder (`ParentSystemId`) skal kræve
    ret over målforælderen, for et moduls koblinger og integrationer følger med
@@ -148,6 +149,46 @@ Beslutningerne herunder præciserer E og G.
 3. Kobler EA de ~300 systemer centralt via regneark (3d), mens formularen bruges til den løbende
    vedligeholdelse? *(ja)*
 
+## Beslutninger for delopgave 4: forvaltere, historik og midlertidig drift
+
+Arkitektens plan blev gennemgået af Quality Control, domæne-rådgiveren og Security Reviewer før koden, og deres
+fund er indarbejdet. Ejeren besluttede den midlertidige drift 2026-09-25 (U). Tre spørgsmål ligger hos ejeren
+(se nederst). Indtil der kommer svar, bygges der efter forslagene.
+
+| # | Beslutning | Hvorfor |
+|---|---|---|
+| O | **Redigeringsret:** systemejer og systemforvaltere på systemet eller på dets forælder (moduler arver). Forretningsejeren redigerer ikke. En rolle på et modul giver ikke ret over forælderen. Enterprise arkitekten må alt. Reglen findes ét sted (`SystemAccess` og handlerne i `Authorization/`), og klienten viser knapper ud fra serverens `permissions`. Bevidst: modulets forvalter kobler modulets kapabiliteter, selvom det ændrer forælderens dækning og overlap — koblingerne er modulets egne data. | Beslutning 13: forvalterne vedligeholder, EA kuraterer. |
+| P | **Forvaltere må ændre rollerne på deres system**, også give andre ret og fjerne sig selv. Accepteret risiko: en forvalter kan fjerne ejeren og de andre forvaltere, og kun EA kan genoprette det. Historikken (4c) viser, hvem der gjorde det. | Overdragelse, når en forvalter stopper, er den ændring, der oftest glemmes (domæne-rådgiveren). |
+| Q | **Skift af forælder kræver ret over systemet, over den forælder det forlader, og over den forælder det flytter til.** Kandidatlisten bruger samme regel, og formularen låser feltet med forklaringen "Modulet kan kun flyttes af den, der kan redigere X". | Koblinger og integrationer følger med, og begge forældres dækning og overlap ændres (Security, A1). |
+| R | **Kun EA sletter systemer.** Sletning har sin egen policy, som tjekkes før låsen. Forvalteren ser "Kun enterprise arkitekten kan slette systemer. Er systemet taget ud af brug, så sæt status til Nedlagt." | Sletning er til fejloprettelser. Adgangen afgøres før de dyre operationer, så en afvisning er 403, ikke 409 (QC). |
+| S | **Integrationer:** ret over en af enderne, også via et modul under ens system. Platformens forvalter får ikke ret via platformen; det tages op igen med integrationsimporten (delopgave 6). Accepteret risiko: en forvalter kan oprette integrationer til alle systemer og vælge enhver platform som via. Historikken registrerer på alle tre. | Enderne kender integrationen. Via er en oplysning, ikke et ejerskab (domæne-rådgiveren, Security). |
+| T | **Identitet:** `Person.Oid` (tidligere `EntraObjectId`) er værdien af claim `oid`: Entra-objekt-id (spor A) eller `fb:` + Firebase-uid (U). E-mail er en invitationsnøgle, der bruges én gang til at binde, aldrig en identitet. Den første EA.Admin udpeges med en konfigurationsliste af oid'er. | Én bindingsnøgle, som spor A overskriver, i stedet for to kolonner, der skal holdes i takt. |
+| U | **Midlertidig drift på earch.vejleaa.dk** (ejerens Firebase-projekt): kun fiktive systemdata; Firebase Hosting + Cloud Run + Cloud SQL (PostgreSQL) i EU; login med e-mail-link; automatisk udrulning ved merge via Workload Identity Federation, uden nøglefil; ingen Firebase-konfiguration i repoet (klienten henter `/__/firebase/init.json`). **Comply-or-Explain:** "Single Identity: Entra ID" og "ingen eksterne kald fra UI'et" fraviges bevidst, kun på earch, og afvigelsen udløber med spor A. | Kolleger skal kunne prøve værktøjet, før DTU-driften (spor A) er klar. PostgreSQL bevares ("ingen ny database-motor"). |
+| V | **Ingen selvoprettelse i Firebase.** Oprettelse af konti er slået fra (Identity Platform), og ejeren opretter konti uden password med et committet script. Serveren bygger identiteten fra bunden (kun `oid`, navn fra registret og roller fra konfigurationen), afviser tokens fra andre projekter og kræver en verificeret e-mail. Dev-login kan ikke komme med i containeren. | Firebase lader et password-login og et link-login lande på samme konto, og de kan ikke skelnes i tokenet. En konto oprettet af en angriber før offerets første login ville ellers overtage offerets rettigheder, også ejerens admin (Security, B1–B5). |
+| W | **Ændringshistorik:** én post pr. gemning; lister som +/−; lange tekster foldet sammen; aktøren fra login med navnet fra registret; eksplicit aktør også uden bruger (seed: "Eksempeldata"); poster på begge forældre ved flytning og på forælderen, når et modul slettes; en hårdt slettet integration står på begge ender og via; ingen tom post. "Sidst ændret" linker til historikken, der siger, fra hvilken dato den føres. En tværgående "seneste ændringer" for EA bygges, før der kommer rigtige data. | Historikken må ikke modsige "Sidst ændret" ved siden af, og en sletning må ikke forsvinde med sin egen side (QC, domæne-rådgiveren). |
+
+**Skæring** (hver skive lander alene; migreringer merges én ad gangen; alle omdøbninger lander før første
+udrulning på earch):
+- **4a:** O–S og omdøbningen i T (server). Formularerne siger "Kontakt enterprise arkitekten", hvor en knap før
+  var skjult.
+- **4b:** "Mine systemer (N)" i topmenuen (alle roller, også forretningsejer; ældst bekræftede øverst), rollerne
+  som mail-links med "Redigeres af systemejer og systemforvaltere", en advarsel, når man fjerner sig selv, og
+  E2E-fundamentet (Playwright).
+- **F0:** afprøvning mod Firebase sammen med ejeren (Security Reviewers protokol). Merges ikke.
+- **F1:** Firebase-login på serveren (T og V). **F2:** login i web (fejltekster, "tjek uønsket post").
+  **F2b:** e-mail på personer og en admin-liste over personer med login-status (QC).
+- **F3:** container, `firebase.json` og engangskommandoerne (ventende migreringer, demo-data).
+  **F4:** udrulning ved merge, hvor migreringer og demo-data venter på ejerens godkendelse.
+- **4c/4d:** ændringshistorikken (W) på serveren og på systemsiden.
+
+**Ejerens spørgsmål (forslag i parentes):**
+1. Login-brugerne er rigtige mennesker: navn og e-mail ligger i Firebase og i registret. Må det være
+   DTU-arbejdsmails i et privat Google-projekt, eller bruger testerne private adresser? *(private adresser,
+   indtil DTU har sagt god for det)*
+2. Må en forvalter skifte forretningsejer? *(ja, som de andre roller; historikken viser hvem)*
+3. En brugertest på earch med 2–3 forvaltere og en kort opgaveliste? *(ja; EA opretter dem og giver dem roller
+   på demo-systemer)*
+
 ## Designprincipper for værktøjet selv
 
 - **Fast metamodel.** Et felt kommer kun ind, når en navngiven visning bruger
@@ -178,7 +219,7 @@ Værktøjet skal selv følge sektionens seks arkitekturprincipper:
 | Udeladt | Hvorfor |
 |---|---|
 | Kritikalitet | Kræver DTU's egen klassifikation; den opfindes ikke her |
-| Login-metode, hosting, persondata | Fase 2 (Comply-or-Explain) |
+| Login-metode, hosting, persondata | Fase 2 (Comply-or-Explain). Midlertidig undtagelse: earch.vejleaa.dk (beslutning U og V) |
 | Grafvisning og transitiv konsekvensanalyse | Tabel og CSV rækker til foranalysen |
 | CVE-feeds, Defender-kobling, Copilot/MCP | Fase 3 |
 | Licensforbrug og priser | Ikke i scope (beslutning 8) |

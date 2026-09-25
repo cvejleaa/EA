@@ -87,10 +87,15 @@ describe('IntegrationFormPage', () => {
     TestBed.inject(AuthService).me.set(me(false));
     const reader = await render();
     expect(button(reader, 'Dataobjektet findes ikke på listen?')).toBeUndefined();
+    // En forvalter kan redigere integrationen, men ikke oprette dataobjekter: hun får at vide, hvem der kan.
+    expect(text(el(reader).querySelector('[data-testid="data-object-missing-hint"]'))).toBe(
+      'Mangler dataobjektet på listen? Kontakt enterprise arkitekten.',
+    );
 
     TestBed.inject(AuthService).me.set(me(true));
     await settle(reader);
     expect(button(reader, 'Dataobjektet findes ikke på listen?')).toBeDefined();
+    expect(el(reader).querySelector('[data-testid="data-object-missing-hint"]')).toBeNull();
   });
 
   it('et nyt dataobjekt oprettes, sorteres på dansk og vælges på integrationen', async () => {

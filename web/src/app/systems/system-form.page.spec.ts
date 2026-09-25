@@ -154,6 +154,42 @@ describe('SystemFormPage', () => {
     expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]'))).toBe(reason);
   });
 
+  it('et låst forælder-felt sender den nuværende forælder med — ellers ville et gem være en flytning', async () => {
+    const reason = 'Modulet kan kun flyttes af den, der kan redigere Nordlys.';
+    const f = await render(
+      systemDetail({
+        parent: { id: 'parent-1', name: 'Nordlys' },
+        permissions: { canEdit: true, canDelete: false, deleteBlockedReason: 'x', parentBlockedReason: reason },
+      }),
+    );
+    expect(form(f).controls.parentSystemId.disabled).toBe(true);
+    expect(text((f.nativeElement as HTMLElement).querySelector('[data-testid="parent-blocked"]'))).toBe(reason);
+
+    form(f).patchValue({ description: 'Ny tekst' });
+    await submit(f);
+    const request = http.expectOne((r) => r.method === 'PUT' && r.url === '/api/systems/sys-1');
+    expect((request.request.body as SystemWriteRequest).parentSystemId).toBe('parent-1');
+    request.flush(systemDetail());
+    await settle(f);
+  });
+
+  it('en forvalter, der ikke må oprette personer, får at vide, hvem der kan', async () => {
+    TestBed.inject(AuthService).me.set(me(false));
+    const f = await render(systemDetail());
+    const root = f.nativeElement as HTMLElement;
+    const addPerson = () => Array.from(root.querySelectorAll('button')).some((b) => text(b) === 'Personen findes ikke på listen?');
+
+    expect(text(root.querySelector('[data-testid="person-missing-hint"]'))).toBe(
+      'Mangler personen på listen? Kontakt enterprise arkitekten.',
+    );
+    expect(addPerson()).toBe(false);
+
+    TestBed.inject(AuthService).me.set(me(true));
+    await settle(f);
+    expect(root.querySelector('[data-testid="person-missing-hint"]')).toBeNull();
+    expect(addPerson()).toBe(true);
+  });
+
   it('viser serverens feltfejl ved roller', async () => {
     const f = await render();
     form(f).patchValue({ name: 'X', lifecycleStatus: 'IDrift' });

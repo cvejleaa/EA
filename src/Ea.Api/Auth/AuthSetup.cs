@@ -72,13 +72,18 @@ public static class AuthSetup
             // Alt kræver login, medmindre et endpoint eksplicit er åbnet (se AnonymousAllowListTests).
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
             .AddPolicy(Policies.CreateSystem, p => p.RequireRole(AppRoles.Admin))
+            .AddPolicy(Policies.DeleteSystem, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManagePersons, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManageDataObjects, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.ManageCapabilities, p => p.RequireRole(AppRoles.Admin))
             .AddPolicy(Policies.EditSystem, p => p.AddRequirements(new EditSystemRequirement()))
+            .AddPolicy(Policies.MoveSystem, p => p.AddRequirements(new MoveSystemRequirement()))
             .AddPolicy(Policies.EditIntegration, p => p.AddRequirements(new EditIntegrationRequirement()));
 
-        services.AddSingleton<IAuthorizationHandler, EditSystemHandler>();
-        services.AddSingleton<IAuthorizationHandler, EditIntegrationHandler>();
+        // Scoped: handlerne deler requestets SystemAccess (ét opslag pr. request) og dermed dets DbContext.
+        services.AddScoped<SystemAccess>();
+        services.AddScoped<IAuthorizationHandler, EditSystemHandler>();
+        services.AddScoped<IAuthorizationHandler, MoveSystemHandler>();
+        services.AddScoped<IAuthorizationHandler, EditIntegrationHandler>();
     }
 }

@@ -666,3 +666,84 @@ filteret til `'none'`, og tjekker `querySelectorAll('mat-option').length` (eller
 tal, EKSAKTE exclusion-labels, ikke bare "der står noget"), bruger rige fixtures (4 kapabiliteter med
 forskellige overlap-kombinationer, ikke ét tomt træ), og dækker eksplicit initial `?overlap=1` via
 `Router.navigateByUrl` FØR komponenten oprettes. Klar til at lande.
+
+## Fund 9db34ad (delopgave 4a, EA-register): forvaltere redigerer egne systemer — meget stærk kerne
+(`SystemAccess`, tre handlere), to reelle huller uden for kernen, én DI-fælde jeg selv skabte
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests` 325/325 (11/11 i `Authorization.StewardAccessTests`), web
+`npx ng test --watch=false` 116/116 i 12 filer. Opgavebeskrivelsen havde selv allerede kørt 21 mutationer (18
+server + 3 web) og fundet/rettet to dobbelte vagter (nuværende-forælder-genvejen i `ParentCandidates`, og
+`mayDelete &&` foran `canDelete`) — jeg kørte 8 uafhængige mutationer for at verificere kernen selv, plus
+målrettet på de punkter, jeg blev bedt om at vurdere. **Alle 8 dræbt:**
+1. `MoveSystemHandler`s `From == To`-genvej fjernet (efter at forfatteren allerede havde fjernet DENS overflødige
+   duplikat i `ParentCandidates`) → dræbt af `Et_modul_kan_ikke_tages_ud_af_en_forælder_forvalteren_ikke_kan_redigere`
+   (kandidatlisten skal stadig vise nuværende forælder). Bekræfter: forenklingen (én vagt, ikke to) er reelt dækket,
+   ikke bare "ser fint ud".
+2. `access.Invalidate()` fjernet fra `UpdateSystem` → dræbt af `Fjerner_forvalteren_sig_selv_viser_svaret_at_hun_ikke_laengere_kan_redigere`
+   (samme response viser stadig `CanEdit: true` efter hun har fjernet sin egen rolle i SAMME PUT). Positivt bevist,
+   ikke kun "ser rimeligt ud".
+3. **`AddScoped<SystemAccess>()` → `AddSingleton<SystemAccess>()` dræbt** af
+   `Forvalteren_redigerer_sit_system_og_dets_moduler_men_ikke_andres` linje 92 (`Assert.False(seenByLeo...CanEdit)`)
+   — Leo (Reader) arvede Fridas cachede `_editable`-sæt fra en TIDLIGERE request i samme test, fordi en singleton
+   deler ÉN instans på tværs af ALLE brugere/requests i hele app-levetiden. God test: samme `TestApp`, flere
+   `HttpClient`'er (forskellige brugere), rækkefølgen "forbudt → giv rolle → tilladt → en ANDEN bruger forbudt"
+   afslører netop dette. **Mønster at genkende næste gang**: en cache pr. request (`AddScoped`) bevises IKKE af at
+   den samme bruger ser korrekt opdaterede data (det kunne også ske med en singleton, der aldrig cacher forkert for
+   ÉN bruger ad gangen) — det kræver en test med MINDST TO forskellige identiteter mod samme kørende instans, hvor
+   den ene ikke må se den andens tilstand.
+4. "Modul giver ikke ret over forælder" (bug: tilføjede `parents`-opslag i `SystemAccess.EditableAsync`, så en rolle
+   på et modul også gav ret over dets forælder) → dræbt AF TO tests på én gang
+   (`En_rolle_paa_et_modul_giver_ikke_ret_over_forælderen` og `Et_modul_kan_ikke_tages_ud_af_en_forælder...`).
+   Bekræfter empirisk (ikke kun ved læsning), at "en forvalter på et modul redigerer forælderens integrationer" IKKE
+   er et separat hul: `SystemAccess` er fælles for `EditSystemHandler`/`EditIntegrationHandler`/`MoveSystemHandler`,
+   så én vagt dækker alle tre forbrugere (præcis det mønster CLAUDE.md efterspørger: "Én vagt pr. sikkerhedsregel,
+   samlet ét sted").
+5. `system-form.page.ts`s `getRawValue()` → `.value` (dropper disabled `parentSystemId`) → dræbt af den NYE test
+   "et låst forælder-felt sender den nuværende forælder med" (ikke af en ældre test — bekræfter den nye test
+   reelt tilføjer dækning, ikke bare gentager en gammel).
+6. `canManagePersons` hardkodet til `true` → dræbt af den NYE test "en forvalter, der ikke må oprette personer,
+   får at vide, hvem der kan" (begge retninger: hint TIL STEDE ved `me(false)`, VÆK ved `me(true)`).
+
+**To reelle huller (verificeret ved mutation, IKKE dræbt af suiten):**
+
+1. **`SystemEndpoints.ParentCandidates`s `canCreate`-gate (kun admin må se kandidater til et NYT system) er
+   utestet for ikke-admin.** `src/Ea.Api/Systems/SystemEndpoints.cs`: `var allowed = system is null ? canCreate : …`
+   — ændrede til `system is null ? true : …` → 325/325 forblev grønt. INGEN test kalder
+   `GET /api/systems/parent-candidates` (uden `forSystemId`) som andet end admin — den eneste test af dette endpoint
+   uden `forSystemId` (`Forælder_kandidater_foelger_samme_regel_som_gem` i `SystemEndpointsTests.cs`) bruger kun
+   `admin`. Reel konsekvens: en forvalter (eller læser), der åbner "opret nyt system"-formularen, ville se FULDE
+   forælder-kandidatliste, selvom hun slet ikke må oprette systemer (kun admin må) — ikke en skriveret, men en
+   informationslæk om systemtræet + en vildledende formular (viser valg, hun aldrig kan gemme). Mangler: en test
+   der kalder `parent-candidates` UDEN `forSystemId` som `TestUsers.Steward` (eller `Reader`) og forventer en TOM
+   liste.
+2. **`DevSeed`s binding af "Frida" (dev-login-brugeren, `FridaOid`) til en Person med Systemforvalter-rolle på
+   "Nordlys ERP"/"Laborant" — selve broen, der lader en RIGTIG udvikler logge ind som "frida" og opleve 4a-featuren
+   — er helt utestet.** `src/Ea.Api/Data/DevSeed.cs:19` (`FridaOid`-konstanten, matcher
+   `appsettings.Development.json`s dev-login-bruger "frida") ændret til en anden guid → `DevelopmentStartupTests`
+   (2/2) OG hele suiten (325/325) forblev grøn. Ingen test logger ind som "frida" mod DevSeed-data og tjekker
+   `CanEdit`/rolle. `StewardAccessTests` bruger sin EGEN `TestUsers.Steward` (anden oid, `TestAccess.BindPersonAsync`
+   mod frisk testdata) — dette dækker REGLEN glimrende, men IKKE at DevSeed/appsettings-parret faktisk hænger
+   sammen. Mangler: en test i `DevelopmentStartupTests.cs`, der logger ind som `frida` (`TestUsers`-post med samme
+   oid som `DevSeed.FridaOid`, eller genbrug af selve konstanten) og bekræfter `CanEdit: true` på "Nordlys ERP".
+
+**Migreringen (`PersonOid`, RenameColumn) — verificeret EMPIRISK, ikke kun ved læsning, at eksisterende data
+overlever:** ved et selvforskyldt uheld (forkert env-var-navn: `ConnectionStrings__EaDb` i stedet for
+`ConnectionStrings__Ea`) kørte `dotnet ef database update Koblinger` faktisk mod den lokale `ea_dev` (som allerede
+havde 6 personer, inkl. Frida med `entra_object_id = …f001`) i stedet for en frisk scratch-database, og reverterede
+`PersonOid`-migrationen dér. Genanvendte migrationen fremad (`dotnet ef database update`) og bekræftede at Fridas
+værdi lå UÆNDRET under det nye kolonnenavn `oid` bagefter — `RenameColumn` er metadata-only i PostgreSQL, ingen
+datatab. `ea_dev` er nu tilbage i korrekt migreret tilstand. **Ingen automatiseret test dækker dette** (testene
+migrerer altid en TOM skabelon fra bunden, aldrig en eksisterende databases opgraderingssti — konsistent med alle
+tidligere migreringer i projektet, ikke nyt for 4a), men risikoen er reelt lav (ren omdøbning, ingen datatransform).
+**Lektie til næste gang**: `dotnet ef`-kommandoer mod en specifik scratch-database KRÆVER `ConnectionStrings__Ea`
+(præcis navnet fra `DatabaseSetup.ConnectionName`), ikke et gættet variabelnavn — ellers rammer kommandoen
+appsettings.Development.json's `ea_dev` uden varsel. Tjek altid `psql -d postgres -c "\l"` FØR og EFTER en
+`dotnet ef database update` mod en formodet scratch-database, hvis man ikke er 100% sikker på env-var-navnet.
+
+**Vurderet, men IKKE et hul (bevidst ikke rapporteret som mangel, kun som lav-værdi-observation):**
+`canAdd` i `SystemIntegrationsResponse` og bekræftelse (`ConfirmSystem`) af et modul specifikt er ikke separat
+assertet for et MODUL (kun for parent-systemet `w.P`), men begge genbruger PRÆCIS samme `EditSystemHandler`/
+`SystemAccess.CanEditAsync`-mekanisme, som ER dræbt-testet med modul-inheritance (`EditAsync(w, w.M, …)`). En
+mutation isoleret til "modul-specifik" adfærd findes ikke uden at røre selve `SystemAccess` (allerede dækket) eller
+opfinde en kunstig bug, der ikke findes i koden. Samme ræsonnement for "integration hvor begge ender er moduler
+under hendes system" (OR af to allerede uafhængigt dræbte prædikater).

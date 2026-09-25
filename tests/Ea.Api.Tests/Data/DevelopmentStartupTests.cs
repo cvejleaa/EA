@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
+using Ea.Api.Data;
 using Ea.Api.Tests.Infrastructure;
 
 namespace Ea.Api.Tests.Data;
@@ -37,6 +39,28 @@ public sealed class DevelopmentStartupTests
         Assert.Equal(1, integrations.Summary.DirectDb);
         var all = await admin.GetAsync("/api/integrations/export.csv");
         Assert.Equal(8, (await all.Content.ReadAsStringAsync()).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length);
+    }
+
+    /// <summary>
+    /// Broen, der lader en udvikler prøve forvalter-adgangen lokalt: dev-brugeren "frida" i appsettings.Development.json
+    /// har samme oid som den person, DevSeed giver roller — og den oid giver ret over netop hendes systemer.
+    /// </summary>
+    [Fact]
+    public async Task Dev_brugeren_frida_er_forvalter_paa_de_seedede_systemer()
+    {
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(RepoPaths.File("src", "Ea.Api", "appsettings.Development.json")))!;
+        var frida = settings["Auth"]!["Dev"]!["Users"]!.AsArray().Single(u => (string?)u!["Id"] == "frida")!;
+        Assert.Equal(DevSeed.FridaOid, (string?)frida["Oid"]);
+
+        await using var app = await TestApp.StartAsync(environment: "Development");
+        var admin = await app.ClientFor(TestUsers.Admin);
+        var ids = (await admin.ListSystemsAsync()).Items.ToDictionary(i => i.Name, i => i.Id);
+        var client = app.ClientWithOid(DevSeed.FridaOid);
+
+        Assert.True((await client.GetSystemAsync(ids["Nordlys ERP"])).Permissions.CanEdit);
+        Assert.True((await client.GetSystemAsync(ids["Nordlys HR"])).Permissions.CanEdit); // Modul under Nordlys ERP.
+        Assert.True((await client.GetSystemAsync(ids["Laborant"])).Permissions.CanEdit);
+        Assert.False((await client.GetSystemAsync(ids["Kompas Sag"])).Permissions.CanEdit);
     }
 
     [Fact]

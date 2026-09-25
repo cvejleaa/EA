@@ -103,6 +103,8 @@
             <button mat-button type="button" (click)="addingDataObject.set(false)">Annullér</button>
           </div>
         }
+      } @else {
+        <p class="muted hint" data-testid="data-object-missing-hint">Mangler dataobjektet på listen? Kontakt enterprise arkitekten.</p>
       }
 
       <mat-form-field>
