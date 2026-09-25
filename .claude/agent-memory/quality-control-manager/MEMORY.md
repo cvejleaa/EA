@@ -709,3 +709,49 @@ eller "Total" rammes): SystemListResponse.Total er FORTSAT "hele registret ufilt
 som alle andre filtre, ingen regression, men spørg ved en fremtidig ændring af tælleren, om det stadig er tydeligt
 nok. "← Alle systemer"-linket på systemsiden peger stadig altid på det UFILTREREDE /systemer, uanset om man kom fra
 "Mine systemer" — men teksten siger netop "Alle systemer", ikke "Tilbage", så den lover ikke mere end den holder.
+
+## Kode-gennemgang delopg. 4b-2 (fcd77c5, PR #17, branch claude/trusting-brahmagupta-4v2ukj) — E2E-fundament (Playwright)
+Konklusion: GOD AT LANDE. Ingen blokerende fund. Verificeret ved kørsel (ikke Playwright selv — Test Manager kørte
+E2E samtidig på samme faste porte, jf. instruks): `ng lint` ren (inkl. nye `e2e/**/*.ts`/`playwright.config.ts`
+lint-mønstre i angular.json), `npm test` uændret 137/137 (Vitest samler IKKE `e2e/*.spec.ts` op — bekræftet både
+ved læsning af `tsconfig.spec.json` (`include: src/**/*.spec.ts`) og ved en rigtig kørsel), `npm run build` OK.
+- Rigtig problem løst til rette tid: plan.md's 4b-bullet lover netop "E2E-fundamentet (Playwright)" EFTER rollerne
+  i UI'et er landet (4a+4b-1) — "Bevidst udeladt"-tabellens begrundelse ("hvor roller i UI'et gør dem værdifulde")
+  er nu indfriet, ikke foregrebet. Scenarierne i `forvalter.spec.ts` genbruger UDELUKKENDE allerede-testede
+  data-testid'er og forretningsregler fra 4a/4b-1 (editors-tekst, my-role, mine-help, "ældst bekræftede øverst",
+  parent-candidates-liste) — ingen ny klient-logik opfindes til lejligheden, kun end-to-end-bevis for det, der
+  allerede var enhedstestet. `/healthz` afventes af Playwright's `webServer`, og API'et kalder `MigrateAndSeedAsync`
+  FØR `app.RunAsync()` (Program.cs) → ingen race, hvor testene rammer appen før DevSeed er færdig.
+- `start-api.sh`: DROP DATABASE er HARDKODET til `ea_e2e` (aldrig parametriseret ud fra `E2E_CONNECTION`) — kan
+  derfor aldrig ramme `ea_dev`, uanset hvad `E2E_CONNECTION` sættes til. MEN: hvis nogen lokalt sætter
+  `E2E_CONNECTION` til en ANDEN, allerede eksisterende database (fx `ea_dev` ved en fejl), vil scriptet stadig
+  sætte `ASPNETCORE_ENVIRONMENT=Development` og starte `dotnet run` MOD DEN, uden at droppe den først — migrate+
+  DevSeed (kun seedet hvis tabellerne er tomme) ville køre imod den. Dokumentationens løfte ("aldrig ea_dev", både
+  i scriptets kommentar og i CLAUDE.md's nye E2E-afsnit) holder kun for DROP-trinnet, ikke for kørselstrinnet —
+  kræver dog en bevidst fejlkonfiguration (CI sætter aldrig `E2E_CONNECTION`). IKKE BLOKERENDE, men spørg ved
+  næste ændring af scriptet: kan navnet "ea_e2e" udledes ét sted (fx parset ud af selve connection-strengen) i
+  stedet for at stå som to uafhængige literaler, så drop-mål og kørsels-mål ikke kan divergere?
+- IKKE BLOKERENDE, men til Test Manager: `login.page.ts`s tekstrettelse (fjerner " · læser" for brugere uden
+  APP-rolle, fordi en forvalter som Frida har system-scopede roller uden nogen app-claim) har INGEN unit-test
+  (ingen `login.page.spec.ts` findes) og E2E-testen matcher kun knappen på NAVNE-PRÆFIKS (`/^Frida Forvalter/`,
+  `/^Leo Læser/`), aldrig på hele knapteksten. En mutation, der genindfører " · læser" (eller enhver anden forkert
+  sekundærtekst), ville IKKE blive fanget af nogen test i dag. Selve rettelsen er substantielt rigtig (den gamle
+  tekst løj om Frida — "læser" var forkert for en, der reelt kan redigere via SystemRole) og lav-risiko i praksis,
+  fordi dev-login aldrig kommer i produktionscontaineren (beslutning V) og de fiktive navne allerede antyder rollen
+  ("Frida Forvalter", "Leo Læser") — men den er reelt UBEVIST. Foreslå en test der asserterer FULD knaptekst for
+  mindst to brugere (én med app-rolle, én uden) næste gang denne fil røres.
+- Fiktive data bekræftet: alle system-/personnavne i `forvalter.spec.ts` (Nordlys ERP/HR/Økonomi/Projekter,
+  Laborant, Kompas Sag, Frida Forvalter (fiktiv), Leo Læser (fiktiv)) er EKSISTERENDE DevSeed-data, ikke nye —
+  ingen ny fiktiv-mærkning krævet, ingen risiko for at de forveksles med rigtige DTU-systemer. Playwright-spor
+  (`trace: retain-on-failure`, uploadet som CI-artifact ved fejl) kan i værste fald lække disse fiktive navne plus
+  en dev-JWT signeret med den ALLEREDE committede, tydeligt mærkede "FIKTIV-udviklingsnoegle" — intet reelt
+  hemmeligt indhold, selv hvis repoet er offentligt.
+- IKKE VERIFICÉRET HERFRA (samme mønster som SQL-hærdnings-gennemgangen): `psql`-tilgængelighed på selve
+  `ubuntu-latest`-runneren (sandsynligt forudinstalleret, men bør tjekkes på den FØRSTE rigtige kørsel af
+  `e2e`-jobbet) og hvorvidt Playwright-rapport-artifacts er offentligt synlige, hvis repoet er privat/offentligt
+  (lavt praktisk risiko pga. fiktivt indhold, men spørg Release Manager om repo-synlighed, samme åbne spørgsmål
+  som ved CodeQL-gennemgangen).
+- CI-jobbets rækkefølge er fornuftig: `dotnet build` FØR `npm run e2e` (kommentar forklarer hvorfor — undgår at
+  webServer-tidsgrænsen (240s) bruges på selve buildet), `forbidOnly: !!process.env['CI']` (samme mønster som
+  andre Playwright-opsætninger), `retries: 0` med en eksplicit kommentar ("Flaky er ikke en årsag") — matcher
+  CLAUDE.md's testprincipper om ikke at gemme sig bag ustabile tests.
