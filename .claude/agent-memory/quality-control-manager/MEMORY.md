@@ -640,3 +640,24 @@ bekræftet empirisk (ikke kun antaget ud fra .editorconfig-rækkefølgen). 335/3
     oprettelsen af `ea_app`/`ea_migrator`/læserollen, selvom beslutning X siger "Rollerne oprettes af ejerens
     script i F3/F4" — lille uklarhed for den, der senere bygger F3: tilføj en linje der eksplicit nævner
     rolle-scriptet, så det ikke overses.
+
+## Plan-gennemgang 4b-1 (2026-09-25, main 7ddb8ba) — "Mine systemer", mail-links, advarsel. Tjek ved kode-gennemgangen:
+(NB: kaldet henviste til mine "forslag om toggle + roller i stedet for adgangssæt" fra plan-gennemgang 4 — de stod
+IKKE i denne fil. Skriv plan-forslag ned med det samme, ellers kan de ikke efterprøves næste gang.)
+- LOGIN-LANDING: authGuard sætter ALTID returnUrl=state.url, og ''→redirect 'systemer' sker før vagten, så en
+  normal indgang giver /login?returnUrl=%2Fsystemer. "Land på X medmindre returnUrl" fyrer derfor aldrig. Spørg
+  altid: hvilken returnUrl har den ALMINDELIGE indgang? (web/src/app/core/auth.guard.ts, app.routes.ts)
+- KOMPONENT-GENBRUG: system-list.page læser kun route.snapshot i ngOnInit. Et menulink /systemer → /systemer?mine=1
+  (samme route) genbruger komponenten → URL skifter, listen gør ikke. Gælder ethvert nyt link til samme side med
+  andre query-parametre. Også routerLinkActive (subset) gør "Systemer" og "Mine systemer" aktive samtidig.
+- Minimal-API bool: klienten sender filter-objektet råt som query (systems.api.ts list) — `mine=1` fra URL'en giver
+  400 mod `bool? mine`. Ét stavemåde hele vejen.
+- "Aldrig bekræftet" FINDES IKKE: LastConfirmedAt er non-null og sættes ved oprettelse (Touch). Fremtidig fælde:
+  Excel-import (6) vil stemple importerede rækker som "bekræftet nu" → ældst-først-sortering gemmer netop dem.
+- Nedlagte systemer bliver aldrig bekræftet → flyder til toppen af "ældst bekræftede øverst" / "trænger mest til
+  et blik". Spørg ved alle friskheds-sorteringer: hvad med Nedlagt?
+- Modul-arv (beslutning O) i tekster: "Redigeres af systemejer og systemforvaltere" og "Kontakt systemforvalteren"
+  ser kun modulets EGNE roller; forælderens forvalter (som også redigerer) står ikke i SystemDetail. Advarslen
+  "kan derefter ikke redigere" er falsk for et modul, hvor man har ret via forælderen → skal afgøres af serveren.
+- Tal i menuen fra /api/me er et øjebliksbillede (me() hentes én gang i vagten) → forældet efter egen rolleændring.
+- Tal og liste skal bruge SAMME IQueryable-regel (mønster: query.Missing()) — ikke to implementeringer.
