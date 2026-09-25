@@ -172,6 +172,24 @@ public sealed class StewardAccessTests
     }
 
     [Fact]
+    public async Task Kun_den_der_kan_oprette_systemer_faar_forælder_kandidater_til_et_nyt_system()
+    {
+        await using var w = await SetupAsync();
+        await GiveRoleAsync(w, w.P, SystemRole.Systemforvalter);
+
+        static async Task<List<SystemRef>> ForNew(HttpClient client)
+        {
+            var response = await client.GetAsync("/api/systems/parent-candidates");
+            await response.ExpectAsync(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<List<SystemRef>>(TestApp.Json))!;
+        }
+
+        // Forvalteren kan ikke oprette systemer (kun EA) — så heller ikke vælge forælder til et nyt.
+        Assert.Empty(await ForNew(w.Frida));
+        Assert.Equal(["Pindsvin", "Quark", "Ræv"], (await ForNew(w.Admin)).Select(s => s.Name));
+    }
+
+    [Fact]
     public async Task Et_selvstaendigt_system_goeres_kun_til_modul_af_en_forælder_forvalteren_kan_redigere()
     {
         await using var w = await SetupAsync();
