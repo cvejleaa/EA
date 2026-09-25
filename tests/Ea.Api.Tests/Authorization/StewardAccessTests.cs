@@ -100,6 +100,28 @@ public sealed class StewardAccessTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Et_tomt_oid_giver_ingen_ret_heller_ikke_til_en_person_med_tomt_oid(string oid)
+    {
+        await using var w = await SetupAsync();
+        var nobody = await w.Admin.CreatePersonAsync("Tom Identitet");
+        await w.App.BindPersonAsync(nobody.Id, oid);
+        var current = await w.Admin.GetSystemAsync(w.P.Id);
+        await (await w.Admin.PutSystemAsync(w.P.Id, current.ToWrite() with
+        {
+            Roles = [new RoleAssignmentInput(SystemRole.Systemforvalter, nobody.Id)],
+        })).ExpectAsync(HttpStatusCode.OK);
+
+        var client = w.App.ClientWithOid(oid);
+        var seen = await client.GetSystemAsync(w.P.Id);
+        Assert.False(seen.Permissions.CanEdit);
+        await (await client.PutSystemAsync(w.P.Id, seen.ToWrite() with { Description = "Uden identitet" }))
+            .ExpectAsync(HttpStatusCode.Forbidden);
+        Assert.Null((await w.Admin.GetSystemAsync(w.P.Id)).Description);
+    }
+
+    [Theory]
     [InlineData(SystemRole.Systemforvalter, true)]
     [InlineData(SystemRole.Systemejer, true)]
     [InlineData(SystemRole.Forretningsejer, false)] // Ejer processen, men redigerer ikke (beslutning 13).
@@ -242,6 +264,36 @@ public sealed class StewardAccessTests
 
         await (await w.Frida.DeleteAsync($"/api/integrations/{own.Id}")).ExpectAsync(HttpStatusCode.NoContent);
         await (await w.Frida.DeleteAsync($"/api/integrations/{incoming.Id}")).ExpectAsync(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Forvalteren_overdrager_systemet_og_skifter_forretningsejer()
+    {
+        await using var w = await SetupAsync();
+        await GiveRoleAsync(w, w.P, SystemRole.Systemforvalter);
+        var anne = await w.Admin.CreatePersonAsync("Anne Afløser");
+        var bo = await w.Admin.CreatePersonAsync("Bo Bogholder");
+
+        // Beslutning P: forvalteren ændrer selv rollerne — også forretningsejeren — og kan give andre ret.
+        var current = await w.Frida.GetSystemAsync(w.P.Id);
+        await (await w.Frida.PutSystemAsync(w.P.Id, current.ToWrite() with
+        {
+            Roles =
+            [
+                new RoleAssignmentInput(SystemRole.Forretningsejer, bo.Id),
+                new RoleAssignmentInput(SystemRole.Systemforvalter, anne.Id),
+                new RoleAssignmentInput(SystemRole.Systemforvalter, w.Person.Id),
+            ],
+        })).ExpectAsync(HttpStatusCode.OK);
+
+        var roles = (await w.Admin.GetSystemAsync(w.P.Id)).Roles.Select(r => (r.Role, r.Person.DisplayName)).ToList();
+        Assert.Equal(
+            [
+                (SystemRole.Forretningsejer, "Bo Bogholder"),
+                (SystemRole.Systemforvalter, "Anne Afløser"),
+                (SystemRole.Systemforvalter, "Frida Forvalter"),
+            ],
+            roles);
     }
 
     [Fact]

@@ -233,3 +233,32 @@
   brugere er adskilt (app=DML, migrator=DDL, check=read-only).
 - PoC-mønster: .NET 10 fil-app: `#:package X@8.*` SKAL stå øverst i filen;
   ClaimsPrincipal.FindFirstValue kræver ASP.NET-ref -> brug FindFirst()?.Value.
+
+## Delopgave 4a (9db34ad, forvaltere redigerer egne systemer) – kørt 2026-09-25
+- Model: SystemAccess (scoped, ét opslag pr. request) = roller Systemejer/Systemforvalter
+  på systemet + moduler under dem; admin shortcut. Handlerne er scoped. MoveSystem
+  kræver system + FRA + TIL (A1 lukket). DeleteSystem = RequireRole(Admin) før lås.
+- BEKRÆFTET lukket (HTTP mod testdb, 8 angrebstests): roller på fremmed system/modul
+  403 og intet ændret; rolle kun på modul giver ikke forælder (PUT/confirm 403);
+  forretningsejer 403; flyt fremmed ind under egen, fremmed modul ud/over, eget modul
+  til fremmed forælder -> 403; flyt til ukendt id -> 403 (samme som fremmed, intet
+  orakel); forælder+roller+beskrivelse i ét PUT -> 403 og INTET delvist gemt;
+  integrationer fremmed<->fremmed 403, PUT/DELETE fremmed 403, from/to/source/target
+  i rå JSON ignoreres; canAdd korrekt; admin-only (persons, data-objects, POST systems,
+  begge importe inkl. tør-kørsel) 403; under importens lås: forvalter DELETE/PUT-
+  fremmed-med-caps/confirm-fremmed -> 403 på 52 ms. Token uden oid / oid "" / " " /
+  STORE bogstaver / efterstillet mellemrum -> ingen ret (fail closed). 200 parallelle
+  GET Frida/Leo: 0 læk af canEdit mellem brugere (Testing = ingen scope-validering,
+  som prod). parent-candidates 3000 systemer: ~33 ms for alle roller.
+- LATENT (BEKRÆFTET i DB): person.Oid="" + token oid="" -> ret. Ingen API-vej sætter
+  Oid i dag; F1 (Firebase-binding) SKAL afvise tomt/whitespace-claim i SystemAccess
+  (IsNullOrWhiteSpace -> tomt sæt) og evt. CHECK (oid <> '').
+- ACCEPTERET (BEKRÆFTET): TOCTOU — forvalterens gem, der er godkendt før EA fjerner
+  hendes rolle på forælderen, lander stadig (rækkelås på modulet holdt, rolle fjernet,
+  lås sluppet -> 200). Vindue = requestets levetid. Historikken (4c) skal vise det.
+- Design-note: modul-forvalter kan koble kapabiliteter på modulet, og de vises som
+  HeldBy på den fremmede forælder (dækning/overlap ændres). Konsistent med O (modulets
+  egne data), men modsat begrundelsen i Q. Ikke fund.
+- PoC gemt som mønster: angrebsklasse i Zattack med egen World (P+M, Q+QM, R), Give()
+  der BEVARER eksisterende roller, Snap() (version/forælder/roller), token-minting
+  med JsonWebTokenHandler + TestUsers.SigningKey for claim-varianter (uden oid osv.).

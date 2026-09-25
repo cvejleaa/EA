@@ -532,3 +532,53 @@ DTO'er genbruges råt).
 - Import-grænser vs. Cloud Run: koblingsimport 64 MB (CouplingImport.MaxFileBytes), Cloud Run 32 MiB, Hosting 60 s.
 - E-mail-levering til @dtu.dk (spam/Safe Links, afsender firebaseapp.com ligner phishing) er den største praktiske
   login-risiko — ikke dækket af E2E (emulator skåret væk).
+
+## Kode-gennemgang delopg. 4a (9db34ad, PR #14, branch claude/trusting-brahmagupta-4v2ukj) — server + minimale form-tekster
+Konklusion: GOD AT LANDE. Ingen blokerende fund. Verificeret ved kørsel (325/325 API-tests, `dotnet format`
+ren, `has-pending-model-changes` ren, web: `ng lint` ren, 116/116 web-tests grønne) OG ved LIVE dev-login (Eva +
+Frida, ægte kørende API+web, kun GET/enkelte skriv-/slet-kald på Frida uden retten hertil):
+- Alle fem plan-fund fra "Plan-gennemgang delopg. 4" (2026-09-25) er ført ind: B2 (sletning har EGEN
+  `Policies.DeleteSystem`, tjekket FØR koblingslåsen, 403 ikke 409 — testet live: `DELETE` som Frida på et system
+  hun kan REDIGERE men ikke slette giver 403, teksten er ordret beslutning R'ens tekst) — mit tidligere fund er
+  altså lukket, ikke kun i planen.
+- O (redigeringsret) og Q (forælderskift) er begge implementeret ÉT sted (`SystemAccess.CanEditAsync`,
+  `MoveSystemHandler`) og BEVIST ved mutationstest i denne gennemgang (ikke kun læst): fjernede modul-arv
+  (`direct.Concat(modules)` → kun `direct`) i `SystemAccess.cs`, kørte `StewardAccessTests` → 3 af 11 tests røde;
+  gendannet bagefter (kun mod committet kode, ingen ukommitteret ændring tabt). Testsuiten (`StewardAccessTests.cs`,
+  262 linjer, ny fil) dækker PRÆCIS opgavens tjekliste 1:1 med både positiv og negativ case i samme test: egne
+  systemer+moduler ja/andres nej, rolle på modul giver IKKE ret over forælder, modul flyttes KUN til forælder man
+  selv kan redigere (inkl. "ud af en forælder man ikke kan redigere" = Forbidden), sletning kun EA, integrationer
+  "en af enderne men ikke kun via platformen" (inkl. kandidatlisten/CanAdd), og "fjerner sig selv → mister CanEdit
+  i SAMME svar" (P). Live-bekræftet på ægte DevSeed-data (Frida er Systemforvalter på Nordlys ERP og Laborant):
+  `GET /api/systems/{Nordlys HR}/…` → canEdit=true (arvet fra forælder), `parent-candidates` for Nordlys HR viser
+  KUN Laborant+Nordlys ERP (hendes to redigérbare systemer), ikke resten af registret.
+- Disabled reactive-form-felt-fælden (kunne have været en STILLE datafejl): et låst `parentSystemId`
+  (`form.controls.parentSystemId.disable()`) risikerer at Angular UDELADER feltet fra `.value` ved gem — komponenten
+  bruger korrekt `getRawValue()`, og der ER en dedikeret ny web-test for netop dette ("et låst forælder-felt sender
+  den nuværende forælder med — ellers ville et gem være en flytning"), som fanger regressionen hvis nogen bytter
+  `getRawValue()` ud med `.value`. God test at pege på som mønster for fremtidige disabled-felter i formularer.
+- "Kontakt enterprise arkitekten"-teksterne (person, dataobjekt) er PRÆCIS scopet til den situation, hvor knappen
+  FØR var usynlig for alle ikke-admins, fordi kun admin kunne redigere formularen overhovedet — nu hvor en
+  forvalter kan åbne formularen, ville den samme betingelse (`!canManagePersons()`/`!canManageDataObjects()`)
+  ellers give en STUM sektion. Testet begge veje (hint væk når `me(true)`, til stede når `me(false)`).
+- Ingen deling brudt: `/api/me.canCreateSystems` stadig admin-only (bekræftet BÅDE i kode — `Policies.CreateSystem`
+  uændret admin-role-krav — OG live: Frida's `/api/me` viser `canCreateSystems:false`). Koblingsimport og
+  kapabilitetsimport (`Policies.ManageCapabilities`) og dataobjekt-oprettelse (`Policies.ManageDataObjects`) er
+  UÆNDREDE admin-only policies — 4a udvider kun `EditSystem`/`EditIntegration`/tilføjer `MoveSystem`, ingen anden
+  policy er rørt. Person.EntraObjectId→Oid omdøbningen (beslutning T) er ren intern rename, IKKE eksponeret i
+  nogen DTO (grep bekræftet), så ingen kontrakt-opdatering (openapi.json/schema.d.ts) var nødvendig — korrekt at
+  PR'en ikke rører dem.
+- `TestAccess.BindPersonAsync` binder oid direkte i testdatabasen (ingen ny API-flade) — bevidst, matcher det
+  allerede noterede fund "INVITATION HAR INGEN UI" (stadig åbent, hører til 4b/F-serien ifølge skæringen, ikke 4a).
+- Skæringen holder: 4a er PRÆCIS "O–S og omdøbningen i T (server) + 'Kontakt enterprise arkitekten' hvor en knap
+  var skjult" — ingen historik (4c/W), ingen "Mine systemer" (4b), intet Firebase (F-serien) sneg sig med. `docs/
+  plan.md`-diffen i denne branch er ren TILFØJELSE af beslutninger O–W (allerede committet FØR 4a-koden, i en
+  tidligere commit på samme branch) — teksten i O/Q/R/S stemmer ord-for-ord med det, koden gør (verificeret ved
+  citat-sammenligning, ikke kun stikprøve).
+- MINDRE, IKKE BLOKERENDE: Ejerens spørgsmål 2 ("må en forvalter skifte forretningsejer? — ja") er IKKE begrænset
+  særskilt nogen steder — `SystemWriteRequest.Roles` valideres kun af `ValidateRoles` (dubletter/SingleHolder), og
+  enhver rolle (inkl. Forretningsejer) kan sættes af enhver, der har `EditSystem` på systemet. Det er PRÆCIS det
+  ejeren bad om ("ja, som de andre roller"), men ingen ny test siger det EKSPLICIT for Forretningsejer-rollen (kun
+  Systemejer/Systemforvalter/Forretningsejer er testet for HVEM DER KAN REDIGERE, ikke at en forvalter kan SÆTTE en
+  ny forretningsejer). Lav risiko (samme kodesti som de andre roller, ingen særbehandling af Forretningsejer i
+  `Apply()`), men spørg Test Manager om en eksplicit test for netop dette scenarie ved næste berøring af roller.
