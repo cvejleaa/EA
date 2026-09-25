@@ -102,14 +102,16 @@ public sealed class MySystemsTests
         await using var _ = app;
         var active = await admin.CreateSystemAsync("Aktivt");
         var planned = await admin.CreateSystemAsync(TestApi.NewSystem("Planlagt", LifecycleStatus.Planlagt));
-        await admin.CreateSystemAsync("Andres");
+        await admin.CreateSystemAsync("Andres aktive");
         await SetRolesAsync(admin, active, (SystemRole.Systemforvalter, person.Id));
         await SetRolesAsync(admin, planned, (SystemRole.Systemforvalter, person.Id));
 
         var list = await frida.ListSystemsAsync("?mine=true&status=IDrift");
 
         Assert.Equal(["Aktivt"], list.Items.Select(i => i.Name));
-        Assert.Equal(["Planlagt"], (await frida.ListSystemsAsync("?mine=true&q=planl")).Items.Select(i => i.Name));
+        // Søgeordet rammer både hendes og et fremmed system: kun hendes står der.
+        Assert.Equal(["Aktivt"], (await frida.ListSystemsAsync("?mine=true&q=aktiv")).Items.Select(i => i.Name));
+        Assert.Equal(2, (await frida.ListSystemsAsync("?q=aktiv")).Items.Count);
     }
 
     [Fact]
