@@ -918,3 +918,77 @@ men konsistent test-gæld.
 mutationsliste (20 mutationer) allerede var kørt og lukket FØR denne gennemgang. Det ene reelle hul
 (navnetie-break) er lav-risiko (kræver to systemer bekræftet i PRÆCIS samme øjeblik) og ikke blokerende alene,
 men bør noteres som en manglende test, ikke rettes hastigt uden en ny test der beviser den.
+
+## Fund fcd77c5 (delopgave 4b-2, EA-register, PR #17): E2E-fundament (Playwright) — stærk kerne, ét bekræftet
+gammelt hul LUKKET af rigtige DevSeed-data, og ét reelt nyt hul (dev-login-teksten helt udækket)
+
+Branch `claude/trusting-brahmagupta-4v2ukj`. Ét scenariefil, `web/e2e/forvalter.spec.ts` (4 tests), kører sekventielt
+(`workers: 1`, `fullyParallel: false`) mod en rigtig API + PostgreSQL + Chromium, med `ea_e2e` droppet og genskabt fra
+DevSeed ved hver kørsel (`web/e2e/start-api.sh`). Baseline: 4/4 grønt (`cd web && npx playwright test`, ~25-32s).
+Krævede `npm ci` med node24 eksplicit i PATH (systemets `npm`/`node` peger på node22, som fejler Angular 22's
+engine-krav — brug `/opt/node24/bin` FØRST i PATH, ikke kun tilgængeligt et sted i den).
+
+**Bekræftet ved mutation — DRÆBT (ud over rekvirentens egne 4: `@if (true)` i system-detail.page.html linje 17 →
+scenarie 3+4; `landing.ts` altid '/systemer' → scenarie 1; `LastConfirmedAt`→`CreatedAt` i SystemEndpoints.cs linje
+121 → scenarie 1; MoveSystem-tjek `p.Id != Guid.Empty` linje 219 → scenarie 2):**
+1. **"via"-teksten er reel**: `system-detail.page.html` linje 70, fjernet `(e.via ? ' (via ' + e.via.name + ')' :
+   '')` helt → scenarie 2 (`forvalteren retter et modul...`) røg rødt på den præcise `toHaveText`-streng
+   ("Redigeres af Frida Forvalter (fiktiv) (via Nordlys ERP).").
+2. **editors-linjens to grene (ejer/ikke-ejer) er reelt skilt ad**: linje 67, ternary'en `s.permissions.canEdit ?
+   'Redigeres af' : 'Ser noget forkert ud? Det rettes af'` kollapset til konstant `'Redigeres af'` → scenarie 4
+   (Leo, læser) røg rødt (venter eksplicit den ANDEN tekst).
+3. **nav-mine-tallet er bundet til den faktiske værdi, ikke bare tilstedeværelse**: `app.ts` linje 25, `{{
+   auth.me()!.mySystemCount }}` → `{{ auth.me()!.mySystemCount + 1 }}` → scenarie 1 røg rødt ("Mine systemer (5)"
+   forventet, "(6)" modtaget).
+4. **"gem persisterer" er reelt bevist, IKKE kun optimistisk klient-ekko**: `SystemEndpoints.cs` linje 545, gjorde
+   `system.Description`-tildelingen til en no-op (`_ = ...` uden at sætte feltet) → scenarie 2's
+   `getByText(text)`-assertion EFTER `Gem ændringer` + navigation til `/systemer/:id` fandt intet. Årsag: klienten
+   navigerer til en HELT NY route/komponent (`SystemDetailPage`, ikke samme instans som formularen), hvis
+   `effect()` i konstruktøren kalder `api.get(id)` uafhængigt — testen kræver derfor reelt en frisk GET fra
+   serveren, ikke bare visning af det, brugeren lige skrev. Ingen eksplicit `page.reload()` er nødvendig, fordi
+   Angular-routing i sig selv skifter komponentinstans og genindlæser via HTTP.
+5. **STORT FUND: lukker et kendt hul fra delopgave 4b-1 (17b36ba)**: `SystemEndpoints.cs` linje 122, mine-grenens
+   `.ThenBy(s => s.NameNormalized)`-tie-break → `.ThenByDescending(...)` → scenarie 1 røg rødt ("Nordlys ERP" og
+   "Nordlys ERP › Nordlys Økonomi" byttede plads). I 4b-1 var dette hul UBEVIST ved unit-test, fordi
+   `MySystemsTests.cs`s fixture brugte `app.Time.Advance()` mellem hver oprettelse (ingen ægte uafgjort). HER er
+   der en ÆGTE uafgjort: DevSeed sætter `Nordlys ERP` og `Nordlys Økonomi` til `confirmedDaysAgo: 30` begge to, ud
+   fra SAMME `now`-variabel (fanget én gang for hele seedingen, `DevSeed.cs` linje 29) — et ægte tie, ikke et
+   tilnærmet et. E2E-testens faste DevSeed-fixture beviser derfor noget, en syntetisk unit-test-fixture ikke gjorde.
+   **Mønster at genkende næste gang**: en TIE i en unit-testfixture, der bevidst forhindres af `Time.Advance()`
+   mellem oprettelser, kan godt eksistere ÆGTE i den faste seed-fixture — tjek DevSeed's egne datoer, før du
+   konkluderer at en tie-break er ubevist projekt-bredt; en E2E-test med rigtig seed-data kan lukke hullet uden at
+   nogen skrev en dedikeret test for det.
+
+**Reelt, ubekræftet hul: dev-login-teksten (`web/src/app/login/login.page.ts`) er HELT udækket.** Ændringen fjerner
+' · læser'-suffikset for brugere uden nogen app-rolle-claim (`user.roles.length ? ... : ''` i stedet for `: ' ·
+læser'`). Satte suffikset tilbage (`: ' · læser'`) → **BÅDE** `npm test` (137/137 web-tests) **OG** `npx playwright
+test` (4/4 E2E) forblev grønne. To uafhængige årsager:
+- Der findes STADIG ingen `login.page.spec.ts` (samme gæld noteret allerede i 4b-1-fundet ovenfor, men her er det en
+  FAKTISK ændret linje, ikke bare utestet tynd sammenkobling).
+- `web/e2e/forvalter.spec.ts`s `loginAs(page, name: RegExp)` bruger `page.getByRole('button', { name })` med
+  `frida = /^Frida Forvalter/` og `leo = /^Leo Læser/` — IKKE ankret med `$` i slutningen. Playwright's
+  accessible-name-matching er substring/regex-baseret, så knappens fulde tekst ("Leo Læser (fiktiv) · læser" eller
+  bare "Leo Læser (fiktiv)") matcher regex'en UANSET suffiks. Login-flowet i E2E rammer derfor aldrig denne linje
+  som en observerbar forskel, selvom begge brugere (Frida OG Leo) rent faktisk rammer denne gren i DevSeed
+  (`appsettings.Development.json`: begge har `"Roles": []` på identitets-claim-niveau — adskilt fra deres
+  forretningsroller i `SystemRoleAssignment`, som er et helt andet lag).
+- **Mangler**: en `web/src/app/login/login.page.spec.ts` (nyt lag — ingen findes i forvejen for hele siden) der
+  monterer siden med en HTTP-mock af `/api/dev/users`, der returnerer mindst én bruger med `roles: []`, og
+  asserterer at knap-teksten IKKE indeholder ' · læser' (og gerne én med roller, der bekræfter ' · <rolle>' stadig
+  vises). Dette er den rigtige lag-placering (klient-tekst → Vitest), jf. CLAUDE.md's punkt 3 — ikke E2E, med
+  mindre regex'en ankres.
+
+**Determinisme, gennemgået og OK:**
+- Testrækkefølge: sekventiel og fil-deklareret (dokumenteret i CLAUDE.md), ikke en skjult risiko — bekræftet at den
+  almindelige `UpdateSystem`-PUT (brugt i scenarie 2) IKKE selv rører `LastConfirmedAt` (kun `Confirm`- og
+  `Create`-håndteringen gør, linje 379/652), så scenarie 2's redigering af "Nordlys HR" ikke selv ville ødelægge
+  scenarie 1's rækkefølge-antagelse ved en eventuel gentagelse.
+- Ingen `Date.now()`/relativ-tid-tekst ("for N dage siden") asserteres nogen steder i specen — kun en statisk
+  hjælpetekst og selve RÆKKEFØLGEN, som er baseret på faste relative dag-forskydninger fra ÉN fanget `now` pr.
+  DevSeed-kørsel (stabil uanset kalenderdato).
+- `ea_e2e` droppes og genskabes ved HVER kørsel (ikke genbrugt på tværs af kørsler) → ingen forurenet tilstand
+  mellem separate `npx playwright test`-invokationer.
+
+**Konklusion for denne PR: IKKE HELT KLAR — mangler login.page.spec.ts (eller en ankret E2E-regex) for
+dev-login-tekstændringen.** Selve E2E-fundamentet (config, CI-job, start-api.sh, de 4 scenarier) er solidt bevist og
+kan lande; den ene linje i `login.page.ts` bør enten få en dedikeret Vitest-spec eller udgå af denne PR.

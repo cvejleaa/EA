@@ -89,7 +89,9 @@ selv.
    tilbagerulninger, og udrulninger med et blokerende fund.
    CI (`.github/workflows/ci.yml`) kører på hver PR: **api** (dotnet format,
    build, alle tests mod PostgreSQL 16, migrationer i sync med modellen) og
-   **web** (lint, tests, build, genererede typer i sync med kontrakten).
+   **web** (lint, tests, build, genererede typer i sync med kontrakten) og
+   **e2e** (Playwright klikker sig gennem den rigtige app med DevSeed's
+   fiktive data i Chromium).
    **CodeQL** (`.github/workflows/codeql.yml`) analyserer C# og TypeScript
    for sikkerhedsfejl på hver PR og ugentligt.
    Der er endnu intet deploy-mål — prototypen kører lokalt (se README).
@@ -235,6 +237,7 @@ npm run lint
 npm test                                          # Vitest, én kørsel
 npm run build
 npm run gen:api && git diff --exit-code -- src/api
+npm run e2e                                       # Playwright: API + web + egen database ea_e2e
 ```
 
 - Testrunneren er Microsoft.Testing.Platform (xUnit v3, se `global.json`):
@@ -247,3 +250,9 @@ npm run gen:api && git diff --exit-code -- src/api
 - Vitest-specs findes via `src/**/*.spec.ts`. Komponenttests skal have samme
   ramme som appen (`provideDanishLocale()`, router, HTTP) og vente med
   `settle()` fra `src/app/testing/fixtures.ts`, før DOM'en læses.
+- E2E-testene (`web/e2e/`) starter selv API'et i Development mod en database,
+  `ea_e2e`, der oprettes forfra fra DevSeed ved hver kørsel (aldrig `ea_dev`),
+  og web på egne porte (4280/5180). Testene deler databasen og kører efter
+  hinanden i filens rækkefølge. `@playwright/test` er låst til en fast
+  version; browseren hentes med `npx playwright install chromium` (CI gør det
+  selv, og i det skybaserede Claude Code-miljø er den forinstalleret).

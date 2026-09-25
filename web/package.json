@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch=false",
     "lint": "ng lint",
-    "gen:api": "openapi-typescript src/api/openapi.json -o src/api/schema.d.ts"
+    "gen:api": "openapi-typescript src/api/openapi.json -o src/api/schema.d.ts",
+    "e2e": "playwright test"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
@@ -29,6 +30,7 @@
     "@angular/cli": "^22.2.0",
     "@angular/compiler-cli": "^22.2.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.56.1",
     "angular-eslint": "22.5.0",
     "eslint": "^10.9.1",
     "jsdom": "^30.0.0",

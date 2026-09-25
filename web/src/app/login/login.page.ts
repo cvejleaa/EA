@@ -19,7 +19,7 @@ import { toProblem } from '../core/problem';
         <div class="row">
           @for (user of users(); track user.id) {
             <button mat-stroked-button type="button" (click)="login(user.id)">
-              {{ user.name }}{{ user.roles.length ? ' · ' + user.roles.join(', ') : ' · læser' }}
+              {{ user.name }}{{ user.roles.length ? ' · ' + user.roles.join(', ') : '' }}
             </button>
           }
         </div>
