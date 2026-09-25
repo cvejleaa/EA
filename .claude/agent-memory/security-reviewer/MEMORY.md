@@ -202,3 +202,34 @@
   (eva=admin, frida/lars=ingen roller).
 - HS256-token i bash: header/payload base64url, openssl dgst -sha256 -hmac KEY.
 - Kør API på egen port+DB: ConnectionStrings__Ea + --urls, ryd op med dropdb.
+
+## Delopgave 4 + Firebase-drift (PLAN-gennemgang, ingen kode) – 2026-09-25
+- Firebase-fakta fra auth-emulatorens kilde (firebase-tools master,
+  src/emulator/auth/operations.ts; raw.githubusercontent.com er tilgængelig,
+  Googles docs-domæner er BLOKERET af proxyen): e-mail-link-login udsteder
+  token med sign_in_provider="password" (samme som password-login) og
+  identities.email -> serveren kan IKKE skelne link fra password. Link-login
+  på eksisterende konto: emailVerified=true, password bevares -> præ-kapring
+  virker i emulatoren (produktion: F0 afgør). Uprivilegeret signUp accepterer
+  displayName -> "name"-claim er brugerstyret. E-mail-skift -> emailVerified=false.
+  EMAIL_SIGNIN-links sendes til enhver adresse (ingen eksistens-tjek).
+- Alle Firebase-projekter deler signeringsnøgler: aud/iss er ENESTE binding
+  til projektet. Kræv test med token fra "andet projekt".
+- BEKRÆFTET (.NET PoC, dotnet run app.cs): tilføjes "name" uden at fjerne
+  tokenets, vinder tokenets (FindFirst + Identity.Name). IdentityModel 8
+  giver CaseSensitiveClaimsIdentity -> "Roles"/"OID" tæller IKKE som
+  roles/oid (kontroltest, lukket).
+- BEKRÆFTET: dotnet publish tager appsettings.Development.json (Mode=Dev +
+  committet nøgle) med i output -> ASPNETCORE_ENVIRONMENT=Development i en
+  container = offentligt dev-login. Krav: udelad filen, K_SERVICE-vagt,
+  sikkerheds-smoke (/api/dev/users 404, /api/auth/mode, 401 uden token).
+- Ejerens e-mail står i offentlige commit-metadata -> admin-kontoen er
+  oplagt præ-kapringsmål (admin bindes på uid).
+- 4a-eskalering fundet i design: modul-forvalter kan flytte modul ud af
+  fremmed forælder (til top eller egen forælder), hvis MoveSystemRequirement
+  kun tjekker system + MÅL. Integrations-PUT har ikke from/to (ingen kapring).
+- F4: produktion-data-godkendelse er kun et sikkerhedsnet, hvis deploy-SA
+  ikke kan køre/ændre data-jobs, ikke har firebaseauth.*/Editor, og DB-
+  brugere er adskilt (app=DML, migrator=DDL, check=read-only).
+- PoC-mønster: .NET 10 fil-app: `#:package X@8.*` SKAL stå øverst i filen;
+  ClaimsPrincipal.FindFirstValue kræver ASP.NET-ref -> brug FindFirst()?.Value.

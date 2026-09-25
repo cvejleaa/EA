@@ -219,7 +219,7 @@ public static partial class DevSeed
             DisplayName = name,
             Department = department,
             Email = $"{name.Split(' ')[0].ToLowerInvariant()}@eksempel.invalid",
-            EntraObjectId = oid,
+            Oid = oid,
         };
     }
 

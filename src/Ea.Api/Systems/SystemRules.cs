@@ -26,8 +26,22 @@ public static class SystemRules
     /// </summary>
     public static Guid OverlapGroupKey(Guid systemId, Guid? parentSystemId) => parentSystemId ?? systemId;
 
+    /// <summary>
+    /// Rollerne, der giver ret til at redigere systemet og dets moduler (beslutning 13: forvalterne vedligeholder;
+    /// forretningsejeren ejer processen, men redigerer ikke). Enterprise arkitekten må alt.
+    /// </summary>
+    public static readonly IReadOnlyList<SystemRole> EditingRoles = [SystemRole.Systemejer, SystemRole.Systemforvalter];
+
+    /// <summary>Sletning er til fejloprettelser og kun for enterprise arkitekten; forvalteren skal vide, hvad hun gør i stedet.</summary>
+    public const string DeleteRequiresAdminReason =
+        "Kun enterprise arkitekten kan slette systemer. Er systemet taget ud af brug, så sæt status til Nedlagt.";
+
     public static string? ParentChangeBlockedReason(int moduleCount) =>
         moduleCount > 0 ? "Systemet har selv moduler og kan derfor ikke gøres til modul." : null;
+
+    /// <summary>Et modul tages kun ud af sin forælder af den, der må redigere forælderen (dens dækning og overlap ændres).</summary>
+    public static string ParentMoveBlockedReason(string parentName) =>
+        $"Modulet kan kun flyttes af den, der kan redigere {parentName}.";
 
     /// <summary>
     /// Et system, der er i brug, kan ikke slettes — sletning er til fejloprettelser og må ikke fjerne historik.

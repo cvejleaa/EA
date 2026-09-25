@@ -20,7 +20,10 @@ public static class TestUsers
     public static readonly TestUser Admin = new("eva", "00000000-0000-0000-0000-0000000000a1", "Eva Arkitekt", AppRoles.Admin);
     public static readonly TestUser Reader = new("leo", "00000000-0000-0000-0000-0000000000b2", "Leo Læser");
 
-    public static readonly TestUser[] All = [Admin, Reader];
+    /// <summary>Uden app-roller: hendes ret kommer KUN fra roller på systemer, efter at personen er bundet (se TestAccess).</summary>
+    public static readonly TestUser Steward = new("frida", "00000000-0000-0000-0000-0000000000c3", "Frida Forvalter");
+
+    public static readonly TestUser[] All = [Admin, Reader, Steward];
 }
 
 /// <summary>Én kørende API-instans mod sin egen database. Brug: <c>await using var app = await TestApp.StartAsync();</c></summary>

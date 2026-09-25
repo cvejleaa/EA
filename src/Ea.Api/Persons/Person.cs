@@ -15,6 +15,9 @@ public sealed class Person
     /// <summary>Afdeling — giver forretningsvinklen på et system via dets forretningsejer.</summary>
     public string? Department { get; set; }
 
-    /// <summary>Entra-objekt-id (claim "oid"). Nøglen, som adgang senere bindes til — aldrig e-mail.</summary>
-    public string? EntraObjectId { get; set; }
+    /// <summary>
+    /// Værdien af claim "oid" for den, der logger ind som personen: Entra-objekt-id (spor A) — eller i den midlertidige
+    /// drift et Firebase-id med præfikset "fb:". Det er nøglen, adgang bindes til — aldrig e-mail.
+    /// </summary>
+    public string? Oid { get; set; }
 }

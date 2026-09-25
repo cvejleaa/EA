@@ -104,8 +104,8 @@ public sealed class EaDbContext(DbContextOptions<EaDbContext> options) : DbConte
             e.Property(p => p.DisplayName).HasMaxLength(200).IsRequired();
             e.Property(p => p.Email).HasMaxLength(320);
             e.Property(p => p.Department).HasMaxLength(200);
-            e.Property(p => p.EntraObjectId).HasMaxLength(100);
-            e.HasIndex(p => p.EntraObjectId).IsUnique();
+            e.Property(p => p.Oid).HasMaxLength(100);
+            e.HasIndex(p => p.Oid).IsUnique();
         });
 
         modelBuilder.Entity<Integration>(e =>
