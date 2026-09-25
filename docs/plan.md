@@ -152,8 +152,8 @@ Beslutningerne herunder præciserer E og G.
 ## Beslutninger for delopgave 4: forvaltere, historik og midlertidig drift
 
 Arkitektens plan blev gennemgået af Quality Control, domæne-rådgiveren og Security Reviewer før koden, og deres
-fund er indarbejdet. Ejeren besluttede den midlertidige drift 2026-09-25 (U). Tre spørgsmål ligger hos ejeren
-(se nederst). Indtil der kommer svar, bygges der efter forslagene.
+fund er indarbejdet. Ejeren besluttede den midlertidige drift 2026-09-25 (U) og svarede ja til de tre spørgsmål
+nederst.
 
 | # | Beslutning | Hvorfor |
 |---|---|---|
@@ -183,13 +183,12 @@ udrulning på earch):
   **F4:** udrulning ved merge, hvor migreringer og demo-data venter på ejerens godkendelse.
 - **4c/4d:** ændringshistorikken (W) på serveren og på systemsiden.
 
-**Ejerens spørgsmål (forslag i parentes):**
-1. Login-brugerne er rigtige mennesker: navn og e-mail ligger i Firebase og i registret. Må det være
-   DTU-arbejdsmails i et privat Google-projekt, eller bruger testerne private adresser? *(private adresser,
-   indtil DTU har sagt god for det)*
-2. Må en forvalter skifte forretningsejer? *(ja, som de andre roller; historikken viser hvem)*
-3. En brugertest på earch med 2–3 forvaltere og en kort opgaveliste? *(ja; EA opretter dem og giver dem roller
-   på demo-systemer)*
+**Ejerens svar (2026-09-25):**
+1. Login-brugerne er rigtige mennesker (navn og e-mail i Firebase og i registret). **Testerne bruger private
+   e-mailadresser**, indtil DTU har sagt god for arbejdsmails i et privat Google-projekt.
+2. **En forvalter må skifte forretningsejer**, som de andre roller; historikken viser hvem.
+3. **Brugertest på earch med 2–3 forvaltere** og en kort opgaveliste. EA opretter dem og giver dem roller på
+   demo-systemer.
 
 ## Designprincipper for værktøjet selv
 

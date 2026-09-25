@@ -37,7 +37,7 @@
       <dt>Forretningsejer</dt>
       <dd [class.missing]="!businessOwner()" data-testid="business-owner">
         @if (businessOwner(); as p) {
-          {{ p.displayName }}
+          <ng-container *ngTemplateOutlet="person; context: { $implicit: p }" />
           @if (p.department) {
             <span class="muted"> · {{ p.department }}</span>
           }
@@ -46,16 +46,41 @@
         }
       </dd>
       <dt>Systemejer</dt>
-      <dd [class.missing]="!systemOwner()">{{ systemOwner()?.displayName ?? 'Ikke angivet' }}</dd>
+      <dd [class.missing]="!systemOwner()" data-testid="system-owner">
+        @if (systemOwner(); as p) {
+          <ng-container *ngTemplateOutlet="person; context: { $implicit: p }" />
+        } @else {
+          Ikke angivet
+        }
+      </dd>
       <dt>Systemforvaltere</dt>
-      <dd [class.missing]="!stewards().length">
+      <dd [class.missing]="!stewards().length" data-testid="stewards">
         @for (p of stewards(); track p.id; let last = $last) {
-          {{ p.displayName }}{{ last ? '' : ', ' }}
+          <ng-container *ngTemplateOutlet="person; context: { $implicit: p }" />{{ last ? '' : ', ' }}
         } @empty {
           Ikke angivet
         }
       </dd>
     </dl>
+    <p class="muted editors" data-testid="editors">
+      @if (s.editors.length) {
+        {{ s.permissions.canEdit ? 'Redigeres af' : 'Ser noget forkert ud? Det rettes af' }}
+        @for (e of s.editors; track e.person.id; let last = $last) {
+          <ng-container *ngTemplateOutlet="person; context: { $implicit: e.person }" />{{
+            (e.via ? ' (via ' + e.via.name + ')' : '') + (last ? '.' : ', ')
+          }}
+        }
+      } @else {
+        Systemet har ingen systemejer eller -forvalter. Kontakt enterprise arkitekten.
+      }
+    </p>
+    <ng-template #person let-p>
+      @if (p.email) {
+        <a [href]="'mailto:' + p.email">{{ p.displayName }}</a>
+      } @else {
+        {{ p.displayName }}
+      }
+    </ng-template>
 
     @if (s.modules.length) {
       <h2>Moduler</h2>

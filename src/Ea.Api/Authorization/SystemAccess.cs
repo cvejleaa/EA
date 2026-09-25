@@ -27,9 +27,8 @@ public sealed class SystemAccess(EaDbContext db)
             return _editable;
         }
 
-        // Et tomt oid er ingen identitet — det må aldrig matche en person, hvis Oid ved en fejl er tom (Security, 4a).
-        var oid = user.FindFirstValue(ClaimNames.ObjectId);
-        if (string.IsNullOrWhiteSpace(oid))
+        var oid = user.OidOrNull();
+        if (oid is null)
         {
             return _editable = new HashSet<Guid>();
         }

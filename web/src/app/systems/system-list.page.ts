@@ -1,20 +1,34 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import type { Subscription } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import type { CapabilityNode, LifecycleStatus, SystemListItem, SystemType, TeamDto } from '../api/types';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import type { CapabilityNode, LifecycleStatus, SystemListItem, SystemRole, SystemType, TeamDto } from '../api/types';
 import { AuthService } from '../core/auth.service';
-import { lifecycleLabels, lifecycleOptions, relativeAge, systemTypeLabels, systemTypeOptions } from '../core/labels';
+import { lifecycleLabels, lifecycleOptions, relativeAge, roleLabels, systemTypeLabels, systemTypeOptions } from '../core/labels';
 import { toProblem } from '../core/problem';
 import { CapabilitiesApi } from '../capabilities/capabilities.api';
 import { IntegrationsApi } from '../integrations/integrations.api';
 import { SystemFilter, SystemsApi } from './systems.api';
 
-const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId', 'capabilityId'] as const;
+const FILTER_KEYS = ['q', 'status', 'type', 'teamId', 'businessOwnerId', 'capabilityId', 'mine'] as const;
+
+function filterFrom(params: ParamMap): SystemFilter {
+  const filter: SystemFilter = {};
+  for (const key of FILTER_KEYS) {
+    const value = params.get(key);
+    if (value) {
+      (filter as Record<string, string>)[key] = value;
+    }
+  }
+  return filter;
+}
+
+const sameFilter = (a: SystemFilter, b: SystemFilter): boolean => FILTER_KEYS.every((k) => (a[k] ?? '') === (b[k] ?? ''));
 
 @Component({
   selector: 'ea-system-list-page',
@@ -31,12 +45,13 @@ export class SystemListPage implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
   private requestNo = 0;
+  private params?: Subscription;
 
   protected readonly lifecycleLabels = lifecycleLabels;
   protected readonly lifecycleOptions = lifecycleOptions;
   protected readonly typeLabels = systemTypeLabels;
   protected readonly typeOptions = systemTypeOptions;
-  protected readonly columns = ['name', 'type', 'status', 'team', 'owner', 'confirmed'];
+  protected readonly roleLabels = roleLabels;
 
   protected readonly filter = signal<SystemFilter>({});
   protected readonly items = signal<SystemListItem[]>([]);
@@ -50,6 +65,17 @@ export class SystemListPage implements OnInit, OnDestroy {
   protected readonly now = signal(new Date());
 
   protected readonly canCreate = computed(() => this.auth.me()?.permissions.canCreateSystems ?? false);
+  protected readonly mine = computed(() => this.filter().mine === 'true');
+  /** Er "mine" det eneste filter? Så betyder en tom liste, at brugeren ingen roller har — ikke at intet matcher. */
+  protected readonly onlyMine = computed(() => FILTER_KEYS.every((k) => k === 'mine' || !this.filter()[k]));
+  /** Knappen vises for den, der har mine systemer — og altid, mens filtret er slået til (så det kan slås fra). */
+  protected readonly showMineToggle = computed(() => (this.auth.me()?.mySystemCount ?? 0) > 0 || this.mine());
+  /** "Din rolle" kun i "Mine systemer": hvilke af dem er MIT ansvar (domæne-rådgiveren). */
+  protected readonly columns = computed(() =>
+    this.mine()
+      ? ['name', 'myRole', 'type', 'status', 'team', 'owner', 'confirmed']
+      : ['name', 'type', 'status', 'team', 'owner', 'confirmed'],
+  );
   protected readonly isFiltered = computed(() => FILTER_KEYS.some((k) => !!this.filter()[k]));
 
   /** Serverens rækkefølge (moduler under forælderen), medmindre brugeren har sorteret. */
@@ -66,25 +92,36 @@ export class SystemListPage implements OnInit, OnDestroy {
   });
 
   async ngOnInit(): Promise<void> {
-    const params = this.route.snapshot.queryParamMap;
-    const initial: SystemFilter = {};
-    for (const key of FILTER_KEYS) {
-      const value = params.get(key);
-      if (value) {
-        (initial as Record<string, string>)[key] = value;
-      }
-    }
-    this.filter.set(initial);
     try {
       this.teams.set(await this.api.teams());
     } catch (e) {
       this.error.set(toProblem(e).message);
     }
-    await Promise.all([this.load(), this.loadCapabilityName(initial.capabilityId)]);
+    // URL'en er sandheden: et link til samme side (fx "Mine systemer" i menuen) genbruger komponenten, så listen
+    // følger query-parametrene — men henter ikke igen, når den selv har skrevet dem (setFilter).
+    let first = true;
+    this.params = this.route.queryParamMap.subscribe((params) => {
+      const next = filterFrom(params);
+      if (!first && sameFilter(next, this.filter())) {
+        return;
+      }
+      first = false;
+      this.filter.set(next);
+      this.capability.set(null);
+      void this.load();
+      void this.loadCapabilityName(next.capabilityId);
+    });
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.searchTimer);
+    this.params?.unsubscribe();
+  }
+
+  /** "Din rolle": brugerens egne roller — eller forælderen, når systemet kun er med som modul under et af hendes. */
+  protected myRole(item: SystemListItem): string {
+    const roles = (item.myRoles ?? []) as SystemRole[];
+    return roles.length ? roles.map((r) => this.roleLabels[r]).join(', ') : `Via ${item.parent?.name ?? 'forælderen'}`;
   }
 
   /**

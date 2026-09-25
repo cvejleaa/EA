@@ -14,7 +14,15 @@ public sealed record RoleAssignmentDto(SystemRole Role, PersonDto Person);
 /// Beregnet af serveren med de samme regler, som håndhæves ved skrivning. Klienten afgør aldrig selv adgang.
 /// En begrundelse (ikke null) betyder, at handlingen er blokeret — og hvorfor.
 /// </summary>
-public sealed record SystemPermissions(bool CanEdit, bool CanDelete, string? DeleteBlockedReason, string? ParentBlockedReason);
+/// <param name="CanEditViaParent">
+/// Brugeren kan redigere forælderen og dermed modulet — også uden en rolle på selve modulet (beslutning O). Formularen
+/// advarer kun om "du kan ikke længere redigere", når det er falsk.
+/// </param>
+public sealed record SystemPermissions(
+    bool CanEdit, bool CanDelete, string? DeleteBlockedReason, string? ParentBlockedReason, bool CanEditViaParent);
+
+/// <summary>En, der kan redigere systemet: systemejer eller systemforvalter på systemet — eller på forælderen (Via).</summary>
+public sealed record SystemEditor(PersonDto Person, SystemRef? Via);
 
 public sealed record SystemDetail(
     Guid Id,
@@ -27,6 +35,7 @@ public sealed record SystemDetail(
     SystemRef? Parent,
     IReadOnlyList<ModuleDto> Modules,
     IReadOnlyList<RoleAssignmentDto> Roles,
+    IReadOnlyList<SystemEditor> Editors,
     IReadOnlyList<SystemCapabilityDto> Capabilities,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
@@ -45,9 +54,14 @@ public sealed record SystemListItem(
     TeamDto? ManagingTeam,
     PersonDto? BusinessOwner,
     DateTimeOffset LastConfirmedAt,
-    int ModuleCount);
+    int ModuleCount,
+    IReadOnlyList<SystemRole>? MyRoles = null);
 
 /// <param name="Total">Antal systemer i registret i alt (ufiltreret) — til "viser X af Y".</param>
+/// <remarks>
+/// Med <c>mine=true</c> har hver række <c>MyRoles</c>: brugerens egne roller på systemet (tom for et modul, der kun er
+/// med via forælderen). Ellers er feltet null.
+/// </remarks>
 public sealed record SystemListResponse(IReadOnlyList<SystemListItem> Items, int Total);
 
 public sealed record RoleAssignmentInput(SystemRole Role, Guid PersonId);

@@ -640,3 +640,72 @@ bekræftet empirisk (ikke kun antaget ud fra .editorconfig-rækkefølgen). 335/3
     oprettelsen af `ea_app`/`ea_migrator`/læserollen, selvom beslutning X siger "Rollerne oprettes af ejerens
     script i F3/F4" — lille uklarhed for den, der senere bygger F3: tilføj en linje der eksplicit nævner
     rolle-scriptet, så det ikke overses.
+
+## Plan-gennemgang 4b-1 (2026-09-25, main 7ddb8ba) — "Mine systemer", mail-links, advarsel. Tjek ved kode-gennemgangen:
+(NB: kaldet henviste til mine "forslag om toggle + roller i stedet for adgangssæt" fra plan-gennemgang 4 — de stod
+IKKE i denne fil. Skriv plan-forslag ned med det samme, ellers kan de ikke efterprøves næste gang.)
+- LOGIN-LANDING: authGuard sætter ALTID returnUrl=state.url, og ''→redirect 'systemer' sker før vagten, så en
+  normal indgang giver /login?returnUrl=%2Fsystemer. "Land på X medmindre returnUrl" fyrer derfor aldrig. Spørg
+  altid: hvilken returnUrl har den ALMINDELIGE indgang? (web/src/app/core/auth.guard.ts, app.routes.ts)
+- KOMPONENT-GENBRUG: system-list.page læser kun route.snapshot i ngOnInit. Et menulink /systemer → /systemer?mine=1
+  (samme route) genbruger komponenten → URL skifter, listen gør ikke. Gælder ethvert nyt link til samme side med
+  andre query-parametre. Også routerLinkActive (subset) gør "Systemer" og "Mine systemer" aktive samtidig.
+- Minimal-API bool: klienten sender filter-objektet råt som query (systems.api.ts list) — `mine=1` fra URL'en giver
+  400 mod `bool? mine`. Ét stavemåde hele vejen.
+- "Aldrig bekræftet" FINDES IKKE: LastConfirmedAt er non-null og sættes ved oprettelse (Touch). Fremtidig fælde:
+  Excel-import (6) vil stemple importerede rækker som "bekræftet nu" → ældst-først-sortering gemmer netop dem.
+- Nedlagte systemer bliver aldrig bekræftet → flyder til toppen af "ældst bekræftede øverst" / "trænger mest til
+  et blik". Spørg ved alle friskheds-sorteringer: hvad med Nedlagt?
+- Modul-arv (beslutning O) i tekster: "Redigeres af systemejer og systemforvaltere" og "Kontakt systemforvalteren"
+  ser kun modulets EGNE roller; forælderens forvalter (som også redigerer) står ikke i SystemDetail. Advarslen
+  "kan derefter ikke redigere" er falsk for et modul, hvor man har ret via forælderen → skal afgøres af serveren.
+- Tal i menuen fra /api/me er et øjebliksbillede (me() hentes én gang i vagten) → forældet efter egen rolleændring.
+- Tal og liste skal bruge SAMME IQueryable-regel (mønster: query.Missing()) — ikke to implementeringer.
+
+## Kode-gennemgang af 4b-1 (2026-09-25, PR #16, 17b36ba mod main 7ddb8ba) — status: LAND
+Alle fund fra plan-gennemgangen er bygget som foreslået, verificeret manuelt (curl mod kørende API som frida/eva/lars
+via dev-login, ikke kun læst i koden):
+- B1 (landing): redirectTo 'systemer' sker FØR authGuard, så en almindelig indgang giver returnUrl=/systemer.
+  landingUrl() behandler netop '/systemer' som "intet mål" og sender ikke-EA med roller til MINE_URL. Bekræftet:
+  Frida (mySystemCount=5) → Mine systemer; Eva (EA.Admin) og Leo (ingen roller) → /systemer.
+- B2 (URL-styret liste, udelukkende menupunkter): system-list.page abonnerer nu på route.queryParamMap (ikke kun
+  snapshot i ngOnInit) — gælder ALLE filtre, ikke kun mine=true, så kapabilitetsfilter-links fra andre sider også
+  virker ved komponent-genbrug. app.ts' onMine()/onSystems() er gensidigt udelukkende (onSystems kræver !onMine).
+  Testet med positive assertions (app.spec.ts: hvilket link har klassen "active", ikke kun at et link findes).
+- B3 (nedlagte sidst, "aldrig bekræftet" findes ikke): OrderBy(Nedlagt).ThenBy(LastConfirmedAt) i SystemEndpoints;
+  LastConfirmedAt fortsat non-null overalt. MySystemsTests dækker rækkefølgen med 5 konkrete systemer.
+  17b36ba (opfølgende commit) rettede selv en båndsvaghed: 5 systemer vs. 6 roller (to systemer havde to roller
+  hver) — uden den skelnen havde en mutation af "roller" i stedet for "systemer" ikke slået ud (grøn med forkert
+  regel). Godt eksempel på testprincippet "et bånd der rummer både gammel og ny værdi måler ingenting" — fundet og
+  rettet AF opgaven selv, ikke af QC.
+- B4 (editors/canEditViaParent): SystemEndpoints.EditorsOf gengiver beslutning O præcis (egne EditingRoles-bærere
+  + forælderens, forretningsejer redigerer ikke, en person kun én gang, "via" sat af serveren — klienten kan intet
+  gætte). SystemPermissions.CanEditViaParent styrer selfRemovalWarning korrekt: verificeret med curl at Nordlys HR
+  (modul uden egen rolle for Frida) har canEdit=true, canEditViaParent=true, editors=[Frida via Nordlys ERP].
+- Toggle "Kun mine systemer": bevarer andre filtre (queryParamsHandling: 'merge'); "Nulstil filtre" rydder mine
+  filter med (bevidst, ét sted at komme ud af visningen).
+- Én regel for menuens tal og listen: SystemQueries.Mine(IQueryable, ClaimsPrincipal) bruges UÆNDRET af både
+  /api/me (MySystemCount) og /api/systems?mine=true — ikke to formuleringer af samme ting.
+- loadMe efter gem: system-form.page.save() kalder auth.loadMe() efter et vellykket gem, så menuens tal ikke er en
+  fastfrosset visning fra login (kendt fælde i denne hukommelse, nu netop håndteret ved den ene skrivevej, der kan
+  ændre roller).
+- Kontakttekster: "Redigeres af X" / "Ser noget forkert ud? Det rettes af X" / "Systemet har ingen systemejer eller
+  -forvalter. Kontakt enterprise arkitekten." — alle tre testet med FULD streng (ikke kun DOM-tilstedeværelse),
+  inkl. mailto-links og "(via Nordlys)"-suffiks.
+- Advarsel ved tab af alle redaktører (beslutning P): noEditorsWarning gælder kun `!s.parent` (selvstændige
+  systemer) — korrekt, for et modul kan forælderens redaktører stadig redigere det, selvom modulet mister sine
+  egne. Testet eksplicit (system-form.page.spec.ts): modul + fjern egen rolle → INGEN no-editors-advarsel.
+- "Din rolle" (domæne-rådgiveren): kolonne kun i mine-visning, viser roller eller "Via <forælder>" for et modul
+  uden egen rolle (myRoles: null uden for mine=true, tom liste for et arvet modul — skelnes korrekt i UI'en).
+- Kontrakt-kæden i sync: openapi.json ⇄ schema.d.ts verificeret med `npm run gen:api` (ingen diff). Ingen nye
+  enum-værdier, så labels.ts krævede ingen ændring.
+- Fiktive data: Frida/Bo/Hanne/Lars/Eva/Leo er alle mærket "(fiktiv)" i DevSeed/appsettings.Development.json, ingen
+  DTU-navne eller -mails (alle @eksempel.invalid).
+- Verificeret selv: `dotnet build`, alle 342 API-tests (rigtig PostgreSQL), 137 web-tests, `npm run lint`, og
+  `npm run build` — alle grønne på committet kode (Node 24 krævet lokalt, .nvmrc siger 24; systemets default var 22).
+Ikke-blokerende, kun observeret (ingen ny fejl introduceret af 4b-1, men værd at have i baghovedet næste gang listen
+eller "Total" rammes): SystemListResponse.Total er FORTSAT "hele registret ufiltreret" (dokumenteret sådan siden før
+4b-1) — gælder også mine=true, så "Viser 5 af 15 systemer" på Mine-siden IKKE betyder "5 af dine 15". Samme mønster
+som alle andre filtre, ingen regression, men spørg ved en fremtidig ændring af tælleren, om det stadig er tydeligt
+nok. "← Alle systemer"-linket på systemsiden peger stadig altid på det UFILTREREDE /systemer, uanset om man kom fra
+"Mine systemer" — men teksten siger netop "Alle systemer", ikke "Tilbage", så den lover ikke mere end den holder.

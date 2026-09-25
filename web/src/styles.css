@@ -13,6 +13,14 @@
   color: var(--mat-sys-error);
 }
 
+/* En advarsel, der ikke blokerer (fx før man fjerner sig selv som forvalter). */
+.warning-text {
+  color: var(--mat-sys-on-tertiary-container);
+  background: var(--mat-sys-tertiary-container);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

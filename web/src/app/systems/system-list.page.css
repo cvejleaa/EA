@@ -7,3 +7,5 @@
 .module { padding-left: 16px; display: inline-block; }
 .missing { color: var(--mat-sys-on-surface-variant); font-style: italic; }
 .empty { padding: 16px; }
+.mine-toggle { align-self: center; }
+.mine-toggle.on { background: var(--mat-sys-secondary-container); }

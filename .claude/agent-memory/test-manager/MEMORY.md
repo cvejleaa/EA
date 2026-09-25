@@ -827,3 +827,94 @@ INGEN kode i denne PR opretter rollerne eller ændrer connection strings; det er
 ("Rollerne oprettes af ejerens script i F3/F4"). Ikke en Test Manager-mangel (intet at mutere endnu), men
 Quality Control/Release Manager bør vide, at ejerens fjerde krav ("mindste rettighed i databasen") kun er en
 PLAN, ikke en implementering, i denne PR.
+
+## Fund 17b36ba (delopgave 4b-1, EA-register, PR #16): "Mine systemer", menuens tal, editors — exceptionelt stærk
+kerne (18 mutationer kørt, 17 dræbt), ét reelt hul (navnetie-break) + én "svaghed i bevisførelsen" (implicit DB-orden)
+
+Baseline: `dotnet test --project tests/Ea.Api.Tests` 342/342 (42/42 i `Ea.Api.Tests.Systems`, ny fil
+`MySystemsTests.cs` med 5 facts). Web `npx ng test --watch=false` (kørt som
+`/opt/node24/bin/node ./node_modules/.bin/ng test --watch=false` efter `/opt/node24/bin/npm install`) 137/137 i 13
+filer. Opgavebeskrivelsen selv havde allerede kørt 20 mutationer (10 server + 10 web) og fundet dem alle røde — jeg
+kørte 18 uafhængige mutationer for selv at verificere kernen (`SystemQueries.Mine`, `OidOrNull`, sorteringen,
+`EditorsOf`, `canEditViaParent`, `/api/me`, samt web: `myRole`, toggle-aria, URL-følge-logik, begge
+system-form-advarsler, `loadMe`, editors-teksten, tom-teksten, `landingUrl`s `/systemer`-særtilfælde) — **17 af 18
+dræbt**, ofte af netop ÉN linje i den navngivne test:
+
+1. `SystemQueries.Mine`s modul-arv fjernet → dræbt (`Mine_systemer_er_alle_roller...`, "Ejer-modul" forsvinder).
+2. `Mine`s rolle-filter indsnævret til kun `EditingRoles` (ekskluderer Forretningsejer) → dræbt (samme test,
+   "Ejer-system"/"Systemejer-system" ville miste deres eneste rolle).
+3. `OidOrNull` accepterer blankt oid (fjernet `IsNullOrWhiteSpace`-tjekket) → dræbt (3 fejl i
+   Systems+Authorization, inkl. `Uden_egne_roller_eller_uden_identitet_er_der_ingen_mine_systemer`s tomme-oid-case).
+4. Sortering: nedlagte IKKE sidst (fjernet `OrderBy(Nedlagt)`) → dræbt.
+5. Sortering: nyeste først (`ThenByDescending` i stedet for `ThenBy` på `LastConfirmedAt`) → dræbt.
+6. **Navnetie-break i Mine-sorteringen (`ThenBy(NameNormalized)` → `ThenByDescending`) → 42/42 forblev GRØNT.**
+   Se hul-afsnittet nedenfor.
+7. `EditorsOf` uden forælderens redaktører (`s.ParentSystem is null || true`) → dræbt.
+8. `EditorsOf` med Forretningsejer tilføjet til `EditingRoles` → dræbt (Dan optræder ikke i nogen forventet liste).
+9. `EditorsOf`s dedup fjernet (`own.All(o => o.Person.Id != p.Id)`-filteret) → dræbt (Cille ville optræde to gange).
+10. `canEditViaParent` hardkodet `false` → dræbt (`Ret_via_forælderen_saettes_af_serveren`).
+11. `/api/me`s `PersonId` hardkodet `null` → dræbt.
+12. Web `myRole()`s via-forælder-fald (`Via ${item.parent?.name}`) → fast streng `'–'` → dræbt.
+13. Web toggle-knappens `[attr.aria-pressed]="mine()"` → `false` → dræbt.
+14. Web: `ngOnInit` ændret fra `queryParamMap.subscribe` til én gangs `route.snapshot`-læsning (listen følger ikke
+    længere URL'en) → dræbt (`et link til "Mine systemer" på samme side henter listen igen`-testen fanger det
+    som en MANGLENDE HTTP-forespørgsel, en stærkere fejlsignatur end en assertion).
+15. `selfRemovalWarning`s `s.permissions.canEditViaParent`-guard fjernet → dræbt.
+16. `noEditorsWarning`s `s.parent`-guard (modul-undtagelsen) fjernet → dræbt.
+17. `system-form.page.ts`s `loadMe()`-kald efter gem fjernet → dræbt (3 tests, ny "uventet forespørgsel"-fejl —
+    testene forventer eksplicit `http.expectOne('/api/me')` efter hver gem).
+18. `system-detail.page.html`s "Redigeres af"/"Ser noget forkert ud?"-tekst byttet → dræbt.
+19. `system-list.page.html`s tom-tekst byttet ("Ingen af dine..." ↔ "Du har ingen rolle...") → dræbt.
+20. `landingUrl`s særtilfælde for `/systemer` som IKKE-mål fjernet (`target && target !== '/systemer'` →
+    kun `target`) → dræbt (`standardadressen er ikke et mål`-testen).
+
+**Ét reelt hul: navnetie-break i Mine-sorteringen er UBEVIST.** `SystemEndpoints.cs`, mine-grenens
+`.ThenBy(s => s.NameNormalized)` (efter `LifecycleStatus == Nedlagt` og `LastConfirmedAt`) — byttet til
+`ThenByDescending` → **42/42 forblev grønt**. Årsag: `Mine_systemer_er_alle_roller_og_deres_moduler...`s fem
+systemer får hver sin egen dag via `app.Time.Advance(TimeSpan.FromDays(1))` mellem oprettelserne, så
+`LastConfirmedAt` ALDRIG er ens for to rækker — tie-break'en på navn bliver aldrig aktiveret. Mangler: to systemer
+med SAMME `LastConfirmedAt` (fx begge oprettet/bekræftet i samme øjeblik, uden `app.Time.Advance()` imellem) og
+forskellige navne, der bekræfter den alfabetisk først navngivne kommer FØRST i `mine`-listen.
+
+**"Svaghed i bevisførelsen" (ikke en reel mangel i selve reglen, men i testens evne til at bevise den):**
+`myRoles?[r.Id].Distinct().Order().ToList()`s `.Order()`-kald (alfabetisk/enum-rækkefølge på "Din rolle",
+fx "Forretningsejer, Systemejer") — fjernede `.Order()` helt → **42/42 forblev grønt**, MEN byttede til
+`.OrderDescending()` → dræbt (1 fejl). Årsag: `SystemRoleAssignment`s sammensatte primærnøgle er
+`(SystemId, Role, PersonId)` (`EaDbContext.cs:90`), så PostgreSQL's indeks-scan for `WHERE SystemId IN (...)`
+tilfældigvis returnerer rækkerne allerede i Role-rækkefølge — uden nogen eksplicit `ORDER BY` fra koden. Koden er
+IKKE forkert (den skriver eksplicit `.Order()`, hvilket er den rigtige, robuste løsning), men testen beviser reelt
+kun retningen (asc vs desc), ikke at `.Order()`-kaldet SELV er nødvendigt — en udvikler, der ved et uheld fjerner
+`.Order()` helt (fx under en refaktorering), ville ikke få en rød test, fordi Postgres' udførelsesplan tilfældigvis
+matcher. **Mønster at genkende næste gang**: når en sortering på et LINQ-resultat af en DB-forespørgsel uden
+eksplicit sortering "tilfældigvis" matcher forventningen efter en mutation, mistænk at den sammensatte primærnøgle/
+et indeks giver en ufrivillig men konsistent fysisk rækkefølge — test dette specifikt ved at BYTTE
+retningen (asc↔desc), ikke kun ved at FJERNE sorteringen, for at skelne "ubevist" fra "reelt forkert i denne
+kørsel, ville måske fejle i en anden Postgres-version/plan".
+
+**Strukturelt bekræftet, ikke et hul:** `EditorsOf` (permissions-visning) og `SystemAccess` (den faktiske
+adgangskontrol) refererer BEGGE `SystemRules.EditingRoles` som samme statiske felt — ikke to hardkodede lister,
+der kan glide fra hinanden med grøn suite. Der er derfor ingen reel "to vagter om samme regel"-risiko her (CLAUDE.
+dks bekymring), fordi det strukturelt er ét sted. Der findes dog ingen DIREKTE test, der binder "en person i
+Editors-listen" sammen med "denne person ser CanEdit: true, når hun selv logger ind" (kun `canEditViaParent`
+er testet med brugerens egen klient, ikke listens øvrige medlemmer) — lav værdi at tilføje, given den delte
+kildekode, men nævnt for fuldstændighedens skyld.
+
+**Bekræftet, ikke testet i denne PR (lavt-risiko gap, nævnt men ikke blokerende):** `mine=true` kombineret med
+fritekstsøgning (`q`) er UDEN test, hverken server (`MySystemsTests.cs`) eller web
+(`system-list.page.spec.ts`, som kun kombinerer `mine` med `status`). Koden komponerer blot endnu et `.Where()`
+oven på `query.Mine(user)` (samme generiske mønster som alle andre filterkombinationer, der ER testet), så risikoen
+er lav — men "mine sammen med søgning" er en oplagt bruger-adfærd (en forvalter, der søger blandt SINE systemer),
+som ingen test dækker eksplicit.
+
+**Ikke en mangel, men værd at bemærke:** `web/src/app/login/login.page.ts` (som nu kalder `landingUrl(...)`) har
+STADIG ingen `.spec.ts`-fil overhovedet — hverken før eller efter denne PR. `landing.ts` selv er grundigt testet
+som en ren funktion (`landing.spec.ts`, 4 tests, dræbte to selvstændige mutationer ovenfor), så login-siden er kun
+en tynd sammenkobling (samme lav-risiko-mønster som utestede routes i tidligere delopgaver) — ikke PR-specifikt,
+men konsistent test-gæld.
+
+**Konklusion: KLAR TIL AT LANDE.** Kernen (server: `Mine`, `OidOrNull`, sortering, `EditorsOf`, `canEditViaParent`,
+`/api/me`; web: menu-eksklusivitet, URL-følgende liste, begge advarsler, `loadMe`, editors/tom-tekst,
+`landingUrl`) er exceptionelt grundigt bevist — markant stærkere end gennemsnittet, fordi opgavebeskrivelsens egen
+mutationsliste (20 mutationer) allerede var kørt og lukket FØR denne gennemgang. Det ene reelle hul
+(navnetie-break) er lav-risiko (kræver to systemer bekræftet i PRÆCIS samme øjeblik) og ikke blokerende alene,
+men bør noteres som en manglende test, ikke rettes hastigt uden en ny test der beviser den.

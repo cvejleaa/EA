@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
@@ -17,7 +17,7 @@ import { SystemsApi } from './systems.api';
 
 @Component({
   selector: 'ea-system-detail-page',
-  imports: [RouterLink, DatePipe, MatButtonModule, SystemIntegrationsComponent],
+  imports: [RouterLink, DatePipe, NgTemplateOutlet, MatButtonModule, SystemIntegrationsComponent],
   templateUrl: './system-detail.page.html',
   styleUrl: './system-detail.page.css',
 })

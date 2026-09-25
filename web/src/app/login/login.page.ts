@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import type { AuthModeResponse, DevUserResponse } from '../api/types';
 import { AuthService } from '../core/auth.service';
+import { landingUrl } from '../core/landing';
 import { toProblem } from '../core/problem';
 
 @Component({
@@ -56,8 +57,7 @@ export class LoginPage implements OnInit {
   protected async login(userId: string): Promise<void> {
     try {
       await this.auth.loginDev(userId);
-      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-      await this.router.navigateByUrl(returnUrl?.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/systemer');
+      await this.router.navigateByUrl(landingUrl(this.auth.me()!, this.route.snapshot.queryParamMap.get('returnUrl')));
     } catch (e) {
       this.error.set(toProblem(e).message);
     }

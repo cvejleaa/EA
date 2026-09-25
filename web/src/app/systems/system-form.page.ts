@@ -1,3 +1,4 @@
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -114,6 +115,42 @@ export class SystemFormPage implements OnInit {
   protected readonly canManagePersons = computed(() => this.auth.me()?.permissions.canManagePersons ?? false);
   protected readonly parentBlockedReason = computed(() => this.existing()?.permissions.parentBlockedReason ?? null);
 
+  private readonly formValue = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
+
+  /**
+   * Fjerner en forvalter sin egen redigerende rolle, mister hun retten — medmindre hun kan redigere via forælderen
+   * eller er enterprise arkitekt (begge oplyst af serveren). En advarsel før gem; den blokerer ikke.
+   */
+  protected readonly selfRemovalWarning = computed(() => {
+    const s = this.existing();
+    const me = this.auth.me();
+    if (!s || !me?.personId || me.permissions.canCreateSystems || s.permissions.canEditViaParent) {
+      return null;
+    }
+    const had = s.roles.filter((r) => r.person.id === me.personId && (r.role === 'Systemejer' || r.role === 'Systemforvalter'));
+    if (!had.length) {
+      return null;
+    }
+    const v = this.formValue();
+    if (v.systemOwnerId === me.personId || (v.stewardIds ?? []).includes(me.personId)) {
+      return null;
+    }
+    const role = had.some((r) => r.role === 'Systemejer') ? 'systemejer' : 'systemforvalter';
+    return `Du fjerner dig selv som ${role} og kan derefter ikke redigere systemet.`;
+  });
+
+  /** Beslutning P: fjernes alle, der kan redigere et selvstændigt system, kan kun EA rette det bagefter. */
+  protected readonly noEditorsWarning = computed(() => {
+    const s = this.existing();
+    if (!s || s.parent || !s.roles.some((r) => r.role === 'Systemejer' || r.role === 'Systemforvalter')) {
+      return null;
+    }
+    const v = this.formValue();
+    return v.systemOwnerId || (v.stewardIds ?? []).length
+      ? null
+      : 'Systemet får ingen systemejer eller systemforvaltere. Så kan kun enterprise arkitekten redigere det.';
+  });
+
   async ngOnInit(): Promise<void> {
     try {
       const id = this.id();
@@ -153,6 +190,8 @@ export class SystemFormPage implements OnInit {
       const saved = this.existing()
         ? await this.api.update(this.existing()!.id, request)
         : await this.api.create(request);
+      // Rollerne kan være ændret: menuens "Mine systemer (N)" skal følge med.
+      void this.auth.loadMe().catch(() => undefined);
       await this.router.navigate(['/systemer', saved.id]);
     } catch (e) {
       // Indtastningerne bevares — brugeren skal ikke skrive dem igen.

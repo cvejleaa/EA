@@ -117,6 +117,12 @@
       @if (fieldError('roles')) {
         <p class="error-text">{{ fieldError('roles') }}</p>
       }
+      @if (selfRemovalWarning()) {
+        <p class="warning-text" role="status" data-testid="self-removal">{{ selfRemovalWarning() }}</p>
+      }
+      @if (noEditorsWarning()) {
+        <p class="warning-text" role="status" data-testid="no-editors">{{ noEditorsWarning() }}</p>
+      }
 
       @if (canManagePersons()) {
         @if (!addingPerson()) {

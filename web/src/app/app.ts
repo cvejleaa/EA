@@ -1,7 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { AuthService } from './core/auth.service';
 
 @Component({
@@ -12,7 +14,20 @@ import { AuthService } from './core/auth.service';
       <a routerLink="/systemer" class="brand">EA-register</a>
       @if (auth.me()) {
         <nav class="nav" aria-label="Hovedmenu">
-          <a mat-button routerLink="/systemer" routerLinkActive="active" data-testid="nav-systems">Systemer</a>
+          @if (auth.me()!.mySystemCount > 0) {
+            <a
+              mat-button
+              routerLink="/systemer"
+              [queryParams]="{ mine: 'true' }"
+              [class.active]="onMine()"
+              data-testid="nav-mine"
+            >
+              Mine systemer ({{ auth.me()!.mySystemCount }})
+            </a>
+          }
+          <a mat-button routerLink="/systemer" [class.active]="onSystems() && !onMine()" data-testid="nav-systems">
+            Systemer
+          </a>
           <a mat-button routerLink="/kapabiliteter" routerLinkActive="active" data-testid="nav-capabilities">
             Kapabiliteter
           </a>
@@ -47,6 +62,20 @@ import { AuthService } from './core/auth.service';
 export class App {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  /** Systemsiderne (liste og system) — men ikke "Mine systemer", så kun ét menupunkt er markeret (QC). */
+  protected readonly onSystems = computed(() => this.router.parseUrl(this.url()).root.children['primary']?.segments[0]?.path === 'systemer');
+  protected readonly onMine = computed(() => {
+    const tree = this.router.parseUrl(this.url());
+    return tree.root.children['primary']?.segments.length === 1 && tree.queryParams['mine'] === 'true';
+  });
 
   protected logout(): void {
     this.auth.logout();

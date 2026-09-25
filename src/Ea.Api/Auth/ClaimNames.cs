@@ -22,6 +22,13 @@ public static class AppRoles
 
 public static class ClaimsPrincipalExtensions
 {
+    /// <summary>
+    /// Brugerens oid som nøgle til en person — eller null. Et tomt eller blankt oid er ingen identitet og må aldrig
+    /// matche en person, hvis Oid ved en fejl er tom (Security, 4a). Adgangen og "Mine systemer" bruger begge denne.
+    /// </summary>
+    public static string? OidOrNull(this ClaimsPrincipal user) =>
+        user.FindFirstValue(ClaimNames.ObjectId) is { } oid && !string.IsNullOrWhiteSpace(oid) ? oid : null;
+
     public static string ObjectId(this ClaimsPrincipal user) =>
         user.FindFirstValue(ClaimNames.ObjectId) ?? throw new InvalidOperationException("Token mangler oid-claim.");
 
