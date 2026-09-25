@@ -167,8 +167,8 @@ public static class SystemEndpoints
 
     /// <summary>
     /// Gyldige forældre for et (nyt eller eksisterende) system — samme regler som ved gem: modul-reglen og adgangen
-    /// (et skift kræver ret over systemet, den gamle og den nye forælder). Den nuværende forælder er altid med, så
-    /// feltet kan vise den, også når brugeren ikke må flytte modulet.
+    /// (et skift kræver ret over systemet, den gamle og den nye forælder). At blive under den nuværende forælder er
+    /// ikke et skift, så den er med for den, der kan redigere systemet — også når modulet ikke må flyttes.
     /// </summary>
     private static async Task<Ok<List<SystemRef>>> ParentCandidates(
         Guid? forSystemId, EaDbContext db, ClaimsPrincipal user, IAuthorizationService auth, CancellationToken ct)
@@ -189,8 +189,7 @@ public static class SystemEndpoints
         {
             var allowed = system is null
                 ? canCreate
-                : p.Id == system.ParentSystemId
-                  || (await auth.AuthorizeAsync(user, new ParentChange(system, system.ParentSystemId, p.Id), Policies.MoveSystem)).Succeeded;
+                : (await auth.AuthorizeAsync(user, new ParentChange(system, system.ParentSystemId, p.Id), Policies.MoveSystem)).Succeeded;
             if (allowed)
             {
                 candidates.Add(new SystemRef(p.Id, p.Name));
