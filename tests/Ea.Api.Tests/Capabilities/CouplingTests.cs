@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Ea.Api.Capabilities;
 using Ea.Api.Common;
+using Ea.Api.Data;
 using Ea.Api.Systems;
 using Ea.Api.Tests.Infrastructure;
 using Npgsql;
@@ -391,7 +392,7 @@ public sealed class CouplingTests
         await using var import = new NpgsqlConnection(app.ConnectionString);
         await import.OpenAsync();
         await using var transaction = await import.BeginTransactionAsync();
-        await Sql(import, transaction, "LOCK TABLE ea.capabilities, ea.system_capabilities IN SHARE ROW EXCLUSIVE MODE");
+        await Lock(import, transaction, TableLock.CapabilitiesAndCouplings);
 
         var put = admin.CoupleAsync(system, target);
         await WaitForBlockedLockAsync(import, transaction);
@@ -421,7 +422,7 @@ public sealed class CouplingTests
         await using var coupling = new NpgsqlConnection(app.ConnectionString);
         await coupling.OpenAsync();
         await using var transaction = await coupling.BeginTransactionAsync();
-        await Sql(coupling, transaction, "LOCK TABLE ea.system_capabilities IN ROW EXCLUSIVE MODE");
+        await Lock(coupling, transaction, TableLock.Couplings);
         await Sql(coupling, transaction,
             $"INSERT INTO ea.system_capabilities (system_id, capability_id) VALUES ('{system.Id}', '{ids["K2.1"]}')");
 

@@ -747,3 +747,83 @@ assertet for et MODUL (kun for parent-systemet `w.P`), men begge genbruger PRÆC
 mutation isoleret til "modul-specifik" adfærd findes ikke uden at røre selve `SystemAccess` (allerede dækket) eller
 opfinde en kunstig bug, der ikke findes i koden. Samme ræsonnement for "integration hvor begge ender er moduler
 under hendes system" (OR af to allerede uafhængigt dræbte prædikater).
+
+## Fund c6e9bed (SQL-hærdning, PR #15): stærk kerne, ÉT reelt hul i selve vagten (bypass), resten dræbt
+
+Baseline: `dotnet build EA.slnx` og `-c Release` begge 0/0 grønt; fuld suite `dotnet test --project
+tests/Ea.Api.Tests` 335/335 grønt. Alle mutationer kørt mod committet `c6e9bed` i egen worktree, genskabt med
+`git checkout -- <fil>` mellem hver.
+
+**BLOKERENDE HUL: `SqlSafetyTests`s tekst-scanning (`RawSqlApis`/`SqlApis`-listerne) kan omgås af
+`NpgsqlDataSource.CreateCommand(sql)`, og INGEN af de tre analyzere (EF1002/CA2100/CA3001) fanger den heller.**
+Tilføjede `src/Ea.Api/Data/DataSourceScratch.cs` med præcis dette (Npgsql er allerede en transitiv afhængighed via
+`Npgsql.EntityFrameworkCore.PostgreSQL`, så INGEN ny pakke krævet):
+```csharp
+public static async Task RunAsync(NpgsqlDataSource dataSource, string table)
+{
+    await using var cmd = dataSource.CreateCommand("SELECT * FROM " + table); // klassisk konkatenering
+    await cmd.ExecuteNonQueryAsync();
+}
+```
+`dotnet build EA.slnx -c Release` → **0 Warnings, 0 Errors** (analyzerne tavse — deres sink-signaturer kender kun
+`DbCommand.CommandText`-SETTEREN og EF's `*Raw`/`FromSql*`-metoder, ikke `NpgsqlDataSource.CreateCommand(string)`,
+som tager SQL-teksten som KONSTRUKTØR-lignende ARGUMENT). `dotnet run --project tests/Ea.Api.Tests --
+-class "Ea.Api.Tests.Data.SqlSafetyTests"` → **5/5 grønt, uændret** (ordet "NpgsqlDataSource" og "CreateCommand"
+står ikke i `RawSqlApis`/`SqlApis`). Kontrast: samme forsøg via `Database.GetDbConnection().CreateCommand()` +
+`cmd.CommandText = "..." + table` FANGES fint (CA2100-byggefejl OG tekst-scan, fordi "CommandText" er en
+scannet streng) — det er specifikt API'er, der tager SQL som ARGUMENT (ikke en settable property), der er blinde
+vinkler. Samme kategori (utestet, ikke forsøgt pga. ingen NuGet-adgang i denne kørsel): Dapper (`connection
+.Query<T>(sql)`) — bruger heller ikke `CommandText`-setteren og er ikke i nogen af listerne. **Forslag:** tilføj
+"NpgsqlDataSource", "CreateCommand", "Dapper" til `RawSqlApis`, ELLER (bedre, mere robust) vend testen om: scan
+efter TILLADTE mønstre (kun EF Core LINQ + `TableLocks.Sql`) i stedet for FORBUDTE navne — en positiv liste kan
+ikke omgås af et nyt API-navn, en negativ kan. Nævn til ejeren/Quality Control: CodeQL (som ikke kan køres lokalt)
+er den eneste tilbageværende chance for at fange denne klasse, og `security-extended`-CodeQL-pakken har
+formodentlig sink-modeller for både Npgsql og Dapper, men det er IKKE efterprøvet her.
+
+**Dræbt, som forventet:** rå SQL i `CsvImport.cs` via `ExecuteSqlRawAsync("SELECT 1", ct)` (konstant streng, ingen
+interpolation — analyzerne tavse, men tekst-scanningen fangede `ExecuteSqlRaw` alligevel: `API_et_bruger_ingen_raa_SQL`
+rød med `["Common/CsvImport.cs: ExecuteSqlRaw"]`); parametriseret `ExecuteSqlAsync($"SELECT 1", ct)` uden for
+`TableLocks.cs` (`SQL_tekst_findes_kun_i_den_faste_laaseliste` rød: `["Data/TableLocks.cs", "Common/CsvImport.cs"]`);
+`CommitIfUnchangedAsync`s `LockAsync`-kald fjernet (`_ = tableLock;`) → 2/51 røde i de rigtige PostgreSQL-race-tests
+(importen tager reelt ikke låsen længere); en forkert låsetekst (`TableLock.Couplings` ændret til at låse
+`ea.systems` i stedet for `ea.system_capabilities`) → øjeblikkeligt rød på enheds-niveau
+(`Hver_laas_er_en_konstant_tekst_uden_argumenter`, forventet vs. faktisk streng), OG 4/51 røde i de ægte
+race-tests (formular-PUT og sletning bruger begge `TableLock.Couplings` og enten låser forkert eller rammer en
+uventet `55P03`-lock-fejl, fordi timings-antagelsen i `WaitForBlockedLockAsync`/`FOR UPDATE NOWAIT` brydes).
+
+**Spørgsmål "deler race-testene nu blindt produktionens låsetekst?" — svaret er NEJ, af to grunde.** (1)
+`SqlSafetyTests.Hver_laas_er_en_konstant_tekst_uden_argumenter` er en UAFHÆNGIG Theory med hårdkodet
+forventet streng pr. enum-værdi — den fanger enhver tekst-mutation på millisekund-niveau, uanset om race-testene
+bruger samme kilde. (2) Selv når race-testene bevidst kalder `TableLocks.Sql(...)` (samme kilde som
+produktionen), afslørede en forkert tabel STADIG 4 ægte PostgreSQL-race-tests, fordi disse tests' antagelser
+(`WaitForBlockedLockAsync`s faste standard-tabel `ea.system_capabilities`, og "importen kan stadig FOR UPDATE
+NOWAIT-låse systemrækken") er uafhængige af selve låseteksten og brydes, når den ændrer sig. Refaktoreringen
+(fra to uafhængige hårdkodede strenge til delt `TableLocks.Sql`) reducerer duplikering uden reelt tab af dækning
+— MEN hvis `Hver_laas_er_en_konstant_tekst_uden_argumenter` nogensinde fjernes, mistes den hurtige, garanterede
+fangst, og man er tilbage til kun at stole på de dyrere, indirekte race-test-symptomer.
+
+**`Alle_laase_har_en_tekst` er IKKE en dobbelt-vagt af Theory'en — den dækker noget andet (enum-exhaustiveness).**
+Tilføjede et tredje `TableLock`-medlem (`Scratch`) UDEN switch-case i `TableLocks.Sql` (rammer kun default
+`_ => throw`) → Theory'en (kun 2 `[InlineData]`) forblev upåvirket/grøn (rører aldrig den nye værdi), men
+`Alle_laase_har_en_tekst` (som itererer `Enum.GetValues<TableLock>()` via refleksion) blev rød med
+`ArgumentOutOfRangeException: Ukendt lås.` — den fanger specifikt "ny lås tilføjet, glemt i switch'en", en fejl
+Theory'en aldrig ville opdage, fordi den kun kører de værdier, forfatteren huskede at nævne.
+
+**Editorconfig-sektionen `[src/**/*.cs]` er bevist AKTIV i Release-build (CI's faktiske kommando
+`dotnet build EA.slnx -c Release`), for alle tre regler, uden nogen særlig `AnalysisMode`:** lagde en
+interpoleret `ExecuteSqlRawAsync($"...")` ind i `src/Ea.Api/Data/TableLocks.cs` → EF1002-byggefejl. Lagde
+`NpgsqlCommand.CommandText = "..." + variabel` ind samme sted → CA2100-byggefejl. Lagde en minimal-API-handler
+med `request.Query["table"]` direkte i en `new NpgsqlCommand(...)`-konstruktør ind → BÅDE CA2100 og CA3001
+(taint fra `HttpRequest.Query` til SQL-sink) fejlede bygget — CA3001 kræver altså IKKE en særlig `AnalysisMode`
+her, kun at severity sættes i `.editorconfig` (`AnalysisLevel=latest-recommended` i `Directory.Build.props` er
+nok til at analyzer-pakken er med; editorconfig-severity slår den til). Negativ kontrol: `tests/Ea.Api.Tests/
+Infrastructure/DbLocks.cs` bruger PRÆCIS det mønster (`new NpgsqlCommand(sql, connection, transaction)` med en
+vilkårlig `sql`-parameter), der ville udløse CA2100 — bygget er 0/0 grønt i dag, hvilket bekræfter at
+`[src/**/*.cs]`-scopet IKKE rammer `tests/` (som tilsigtet, jf. kommentaren i .editorconfig).
+
+**Ikke undersøgt i denne omgang (uden for komiteret kode, men nævnt til ejeren):** "mindste rettighed i
+databasen" (`ea_app`/`ea_migrator`-rolleadskillelse) er KUN dokumenteret som beslutning X i `docs/plan.md` —
+INGEN kode i denne PR opretter rollerne eller ændrer connection strings; det er eksplicit udskudt til F3/F4
+("Rollerne oprettes af ejerens script i F3/F4"). Ikke en Test Manager-mangel (intet at mutere endnu), men
+Quality Control/Release Manager bør vide, at ejerens fjerde krav ("mindste rettighed i databasen") kun er en
+PLAN, ikke en implementering, i denne PR.
