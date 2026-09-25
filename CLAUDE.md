@@ -173,6 +173,9 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
   - Overlap og dækning afgøres ét sted hver: `CapabilityRules.OverlapOf` og
     `CapabilityQueries.Uncovered`. Kort, systemside, systemliste og CSV bruger
     dem — klienten regner aldrig selv.
+  - Databasens rettigheder følger modellen: `scripts/db-roller.sql` nævner
+    hver tabel enten med UPDATE/DELETE eller som bevidst append-only
+    (`SqlSafetyTests` fejler for en ny tabel, indtil der er taget stilling).
   - Konflikt-typer (`Common/Problems.cs`, fx `urn:ea:problem:stale-version`
     og `urn:ea:problem:stale-dry-run`) ⇄ `web/src/app/core/problem.ts`. Kun
     en forældet version må tilbyde "Hent nyeste version"; en forældet
@@ -180,10 +183,15 @@ Kendte måder, ubevist kode slipper igennem med grøn suite:
 - **SQL: parametre og ORM overalt.** Al dataadgang går gennem EF Core/LINQ,
   så værdier altid er parametre. API'ets eneste SQL-tekst er de faste
   tabel-låse i `Data/TableLocks.cs` — en enum, aldrig en streng udefra.
-  `*Raw`-metoder og egne `NpgsqlCommand`'er i `src/` er forbudt:
-  `SqlSafetyTests`, analyzerne (EF1002, CA2100 og CA3001 er fejl i `src/`)
-  og CodeQL fanger dem. Databasen giver appen mindste rettighed: kun DML;
-  migreringer kører med en særskilt rolle (beslutning X i `docs/plan.md`).
+  `*Raw`-metoder, Npgsql's egne kommandoer/datakilde/COPY og EF's rå
+  forbindelse er forbudt i `src/`. Tre lag: `SqlSafetyTests` (en blokliste
+  over de kendte API'er og præcis ét SQL-kald i hele API'et), analyzerne
+  (EF1002, CA2100 og CA3001 er fejl i `src/`; kun de genererede
+  migrationsfiler er undtaget) og CodeQL som bagstopper for veje, listen ikke
+  kender. I driften skal databasen give appen mindste rettighed (beslutning X
+  i `docs/plan.md`, script i `scripts/db-roller.sql`). Det bygges med driften
+  (F3/F4); lokalt findes kun én rolle (`ea`), fordi testene opretter
+  databaser.
 - **Serveren er eneste autoritet.** Validering i klienten kan omgås. Server-
   adgangstjek må aldrig være mere gavmilde end klientens regler — og de skal
   ligge FØR de dyre operationer, så en afvisning er billig.

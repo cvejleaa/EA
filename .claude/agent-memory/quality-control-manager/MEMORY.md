@@ -582,3 +582,61 @@ Frida, ægte kørende API+web, kun GET/enkelte skriv-/slet-kald på Frida uden r
   Systemejer/Systemforvalter/Forretningsejer er testet for HVEM DER KAN REDIGERE, ikke at en forvalter kan SÆTTE en
   ny forretningsejer). Lav risiko (samme kodesti som de andre roller, ingen særbehandling af Forretningsejer i
   `Apply()`), men spørg Test Manager om en eksplicit test for netop dette scenarie ved næste berøring af roller.
+
+## Kode-gennemgang: SQL-hærdning (c6e9bed, PR #15, branch claude/trusting-brahmagupta-4v2ukj)
+Konklusion: GOD AT LANDE, med ÉN SKAL-RETTES (tekst, ikke kode) og to IKKE-BLOKERENDE opfølgninger. Verificeret
+ikke kun ved læsning, men ved RIGTIG mutation mod committet kode (bygget, ikke kun antaget, og rullet tilbage
+bagefter): en `ExecuteSqlRawAsync($"…{userInput}…")` og en rå `NpgsqlCommand("…" + userInput)` indsat i `src/`
+gav begge en ØJEBLIKKELIG build-fejl (EF1002 hhv. CA2100); en stray `db.ExecuteSqlAsync($"SELECT 1")` uden for
+`TableLocks.cs` gjorde `SqlSafetyTests.SQL_tekst_findes_kun_i_den_faste_laaseliste` rød. Samme rå-SQL-kald
+indsat i en migrations-fil (`Data/Migrations/…`) gav IKKE en fejl — `generated_code = true`-undtagelsen
+virker også for de tre nye analyzer-ID'er, ikke kun for den gamle brede `dotnet_analyzer_diagnostic.severity`,
+bekræftet empirisk (ikke kun antaget ud fra .editorconfig-rækkefølgen). 335/335 API-tests grønne,
+`has-pending-model-changes` ren, `dotnet format` ren.
+- Alle fire dele af ejerens krav er reelt indfriet, tre af dem I KODEN nu, én kun I PLANEN (bevidst):
+  1. Parametre/ORM overalt: INGEN rå SQL tilbage i `src/` (grep-bekræftet); eneste SQL-tekst er
+     `Data/TableLocks.cs` (en enum → `FormattableString`, ingen argumenter).
+  2. Fast liste for identifikatorer: grep efter `OrderBy(`, `EF.Property`, `[FromQuery]`-sortering/felt-navne og
+     CSV-header-håndtering (`CapabilityCsv.Header`, `CouplingCsv.Header`, `IntegrationCsv.Header`) viste INGEN
+     andre steder, hvor et identifikator-agtigt input (kolonne/tabelnavn) bliver til SQL — `TableLock`-enummen
+     var rent faktisk den ENESTE frie streng i hele API'et. Værd at gen-tjekke ved fremtidige "sortér efter
+     kolonne fra query"-features.
+  3. Mindste rettighed: KUN SKREVET NED (beslutning X i `docs/plan.md`), ikke bygget — lokalt er der stadig
+     kun ÉN rolle (`ea`, CREATEDB, se `scripts/dev-db.sh`), ingen `ea_app`/`ea_migrator`/læserolle findes endnu.
+     Beslutning X selv er PRÆCIS og korrekt afgrænset ("I driften får appen…", altså fremtid/produktion) — men
+     CLAUDE.md's egen destillation af reglen ("Databasen giver appen mindste rettighed: kun DML; migreringer
+     kører med en særskilt rolle") DROPPEDE kvalifikationen og lyder som en nutidig kendsgerning. ANBEFALET
+     RETTELSE (ikke selv udført af QC): præcisér med "planlagt"/"i driften" (fx "får appen i driften mindste
+     rettighed … (beslutning X, endnu ikke oprettet lokalt)"), ikke en påstået nutidig sandhed. Tjek ved næste
+     læsning af CLAUDE.md, at teksten stadig matcher hvad der faktisk er bygget, ikke kun planlagt.
+  4. Analyzer i CI: EF1002/CA2100/CA3001 sat til `error` i `.editorconfig`, kørt via det EKSISTERENDE
+     `dotnet build`-trin i `ci.yml` (ingen ny CI-fil nødvendig for dette lag) — bekræftet med mutation. Plus en
+     ny selvstændig CodeQL-workflow (`csharp` + `javascript-typescript`, `security-extended`).
+- NYT MØNSTER (godt): race-testene (`CouplingTests`/`CouplingImportTests`) tager nu låsen via en DELT helper
+  (`DbLocks.Lock` → `TableLocks.Sql(tableLock)`, PRODUKTIONENS kilde), i stedet for hver sin hardkodede
+  SQL-streng som før. Først en bekymring: mutation af tabelnavnet i `TableLocks.Sql` ville nu ramme BÅDE
+  produktionskoden og testens "modstander"-lås ens, og racetesten ville stadig bare se to (forkerte) låse
+  kollidere — men det er OK, fordi den PRÆCISE SQL-tekst i forvejen har sin EGEN vagt ét sted
+  (`SqlSafetyTests.Hver_laas_er_en_konstant_tekst_uden_argumenter`, literal streng-sammenligning) — races-
+  testene tester derfor korrekt KUN blokerings-adfærden, ikke SQL-teksten igen. Præcis "én vagt pr. regel,
+  samlet ét sted" fra CLAUDE.md's testprincipper. Genbrug denne adskillelse (én test for "er teksten rigtig",
+  andre tests for "opfører systemet sig rigtigt med den") som mønster fremover.
+- IKKE-BLOKERENDE, kunne ikke verificeres herfra (ingen adgang til rigtig GitHub Actions/API):
+  - CodeQL `build-mode: none` for `csharp`: en nyere ekstraktionsmåde for et kompileret sprog — fornuftig
+    begrundelse i kommentaren (undgår at skulle installere en bestemt .NET-version på runneren), men bør
+    verificeres på den FØRSTE rigtige kørsel (kig efter "intet at analysere/no files extracted"-advarsler for
+    csharp-jobbet), ikke antages at virke perfekt fra dag ét.
+  - Fork-PR'er: `pull_request`-triggede workflows fra en ekstern fork får et SKRIVEBESKYTTET GITHUB_TOKEN,
+    UANSET `permissions: security-events: write` i filen — SARIF-uploadet ville fejle (403) for en ægte
+    ekstern bidragyders fork-PR, og CodeQL-tjekket ville stå rødt uden at det betyder noget om PR'ens indhold.
+    Lav risiko nu (soloprojekt, ingen eksterne bidragydere), men værd at skrive ned et sted, så det ikke
+    undersøges som en gåde senere.
+  - Hvis repoet er PRIVAT (uklart fra CLAUDE.md, kun "personlig GitHub-konto"): code scanning/CodeQL-upload
+    kræver historisk GitHub Advanced Security for private repos — hvis det ikke er slået til, ville
+    analyze-uploadet fejle på HVER kørsel, ikke kun fork-PR'er. Spørg Release Manager om at bekræfte
+    repo-synlighed og at "CodeQL" rent faktisk består én gang, før den evt. sættes som et krævet tjek i
+    branch protection.
+  - `docs/plan.md`'s F3-punkt ("container, `firebase.json` og engangskommandoerne") nævner IKKE eksplicit
+    oprettelsen af `ea_app`/`ea_migrator`/læserollen, selvom beslutning X siger "Rollerne oprettes af ejerens
+    script i F3/F4" — lille uklarhed for den, der senere bygger F3: tilføj en linje der eksplicit nævner
+    rolle-scriptet, så det ikke overses.

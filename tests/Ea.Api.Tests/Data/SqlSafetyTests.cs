@@ -1,5 +1,8 @@
+using System.Text.RegularExpressions;
 using Ea.Api.Data;
 using Ea.Api.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Ea.Api.Tests.Data;
 
@@ -10,29 +13,42 @@ namespace Ea.Api.Tests.Data;
 /// </summary>
 public sealed class SqlSafetyTests
 {
-    /// <summary>Kald, der sender tekst direkte som SQL (eller udenom EF). Må ikke findes i API'et.</summary>
+    /// <summary>
+    /// Kald, der sender tekst direkte som SQL eller går udenom EF: EF's rå metoder, Npgsql's egne kommandoer, datakilde
+    /// og COPY, EF's rå forbindelse og en FormattableString bygget af en almindelig streng. Listen er en blokliste —
+    /// CodeQL i CI er bagstopperen for veje, den ikke kender.
+    /// </summary>
     private static readonly string[] RawSqlApis =
-        ["ExecuteSqlRaw", "FromSqlRaw", "SqlQueryRaw", "NpgsqlCommand", "NpgsqlBatch", "DbCommand", "CommandText"];
+    [
+        "ExecuteSqlRaw", "FromSqlRaw", "SqlQueryRaw",
+        "NpgsqlCommand", "NpgsqlBatch", "NpgsqlDataSource", "NpgsqlConnection",
+        "DbCommand", "CommandText", "CreateCommand", "GetDbConnection",
+        "BeginTextImport", "BeginTextExport", "BeginBinaryImport", "BeginBinaryExport", "BeginRawBinaryCopy",
+        "FormattableStringFactory",
+    ];
 
     /// <summary>EF's SQL-kald med interpoleret tekst (parametriseret). Må kun bruges af den faste låseliste.</summary>
     private static readonly string[] SqlApis =
         ["ExecuteSql(", "ExecuteSqlAsync(", "ExecuteSqlInterpolated", "FromSql(", "FromSqlInterpolated", "SqlQuery<", "SqlQuery("];
 
-    /// <summary>API'ets kildekode — uden migreringerne, der er genereret DDL og køres af migreringen, ikke af appen.</summary>
+    /// <summary>
+    /// Al API'ets kildekode — også migrations-mappen, så en håndskrevet hjælper dér ikke slipper udenom. (De genererede
+    /// migreringer bruger kun migrationBuilder og rammer ingen af mønstrene.)
+    /// </summary>
     private static List<(string Path, string Text)> ApiSources()
     {
         var root = RepoPaths.File("src", "Ea.Api");
         var sources = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
             .Where(f => !f.StartsWith("bin/", StringComparison.Ordinal)
-                && !f.StartsWith("obj/", StringComparison.Ordinal)
-                && !f.StartsWith("Data/Migrations/", StringComparison.Ordinal))
+                && !f.StartsWith("obj/", StringComparison.Ordinal))
             .Select(f => (Path: f, Text: File.ReadAllText(Path.Combine(root, f))))
             .ToList();
 
         // En scanning uden filer beviser intet: de filer, der før havde rå SQL, skal være med.
         Assert.Contains(sources, s => s.Path == "Common/CsvImport.cs");
         Assert.Contains(sources, s => s.Path == "Systems/SystemEndpoints.cs");
+        Assert.Contains(sources, s => s.Path == "Data/Migrations/EaDbContextModelSnapshot.cs");
         return sources;
     }
 
@@ -47,14 +63,51 @@ public sealed class SqlSafetyTests
     }
 
     [Fact]
-    public void SQL_tekst_findes_kun_i_den_faste_laaseliste()
+    public void API_et_har_praecis_et_SQL_kald_og_det_tager_en_fast_laas()
     {
-        var files = ApiSources()
-            .Where(s => SqlApis.Any(api => s.Text.Contains(api, StringComparison.Ordinal)))
-            .Select(s => s.Path)
+        // Hvert forekomst tælles — også et ekstra kald i selve låsefilen skal gøre testen rød.
+        var calls = ApiSources()
+            .SelectMany(s => SqlApis.SelectMany(api => Occurrences(s.Text, api).Select(_ => $"{s.Path}: {api}")))
             .ToList();
 
-        Assert.Equal(["Data/TableLocks.cs"], files);
+        Assert.Equal(["Data/TableLocks.cs: ExecuteSqlAsync("], calls);
+    }
+
+    /// <summary>Tabeller, appen bevidst kun må læse og tilføje i (fx ændringshistorikken, beslutning W). Tom i dag.</summary>
+    private static readonly string[] AppendOnlyTables = [];
+
+    /// <summary>
+    /// Mindste rettighed følger modellen: hver tabel står enten i scriptets UPDATE/DELETE-liste eller er bevidst
+    /// append-only. En ny tabel gør testen rød, indtil nogen har taget stilling (scripts/db-roller.sql, beslutning X).
+    /// </summary>
+    [Fact]
+    public async Task Rettighedsscriptet_kender_hver_tabel_i_modellen()
+    {
+        await using var app = await TestApp.StartAsync();
+        using var scope = app.Services.CreateScope();
+        var tables = scope.ServiceProvider.GetRequiredService<EaDbContext>().Model.GetEntityTypes()
+            .Select(e => e.GetTableName()!)
+            .Distinct()
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        var script = await File.ReadAllTextAsync(RepoPaths.File("scripts", "db-roller.sql"));
+        var grant = Regex.Match(script, @"GRANT UPDATE, DELETE ON(?<tables>[^;]*?)TO ea_app;", RegexOptions.Singleline);
+        Assert.True(grant.Success, "Scriptet mangler GRANT UPDATE, DELETE ... TO ea_app.");
+        var mutable = grant.Groups["tables"].Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.Replace("ea.", "", StringComparison.Ordinal));
+
+        Assert.Contains("systems", tables);
+        Assert.Equal(tables, mutable.Concat(AppendOnlyTables).Order(StringComparer.Ordinal));
+    }
+
+    private static IEnumerable<int> Occurrences(string text, string value)
+    {
+        for (var i = text.IndexOf(value, StringComparison.Ordinal); i >= 0; i = text.IndexOf(value, i + value.Length, StringComparison.Ordinal))
+        {
+            yield return i;
+        }
     }
 
     [Theory]

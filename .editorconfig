@@ -397,7 +397,9 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 
 
 # EF Core-genererede migrationer: rettes ikke i hånden, så analyzere slås fra her.
-[**/Data/Migrations/*.cs]
+# Kun de GENEREREDE filer (tidsstempel-navn, Designer og snapshot) — en håndskrevet fil i mappen analyseres som al
+# anden kode, så rå SQL ikke kan gemme sig her (Security, SQL-hærdningen).
+[**/Data/Migrations/{[0-9]*_*.cs,EaDbContextModelSnapshot.cs}]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
 
