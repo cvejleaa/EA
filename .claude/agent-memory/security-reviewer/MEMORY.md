@@ -262,3 +262,32 @@
 - PoC gemt som mønster: angrebsklasse i Zattack med egen World (P+M, Q+QM, R), Give()
   der BEVARER eksisterende roller, Snap() (version/forælder/roller), token-minting
   med JsonWebTokenHandler + TestUsers.SigningKey for claim-varianter (uden oid osv.).
+
+## F0-script (Firebase-afprøvning, merges ikke) – gennemgået 2026-09-26
+- Scriptet ligger i scratchpad/f0/f0.py (ikke committet). Emulator: firebase-tools i samme mappe,
+  `npx firebase emulators:start --only auth --project demo-f0` (port 9099). Protokol-id'er nu:
+  T0 (nøgle hører til projektet + indstillinger læst via GET v2/projects/{p}/config), T1, T1', T2',
+  T3' (præ-kapring via e-mail-skift), T4' (enumeration A1 vs A2: createAuthUri, PASSWORD_RESET,
+  forkert password), T5a/a'/f/d/e/bc/h, T6/T6', T7/7'/7p/7", T11 (brugeren sætter selv password),
+  T10a/a'/b/c/d. T2/T3/T4 erstattet, T8 -> F1, T9 manuel.
+- BEKRÆFTET i emulatoren (også med enableImprovedEmailPrivacy=true): inviteret bruger A sætter
+  password (accounts:update {idToken,password}), skifter e-mail til offerets adresse (accounts:update
+  {idToken,email} ELLER signUp {idToken,email,password}) -> email_verified=false; ejeren kan så ikke
+  oprette offeret (EMAIL_EXISTS); offerets første link-login LANDER I A's uid, email_verified=true,
+  A's password virker stadig, A's gamle refresh-token virker stadig. Produktion afgør T6/T6'
+  (enumerationsbeskyttelsen skulle blokere updateEmail uden bekræftelse — uverificeret påstand).
+- F1-designkrav herfra: bind Person.Oid = fb:uid NÅR ejeren opretter kontoen (uid kendes da),
+  ikke via e-mail ved første login; opret Firebase-kontoen samtidig med at personen får e-mail
+  i registret; ejer-scriptet skal stoppe hårdt på EMAIL_EXISTS (aldrig "adoptere" en konto).
+  VERIFY_AND_CHANGE_EMAIL til offerets adresse (phishing-klik) rammer også e-mail-binding.
+- BEKRÆFTET fejl i første udgave: forkert/brugt link ved A2-prompten gav INVALID_OOB_CODE ->
+  T5bc "OK" uden at vejen var prøvet (falsk OK på det vigtigste produktionsspørgsmål). Ukaldet
+  ApiError i T5d -> traceback, ingen rapport. Løst: link_sign_in spørger igen på BAD_LINK.
+- Emulator-fakta: signInWithEmailLink tjekker email == oob.email FØR koden forbruges (INVALID_EMAIL,
+  koden kan bruges igen). getProjects returnerer projectNumber som projectId. v2/config findes på
+  /identitytoolkit.googleapis.com/v2/projects/{p}/config. Kender ikke disabledUserSignup/-Deletion
+  og blokerer ikke updateEmail med privacy slået til.
+- PoC-mønster: f0sim.py importerer f0, sætter EMULATOR="" (produktionsvejen) men peger IT/ST på
+  emulatoren, wrapper anon() til at afvise som Identity Platform, og builtins.input henter links
+  fra /emulator/v1/projects/{p}/oobCodes (også bevidst forkerte links). Kontroltest af dommene.
+- Proto3-JSON udelader false-felter: sammenlign med bool(...) når forventningen er False.
